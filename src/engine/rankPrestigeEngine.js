@@ -1,5 +1,6 @@
 /**
  * @module rankPrestigeEngine
+ * Handles career rank advancement, prestige ascension, and perk upgrades.
  */
 const { getRankUpCost } = require('../utils/formulas');
 const { RANKS, PERK_DEFINITIONS } = require('./dropTables');

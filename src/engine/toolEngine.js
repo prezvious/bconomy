@@ -1,5 +1,6 @@
 /**
  * @module toolEngine
+ * Manages tool upgrade verification, material consumption, and recipe lookup logic.
  */
 const { TOOL_UPGRADE_RECIPES } = require('./dropTables');
 

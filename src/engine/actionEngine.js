@@ -1,3 +1,7 @@
+/**
+ * @module actionEngine
+ * Handles resource gathering activities (mine, explore, hunt, fish) and work actions.
+ */
 const { getToolYieldMultiplier, getWorkBasePay, calculateWorkBonuses, getAmnesiacChance, displayItemName } = require('../utils/formulas');
 const { ACTION_COOLDOWNS, MINE_DROP_TABLE, EXPLORE_DROP_TABLE, HUNT_DROP_TABLE, FISH_DROP_TABLE, RANKS } = require('./dropTables');
 
