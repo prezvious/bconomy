@@ -1,7 +1,7 @@
 {
   "name": "bconomy",
   "version": "1.0.0",
-  "description": "Bconomy Economy Game Engine",
+  "description": "A persistent text-based economy and incremental game engine built with Node.js, Express, and modern single-page web interfaces.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
