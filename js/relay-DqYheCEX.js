@@ -1,1 +1,0 @@
-import{ko as e}from"./index-BmAJQgTL.js";var t={baseIdleTime:e*12,apexMintModuleRequirement:25,recoveryCrossSystemMinBayLevels:300};export{t};

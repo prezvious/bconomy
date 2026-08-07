@@ -1,105 +1,60 @@
-<<<<<<< HEAD
-# bconomy
-Not available.
-=======
-# Bconomy Economy Game Engine
+# Bconomy
 
-A persistent text-based economy and incremental game engine built with Node.js, Express, and a responsive single-page web client interface.
+A persistent text-based economy and incremental game engine built with Node.js, Express, and a responsive single-page web client.
 
 ---
 
-## 🌟 Overview
+## Overview
 
-**Bconomy** is a modular web-based economy game where players participate in various economic activities to gather resources, earn currency, advance through career ranks, unlock powerful prestige perks, and manage agricultural plots.
-
-The project features a lightweight Node.js/Express backend service powering game logic, state management, and real-time activity interactions, paired with a web client.
+**Bconomy** is a modular web-based economy game where players participate in various activities to gather resources, earn currency, progress through career ranks, unlock prestige perks, and manage a farm. The project pairs a lightweight Node.js/Express backend with a static web client front-end.
 
 ---
 
-## ✨ Key Features
+## Features
 
-- ⛏️ **Resource Gathering & Activities**: Mine, explore, hunt, and fish to collect valuable resources and items.
-- 🛠️ **Tool Progression System**: Craft and upgrade tools to enhance activity results and efficiency.
-- 📈 **Career Ranks & Escalation**: Progress through economic ranks with scaling costs and prestige potential.
-- ✨ **Prestige & Perks System**: Reset rank progression to earn prestige points and unlock permanent account-wide perks.
-- 🌾 **Farming Operations**: Plant, water, fertilize, and harvest multiple crop types across expandable farming plots.
-- 🌐 **Modular REST API**: Complete API coverage allowing state synchronization and modular front-end integrations.
-
----
-
-## 🏗️ Architecture Overview
-
-The system is structured into cleanly separated modules:
-
-```
-┌────────────────────────────────────────────────────────┐
-│               Web Frontend Client                      │
-│        (HTML, Static Assets, Component UI)             │
-└──────────────────────────┬─────────────────────────────┘
-                           │ HTTP / REST API
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│                   Express Server                       │
-│                     (server.js)                        │
-└──────────────────────────┬─────────────────────────────┘
-                           │ Game Logic Execution
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│                   Core Game Engine                     │
-│  - Action Engine    (Gathering & Work logic)           │
-│  - Tool Engine      (Crafting & Upgrade logic)         │
-│  - Rank & Prestige  (Progression & Ascension logic)    │
-│  - Farm Engine      (Crop lifecycle & Plot logic)      │
-└────────────────────────────────────────────────────────┘
-```
+- **Resource Gathering** — Mine, explore, hunt, and fish to collect items and materials.
+- **Tool Progression** — Upgrade gathering tools to improve efficiency and unlock better results.
+- **Career Ranks** — Advance through economic ranks with scaling requirements.
+- **Prestige System** — Reset progression to earn prestige points and unlock permanent perks.
+- **Farming** — Plant, water, compost, and harvest crops across expandable farming plots.
+- **REST API** — Modular API layer enabling front-end interactions and state synchronization.
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
+
+| Layer       | Technology             |
+| :---------- | :--------------------- |
+| **Runtime** | Node.js                |
+| **Server**  | Express                |
+| **Client**  | HTML, CSS, JavaScript  |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- **Node.js** (v16.x or later recommended)
-- **npm** (v7.x or later)
+- **Node.js** v16 or later
+- **npm** v7 or later
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/prezvious/bconomy.git
-   cd bconomy
-   ```
+```bash
+git clone https://github.com/prezvious/bconomy.git
+cd bconomy
+npm install
+```
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
----
-
-## 🏃 Running the Application
-
-### Development / Production Server
-
-Start the Node.js server:
+### Running
 
 ```bash
 npm start
 ```
 
-Or for development mode:
+The server starts at `http://localhost:3000`.
 
-```bash
-npm run dev
-```
-
-By default, the server runs at `http://localhost:3000`.
-
----
-
-## 🧪 Running Tests
-
-Execute the automated system verification test suite:
+### Testing
 
 ```bash
 npm test
@@ -107,28 +62,24 @@ npm test
 
 ---
 
-## 📡 API Overview
+## Project Structure
 
-The Express server exposes RESTful endpoints for game state operations:
-
-| Category | Endpoint | Description |
-| :--- | :--- | :--- |
-| **State** | `GET /api/state/default` | Fetches the initial player state template |
-| **Actions** | `POST /api/action` | Performs resource gathering or work actions |
-| **Tools** | `POST /api/tool/upgrade` | Upgrades a specified gathering tool level |
-| **Rank** | `POST /api/rank/up` | Advances player to the next career rank |
-| **Prestige**| `POST /api/prestige/ascend` | Resets rank for prestige points |
-| **Prestige**| `POST /api/prestige/perk` | Purchases or upgrades prestige perks |
-| **Farm** | `POST /api/farm/plant` | Plants a crop on a specified plot |
-| **Farm** | `POST /api/farm/plant-all` | Plants crops on all available plots |
-| **Farm** | `POST /api/farm/water` | Waters a specific farming plot |
-| **Farm** | `POST /api/farm/water-all` | Waters all unwatered plots |
-| **Farm** | `POST /api/farm/claim` | Claims harvested crops |
-| **Farm** | `POST /api/farm/add-plot` | Expands farm plot capacity |
+```
+bconomy/
+├── server.js            # Express application entry point
+├── src/
+│   ├── engine/          # Core game logic modules
+│   └── utils/           # Shared utility functions
+├── public/              # Static web client
+│   ├── index.html
+│   ├── style.css
+│   └── js/              # Client-side scripts
+├── tests/               # Automated test suite
+└── package.json
+```
 
 ---
 
-## 📄 License
+## License
 
-Distributed under the MIT License. See `LICENSE` for details.
->>>>>>> 071e5ae (Initial commit: Set up repository with gitignore and high-level README)
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.

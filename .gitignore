@@ -16,6 +16,17 @@ build/
 out/
 .cache/
 *.tsbuildinfo
+js/
+index.html
+
+# Lock files
+package-lock.json
+
+# Internal design notes & documentation
+*.txt
+game_*.md
+tool_*.md
+game_state_breakdown.md
 
 # Logs and debug files
 logs/
