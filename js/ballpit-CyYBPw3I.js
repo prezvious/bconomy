@@ -1,0 +1,1 @@
+import{ko as e}from"./index-BmAJQgTL.js";var t={claimCd:12*e,expiryTime:72*e},n={bcPerBall:2e4,basePrize:1e9,selfSpawnMult:{green:.5,yellow:1,orange:2,blue:4,purple:8,black:16},selfSpawnFloor:{green:.25,yellow:.25,orange:.25,blue:.4,purple:.5,black:.5}};export{t as n,n as t};

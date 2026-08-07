@@ -1,0 +1,28 @@
+Amnesiac
+
+chance = level * 2%
+
+Level 1  = 2% chance
+Level 2  = 4% chance
+Level 3  = 6% chance
+Level 4  = 8% chance
+Level 5  = 10% chance
+Level 6  = 12% chance
+Level 7  = 14% chance
+Level 8  = 16% chance
+Level 9  = 18% chance
+Level 10 = 20% chance
+Level 11 = 22% chance
+Level 12 = 24% chance
+Level 13 = 26% chance
+Level 14 = 28% chance
+Level 15 = 30% chance
+Level 16 = 32% chance
+Level 17 = 34% chance
+Level 18 = 36% chance
+Level 19 = 38% chance
+Level 20 = 40% chance
+Level 21 = 42% chance
+Level 22 = 44% chance
+Level 23 = 46% chance
+Level 24 = 48% chance

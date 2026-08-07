@@ -1,0 +1,1 @@
+import{i as e}from"./rolldown-runtime-aKtaBQYM.js";import{Bo as t,Lr as n,Rr as r,t as i}from"./index-BmAJQgTL.js";var a=e(t(),1);function o(){let e=i(e=>e.appPrefs.compactNumbers);return(0,a.useCallback)((t,i=!1,a)=>e?r(t,i):n(t,i,a),[e])}export{o as t};

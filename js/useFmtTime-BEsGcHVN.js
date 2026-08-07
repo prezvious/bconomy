@@ -1,0 +1,1 @@
+import{i as e}from"./rolldown-runtime-aKtaBQYM.js";import{Bo as t,Br as n,t as r}from"./index-BmAJQgTL.js";var i=e(t(),1);function a(e){return e===`days`?`d`:`y`}function o(){let e=r(e=>e.appPrefs.compactTimers);return(0,i.useCallback)((t,r=`stock`,i=`ceil`)=>n(Math.max(0,t),e?1:2,r,i),[e])}export{o as n,a as t};

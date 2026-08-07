@@ -1,0 +1,1 @@
+import{t as e}from"./index-BmAJQgTL.js";import{t}from"./useTick-BUYsOxy9.js";function n(){return Date.now()+e.getState().serverOffsetTime}function r(t){return t-e.getState().serverOffsetTime}function i(){t();let n=e(e=>e.serverOffsetTime);return Date.now()+n}export{r as n,i as r,n as t};

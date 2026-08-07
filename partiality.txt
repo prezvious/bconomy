@@ -1,0 +1,17 @@
+# Partiality
+Chance = Level × 15%
+1.  Level 1  = +15% Chance
+2.  Level 2  = +30% Chance
+3.  Level 3  = +45% Chance
+4.  Level 4  = +60% Chance
+5.  Level 5  = +75% Chance
+6.  Level 6  = +90% Chance
+7.  Level 7  = +105% Chance
+8.  Level 8  = +120% Chance
+9.  Level 9  = +135% Chance
+10. Level 10 = +150% Chance
+11. Level 11 = +165% Chance
+12. Level 12 = +180% Chance
+13. Level 13 = +195% Chance
+14. Level 14 = +210% Chance
+15. Level 15 = +225% Chance

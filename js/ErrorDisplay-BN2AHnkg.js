@@ -1,0 +1,1 @@
+import{Ro as e}from"./index-BmAJQgTL.js";import{r as t}from"./md-C7IgUcPn.js";var n=e();function r(){return(0,n.jsxs)(`div`,{style:{margin:`5px`},children:[(0,n.jsx)(t,{style:{marginBottom:`5px`}}),`\xA0There was an error with your request.`]})}export{r as t};

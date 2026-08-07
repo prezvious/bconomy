@@ -1,0 +1,15 @@
+{
+  "name": "bconomy",
+  "version": "1.0.0",
+  "description": "Bconomy Economy Game Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/test_all_engines.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  }
+}

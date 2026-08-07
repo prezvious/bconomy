@@ -1,0 +1,1 @@
+var e=Function.prototype.bind.call(Function.prototype.call,[].slice);function t(t,n){return e(t.querySelectorAll(n))}var n=`data-rr-ui-`,r=`rrUi`;function i(e){return`${n}${e}`}function a(e){return`${r}${e}`}export{a as n,t as r,i as t};
