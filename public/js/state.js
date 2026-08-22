@@ -9,7 +9,12 @@ let toolRecipes = {};
 let syncTimeout = null;
 
 export const getState = () => playerState;
-export const setState = (state) => { playerState = state; };
+export const setState = (state) => {
+    if (state && typeof state === 'object' && typeof state.cash === 'number' && state.cash > Number.MAX_SAFE_INTEGER) {
+        state.cash = Number.MAX_SAFE_INTEGER;
+    }
+    playerState = state;
+};
 
 export const getRankData = () => rankData;
 export const setRankData = (data) => { rankData = data; };
@@ -26,6 +31,9 @@ export const loadState = () => {
         const saved = localStorage.getItem('bconomy_player_state');
         if (saved) {
             playerState = JSON.parse(saved);
+            if (playerState && typeof playerState === 'object' && typeof playerState.cash === 'number' && playerState.cash > Number.MAX_SAFE_INTEGER) {
+                playerState.cash = Number.MAX_SAFE_INTEGER;
+            }
             return playerState;
         }
     } catch (e) {
@@ -40,6 +48,9 @@ export const saveState = (state) => {
     }
     try {
         if (playerState) {
+            if (typeof playerState.cash === 'number' && playerState.cash > Number.MAX_SAFE_INTEGER) {
+                playerState.cash = Number.MAX_SAFE_INTEGER;
+            }
             localStorage.setItem('bconomy_player_state', JSON.stringify(playerState));
             queueCloudSync();
         }

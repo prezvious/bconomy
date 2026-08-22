@@ -231,6 +231,64 @@ assert.strictEqual(buyState6.shop.boosterListings['Prospector Kit'].stock, Infin
 assert.strictEqual(buyState6.cash, 10000 - (3 * 1000 + 2 * 2000), 'Cash must be accurately deducted');
 console.log('✓ Passed!\n');
 
+// -----------------------------------------------------------------------------
+// [Test 7] Bulk Buy: Large Money Balance & Equal Distribution with Infinite Stock
+// -----------------------------------------------------------------------------
+console.log('[Test 7] Bulk Buy: Large Money Balance & All Strategies with Infinite Stock...');
+const buyState7 = createFreshState();
+ShopEngine.ensureShopState(buyState7, t0);
+buyState7.shop.nextRestockAt = t0 + 600000;
+buyState7.cash = 4999999972978630000000000; // ~$5 Septillion (from previous un-clamped states)
+buyState7.shop.boosterListings = {
+    'Target Module': { available: true, stock: Infinity, buyPrice: 38750000, tier: 'T3' },
+    'Harvest Relay': { available: true, stock: 13, buyPrice: 6570000000, tier: 'T4' }
+};
+
+const options7 = {
+    priorityStrategy: 'equalDistribution',
+    preset: 'boostersOnly',
+    selectedItems: {
+        'Target Module': { selected: true, minQty: 0, maxQty: Infinity },
+        'Harvest Relay': { selected: true, minQty: 0, maxQty: 13 }
+    }
+};
+
+// 1. Equal Distribution with huge money: should execute in <50ms without hanging
+const startTimeEqual = Date.now();
+const previewLargeEqual = ShopEngine.previewBulkBuy(buyState7, options7, t0);
+const durationEqual = Date.now() - startTimeEqual;
+
+assert(durationEqual < 500, `Equal distribution preview should execute in <500ms, took ${durationEqual}ms`);
+assert.strictEqual(previewLargeEqual.success, true);
+const targetMod = previewLargeEqual.breakdown.find(b => b.itemName === 'Target Module');
+const harvestRelay = previewLargeEqual.breakdown.find(b => b.itemName === 'Harvest Relay');
+assert(harvestRelay !== undefined, 'Harvest Relay should be in breakdown');
+assert.strictEqual(harvestRelay.quantity, 13, 'Harvest Relay should buy all 13 available stock');
+assert(targetMod !== undefined, 'Target Module should be in breakdown');
+assert(targetMod.quantity > 1000000, 'Target Module should buy remaining affordable units');
+assert(previewLargeEqual.totalCost <= Number.MAX_SAFE_INTEGER, 'Total cost should not exceed MAX_SAFE_INTEGER');
+
+const execLarge = ShopEngine.executeBulkBuy(buyState7, options7, t0);
+assert.strictEqual(execLarge.success, true);
+assert(buyState7.cash >= 0, 'Remaining cash should be non-negative');
+assert.strictEqual(buyState7.inventory['Harvest Relay'], 13);
+assert(buyState7.inventory['Target Module'] > 1000000);
+
+// 2. Test all other priority strategies with huge cash and infinite stock
+for (const strategy of ['lowestPrice', 'highestPrice', 'rarestFirst', 'equalDistribution']) {
+    const sState = createFreshState();
+    ShopEngine.ensureShopState(sState, t0);
+    sState.cash = 5000000000000000; // 5 Quadrillion
+    sState.shop.boosterListings = {
+        'Target Module': { available: true, stock: Infinity, buyPrice: 38750000, tier: 'T3' },
+        'Harvest Relay': { available: true, stock: 13, buyPrice: 6570000000, tier: 'T4' }
+    };
+    const sPreview = ShopEngine.previewBulkBuy(sState, { priorityStrategy: strategy }, t0);
+    assert.strictEqual(sPreview.success, true);
+    assert(sPreview.totalCost <= 5000000000000000);
+}
+console.log('✓ Passed!\n');
+
 console.log('========================================================');
 console.log(' ALL BULK ACTIONS TESTS PASSED CLEANLY! ');
 console.log('========================================================\n');

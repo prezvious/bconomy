@@ -631,27 +631,82 @@ class ShopEngine {
             candidates.sort((a, b) => b.rarityScore - a.rarityScore);
         }
 
-        let remainingCash = typeof playerState.cash === 'number' && !isNaN(playerState.cash) ? playerState.cash : 0;
+        let remainingCash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
         const initialCash = remainingCash;
         const purchases = {};
 
         if (priorityStrategy === 'equalDistribution') {
-            // Round-robin purchasing 1 unit per affordable item
-            let addedAny = true;
-            while (addedAny && remainingCash > 0) {
-                addedAny = false;
-                for (const item of candidates) {
-                    const currentPurchased = purchases[item.itemName] || 0;
-
-                    let maxAllowed = item.stock;
-                    if (selectedItems && typeof selectedItems[item.itemName] === 'object' && typeof selectedItems[item.itemName].maxQty === 'number') {
-                        maxAllowed = Math.min(maxAllowed, selectedItems[item.itemName].maxQty);
+            const active = [];
+            for (const item of candidates) {
+                if (!item.buyPrice || item.buyPrice <= 0) continue;
+                let maxAllowed = item.stock;
+                let minQty = 0;
+                if (selectedItems && typeof selectedItems[item.itemName] === 'object') {
+                    const sel = selectedItems[item.itemName];
+                    if (typeof sel.maxQty === 'number' && isFinite(sel.maxQty)) {
+                        maxAllowed = Math.min(maxAllowed, Math.max(0, Math.floor(sel.maxQty)));
                     }
+                    if (typeof sel.minQty === 'number' && isFinite(sel.minQty)) {
+                        minQty = Math.max(0, Math.floor(sel.minQty));
+                    }
+                }
+                if (maxAllowed > 0) {
+                    active.push({
+                        itemName: item.itemName,
+                        buyPrice: item.buyPrice,
+                        maxAllowed,
+                        minQty,
+                        purchased: 0
+                    });
+                }
+            }
 
-                    if (currentPurchased < maxAllowed && item.buyPrice > 0 && remainingCash >= item.buyPrice) {
-                        purchases[item.itemName] = currentPurchased + 1;
-                        remainingCash -= item.buyPrice;
-                        addedAny = true;
+            // Fast multi-unit batch round-robin
+            while (active.length > 0 && remainingCash > 0) {
+                const roundCost = active.reduce((sum, it) => sum + it.buyPrice, 0);
+                if (roundCost <= 0) break;
+
+                const affordableRounds = Math.floor(remainingCash / roundCost);
+                let maxRoundsToCapacity = Infinity;
+                for (const it of active) {
+                    const remainingCapacity = it.maxAllowed - it.purchased;
+                    if (remainingCapacity < maxRoundsToCapacity) {
+                        maxRoundsToCapacity = remainingCapacity;
+                    }
+                }
+
+                const batchRounds = Math.min(affordableRounds, maxRoundsToCapacity);
+
+                if (batchRounds >= 1) {
+                    for (const it of active) {
+                        it.purchased += batchRounds;
+                        purchases[it.itemName] = it.purchased;
+                    }
+                    remainingCash -= batchRounds * roundCost;
+
+                    for (let i = active.length - 1; i >= 0; i--) {
+                        if (active[i].purchased >= active[i].maxAllowed) {
+                            active.splice(i, 1);
+                        }
+                    }
+                } else {
+                    let boughtAnyInResidual = false;
+                    for (let i = 0; i < active.length; i++) {
+                        const it = active[i];
+                        if (it.purchased < it.maxAllowed && remainingCash >= it.buyPrice) {
+                            it.purchased += 1;
+                            purchases[it.itemName] = it.purchased;
+                            remainingCash -= it.buyPrice;
+                            boughtAnyInResidual = true;
+                        }
+                    }
+                    if (!boughtAnyInResidual) {
+                        break;
+                    }
+                    for (let i = active.length - 1; i >= 0; i--) {
+                        if (active[i].purchased >= active[i].maxAllowed) {
+                            active.splice(i, 1);
+                        }
                     }
                 }
             }
@@ -744,11 +799,12 @@ class ShopEngine {
             return { error: 'No affordable shop listings match criteria' };
         }
 
-        if ((playerState.cash || 0) < preview.totalCost) {
+        const currentCash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
+        if (currentCash < preview.totalCost) {
             return { error: 'Insufficient funds to execute bulk purchase' };
         }
 
-        playerState.cash -= preview.totalCost;
+        playerState.cash = currentCash - preview.totalCost;
 
         for (const item of preview.breakdown) {
             playerState.inventory[item.itemName] = (playerState.inventory[item.itemName] || 0) + item.quantity;
