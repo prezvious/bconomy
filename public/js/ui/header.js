@@ -6,10 +6,13 @@ import { renderInventory } from './inventory.js';
 import { renderTools } from './tools.js';
 import { renderRankPrestige } from './rankPrestigeCombined.js';
 import { renderFarm } from './farm.js';
+import { updateAccountHeaderUI } from './authModal.js';
 
 export const renderHeader = () => {
     const playerState = getState();
     if (!playerState) return;
+
+    updateAccountHeaderUI();
 
     const cashEl = document.getElementById('header-cash');
     if (cashEl) cashEl.textContent = formatMoney(playerState.cash);

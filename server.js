@@ -10,6 +10,8 @@ const {
     isSupabaseConfigured,
     findEmailByUsername,
     getProfileByUserId,
+    signUpUserAdmin,
+    signInUserServer,
     syncPlayerState,
     formatPlayerId
 } = require('./src/db/supabase');
@@ -854,9 +856,47 @@ app.get('/api/data/faction-multipliers', (req, res) => {
 app.get('/api/config/auth', (req, res) => {
     res.json({
         enabled: isSupabaseConfigured(),
-        supabaseUrl: process.env.SUPABASE_URL || '',
-        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+        supabaseUrl: process.env.SUPABASE_URL || 'https://mlaivuzdwevmzuhxjraw.supabase.co',
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MTQ5NDUsImV4cCI6MjEwMjk5MDk0NX0.2FvGex8DNjpzUY7Yeh4DFd7RCBeV3PFlUQ0I8r71nfc'
     });
+});
+
+app.post('/api/auth/signup', async (req, res) => {
+    const { username, email, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required.' });
+    }
+
+    try {
+        const initialState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        FarmEngine.ensureFarmState(initialState);
+        ShopEngine.ensureShopState(initialState);
+        FactionEngine.ensureFactionState(initialState);
+
+        const result = await signUpUserAdmin({
+            username,
+            email,
+            password,
+            defaultState: initialState
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message || 'Failed to sign up.' });
+    }
+});
+
+app.post('/api/auth/signin', async (req, res) => {
+    const { usernameOrEmail, password } = req.body;
+    if (!usernameOrEmail || !password) {
+        return res.status(400).json({ error: 'Username/Email and password are required.' });
+    }
+
+    try {
+        const result = await signInUserServer({ usernameOrEmail, password });
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message || 'Invalid username or password.' });
+    }
 });
 
 app.post('/api/player/find-email', async (req, res) => {

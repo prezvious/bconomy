@@ -9,12 +9,12 @@ import {
     signInUser,
     signOutUser,
     getAuthSession,
-    getAuthProfile,
-    refreshUserProfile
+    getAuthProfile
 } from '../auth.js';
 import { getState, setState, saveState } from '../state.js';
 import { showToast } from './toast.js';
 import { renderAll } from './header.js';
+import { openDialog, closeDialog } from './modal.js';
 
 let authModalEl = null;
 let currentTab = 'signin'; // 'signin' | 'signup'
@@ -36,7 +36,7 @@ export function setupAuthModal() {
     const closeBtn = authModalEl.querySelector('.auth-modal-close');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
-            authModalEl.close();
+            closeAuthModal();
         });
     }
 
@@ -56,23 +56,28 @@ export function setupAuthModal() {
     setupPasswordInputEnhancements();
 
     // Listen for auth state changes
-    window.addEventListener('bconomy-auth-change', (e) => {
+    window.addEventListener('bconomy-auth-change', () => {
         updateAccountHeaderUI();
     });
 
     updateAccountHeaderUI();
 }
 
-export function openAuthModal(defaultTab = 'signin') {
+export function openAuthModal(defaultTab = 'signin', returnFocus = null) {
+    if (!authModalEl) authModalEl = document.getElementById('auth-modal');
     if (!authModalEl) return;
     switchAuthTab(defaultTab);
     clearAuthForms();
-    authModalEl.showModal();
+    openDialog(authModalEl, {
+        closeOnBackdrop: true,
+        returnFocus: returnFocus || document.activeElement
+    });
 }
 
 export function closeAuthModal() {
-    if (authModalEl && authModalEl.open) {
-        authModalEl.close();
+    if (!authModalEl) authModalEl = document.getElementById('auth-modal');
+    if (authModalEl) {
+        closeDialog(authModalEl);
     }
 }
 
@@ -84,8 +89,10 @@ function switchAuthTab(tab) {
     tabBtns.forEach(b => {
         if (b.dataset.tab === tab) {
             b.classList.add('active');
+            b.setAttribute('aria-selected', 'true');
         } else {
             b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
         }
     });
 
@@ -135,17 +142,19 @@ function showAuthError(paneId, message) {
 }
 
 function setupPasswordInputEnhancements() {
-    const passwordInputs = authModalEl?.querySelectorAll('.password-wrapper input[type="password"], .password-wrapper input[type="text"]') || [];
+    if (!authModalEl) authModalEl = document.getElementById('auth-modal');
+    const passwordInputs = authModalEl?.querySelectorAll('.password-wrapper input') || [];
 
     passwordInputs.forEach(input => {
-        const wrapper = input.closest('.password-wrapper');
+        const wrapper = input.closest('.form-group') || input.parentElement;
         if (!wrapper) return;
 
         const toggleBtn = wrapper.querySelector('.toggle-password-btn');
         const capsLockBadge = wrapper.querySelector('.caps-lock-indicator');
 
         // Toggle Show / Hide Password
-        if (toggleBtn) {
+        if (toggleBtn && !toggleBtn.dataset.bound) {
+            toggleBtn.dataset.bound = 'true';
             toggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 const isPassword = input.type === 'password';
@@ -177,7 +186,8 @@ function setupPasswordInputEnhancements() {
 
     // Sign Up Password Strength Meter Live Listener
     const signupPasswordInput = document.getElementById('signup-password');
-    if (signupPasswordInput) {
+    if (signupPasswordInput && !signupPasswordInput.dataset.bound) {
+        signupPasswordInput.dataset.bound = 'true';
         signupPasswordInput.addEventListener('input', (e) => {
             updateStrengthMeterUI(e.target.value);
         });
@@ -233,13 +243,13 @@ async function handleSignIn(e) {
             submitBtn.classList.add('btn-loading');
         }
 
-        const { user } = await signInUser({ usernameOrEmail: identifier, password });
-        showToast('Welcome back, Guild Master!', 'success');
+        const data = await signInUser({ usernameOrEmail: identifier, password });
+        showToast(`Welcome back, Guild Master ${data.profile?.username || ''}!`, 'success');
         closeAuthModal();
 
         // Load user's cloud saved state
         const profile = getAuthProfile();
-        if (profile && profile.state) {
+        if (profile && profile.state && Object.keys(profile.state).length > 0) {
             setState(profile.state);
             saveState(profile.state);
             renderAll();
@@ -286,13 +296,13 @@ async function handleSignUp(e) {
             submitBtn.classList.add('btn-loading');
         }
 
-        await signUpUser({ username, email, password });
-        showToast('Enlisted successfully! Welcome to Bconomy.', 'success');
+        const data = await signUpUser({ username, email, password });
+        showToast(`Enlisted successfully as Player ${data.profile?.formatted_player_id || '#' + data.profile?.player_id}!`, 'success');
         closeAuthModal();
 
         // Sync initial state if available
         const profile = getAuthProfile();
-        if (profile && profile.state) {
+        if (profile && profile.state && Object.keys(profile.state).length > 0) {
             setState(profile.state);
             saveState(profile.state);
             renderAll();
@@ -339,6 +349,7 @@ export function updateAccountHeaderUI() {
                 await signOutUser();
                 showToast('Signed out of Bconomy.', 'info');
                 updateAccountHeaderUI();
+                renderAll();
             });
         }
     } else {

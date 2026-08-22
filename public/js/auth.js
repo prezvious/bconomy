@@ -1,11 +1,13 @@
 /**
  * @module auth
- * Supabase client authentication and Password Strength Calculator.
+ * Player Authentication, Session State, and Password Strength Calculator.
  */
 
-let supabaseInstance = null;
 let currentSession = null;
 let currentProfile = null;
+
+const AUTH_SESSION_KEY = 'bconomy_auth_session';
+const AUTH_PROFILE_KEY = 'bconomy_auth_profile';
 
 /**
  * Calculate password strength score (0 to 4) and textual evaluation
@@ -42,7 +44,6 @@ export function evaluatePasswordStrength(password) {
     if (score < 1) score = 1;
     if (score > 4) score = 4;
 
-    // If password is very short (< 6 chars), force level 1
     if (len < 6) {
         score = 1;
     }
@@ -75,55 +76,31 @@ export function evaluatePasswordStrength(password) {
 }
 
 /**
- * Initialize Supabase Client in the browser
+ * Initialize Auth State from stored session and server
  */
 export async function initAuth() {
     try {
-        // First check if window.supabase is available from CDN
-        if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
-            console.warn('Supabase JS library not loaded yet');
-            return null;
+        const storedSession = localStorage.getItem(AUTH_SESSION_KEY);
+        const storedProfile = localStorage.getItem(AUTH_PROFILE_KEY);
+
+        if (storedSession && storedProfile) {
+            currentSession = JSON.parse(storedSession);
+            currentProfile = JSON.parse(storedProfile);
         }
 
-        // Fetch public Supabase configuration from server
-        const res = await fetch('/api/config/auth');
-        if (!res.ok) return null;
-        const config = await res.json();
-
-        if (!config.enabled || !config.supabaseUrl || !config.supabaseAnonKey) {
-            console.log('Supabase not configured or enabled');
-            return null;
+        if (currentProfile && currentProfile.id) {
+            await refreshUserProfile(currentProfile.id);
         }
 
-        supabaseInstance = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+        window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
+            detail: { session: currentSession, profile: currentProfile }
+        }));
 
-        // Check for existing active session
-        const { data: { session } } = await supabaseInstance.auth.getSession();
-        if (session && session.user) {
-            currentSession = session;
-            await refreshUserProfile(session.user.id);
-        }
-
-        // Listen for auth state changes
-        supabaseInstance.auth.onAuthStateChange(async (event, session) => {
-            currentSession = session;
-            if (session && session.user) {
-                await refreshUserProfile(session.user.id);
-            } else {
-                currentProfile = null;
-            }
-            window.dispatchEvent(new CustomEvent('bconomy-auth-change', { detail: { session, profile: currentProfile } }));
-        });
-
-        return supabaseInstance;
+        return currentProfile;
     } catch (e) {
-        console.error('Failed to initialize Supabase Auth:', e);
+        console.warn('Failed to restore auth session:', e);
         return null;
     }
-}
-
-export function getSupabase() {
-    return supabaseInstance;
 }
 
 export function getAuthSession() {
@@ -136,17 +113,24 @@ export function getAuthProfile() {
 
 export function setAuthProfile(profile) {
     currentProfile = profile;
+    if (profile) {
+        localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(profile));
+    } else {
+        localStorage.removeItem(AUTH_PROFILE_KEY);
+    }
 }
 
 /**
- * Refresh user profile and sequential Player ID from server/database
+ * Refresh user profile from server
  */
 export async function refreshUserProfile(userId) {
     if (!userId) return null;
     try {
         const res = await fetch(`/api/player/profile/${userId}`);
         if (res.ok) {
-            currentProfile = await res.json();
+            const data = await res.json();
+            currentProfile = data;
+            localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
             return currentProfile;
         }
     } catch (e) {
@@ -159,37 +143,34 @@ export async function refreshUserProfile(userId) {
  * Sign up a new player with Username, optional Email, and Password
  */
 export async function signUpUser({ username, email, password }) {
-    if (!supabaseInstance) {
-        throw new Error('Supabase is not configured.');
-    }
-
-    const cleanUsername = username.trim();
-    if (!cleanUsername || cleanUsername.length < 3) {
-        throw new Error('Username must be at least 3 characters.');
-    }
-
-    // If email is not provided, generate a dedicated system email for Supabase Auth
-    let userEmail = email && email.trim() ? email.trim() : `${cleanUsername.toLowerCase().replace(/[^a-z0-9]/g, '')}@bconomy.local`;
-
-    const { data, error } = await supabaseInstance.auth.signUp({
-        email: userEmail,
-        password: password,
-        options: {
-            data: {
-                username: cleanUsername
-            }
-        }
+    const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            username: username.trim(),
+            email: email ? email.trim() : undefined,
+            password: password
+        })
     });
 
-    if (error) {
-        throw new Error(error.message);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to create account.');
     }
 
-    if (data.user) {
-        // Wait briefly for trigger to populate public.player_state
-        await new Promise(r => setTimeout(r, 600));
-        await refreshUserProfile(data.user.id);
+    currentSession = data.session;
+    currentProfile = data.profile;
+
+    if (currentSession) {
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentSession));
     }
+    if (currentProfile) {
+        localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
+    }
+
+    window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
+        detail: { session: currentSession, profile: currentProfile }
+    }));
 
     return data;
 }
@@ -198,48 +179,33 @@ export async function signUpUser({ username, email, password }) {
  * Sign in existing player using Username OR Email + Password
  */
 export async function signInUser({ usernameOrEmail, password }) {
-    if (!supabaseInstance) {
-        throw new Error('Supabase is not configured.');
-    }
-
-    const identifier = usernameOrEmail.trim();
-    let loginEmail = identifier;
-
-    // If identifier is not an email address, lookup email by username via backend API
-    if (!identifier.includes('@')) {
-        try {
-            const lookupRes = await fetch('/api/player/find-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: identifier })
-            });
-
-            if (lookupRes.ok) {
-                const lookupData = await lookupRes.json();
-                if (lookupData.email) {
-                    loginEmail = lookupData.email;
-                }
-            } else {
-                // Fallback to synthetic email format if not in lookup
-                loginEmail = `${identifier.toLowerCase().replace(/[^a-z0-9]/g, '')}@bconomy.local`;
-            }
-        } catch (e) {
-            loginEmail = `${identifier.toLowerCase().replace(/[^a-z0-9]/g, '')}@bconomy.local`;
-        }
-    }
-
-    const { data, error } = await supabaseInstance.auth.signInWithPassword({
-        email: loginEmail,
-        password: password
+    const res = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            usernameOrEmail: usernameOrEmail.trim(),
+            password: password
+        })
     });
 
-    if (error) {
-        throw new Error(error.message || 'Invalid username or password.');
+    const data = await res.json();
+    if (!res.ok || data.error) {
+        throw new Error(data.error || 'Invalid username or password.');
     }
 
-    if (data.user) {
-        await refreshUserProfile(data.user.id);
+    currentSession = data.session;
+    currentProfile = data.profile;
+
+    if (currentSession) {
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentSession));
     }
+    if (currentProfile) {
+        localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
+    }
+
+    window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
+        detail: { session: currentSession, profile: currentProfile }
+    }));
 
     return data;
 }
@@ -248,10 +214,12 @@ export async function signInUser({ usernameOrEmail, password }) {
  * Sign out current player
  */
 export async function signOutUser() {
-    if (supabaseInstance) {
-        await supabaseInstance.auth.signOut();
-    }
     currentSession = null;
     currentProfile = null;
-    window.dispatchEvent(new CustomEvent('bconomy-auth-change', { detail: { session: null, profile: null } }));
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_PROFILE_KEY);
+
+    window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
+        detail: { session: null, profile: null }
+    }));
 }
