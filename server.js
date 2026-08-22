@@ -5,6 +5,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const {
     isSupabaseConfigured,
     findEmailByUsername,
@@ -25,7 +26,11 @@ const { FactionEngine, getMultiplierTable } = require('./src/engine/factionEngin
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const DEFAULT_STATE = {
     cash: 0,
