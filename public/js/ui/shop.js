@@ -19,7 +19,8 @@ const defaultShopViewState = () => ({
     sellCategory: 'all',
     availability: 'available',
     buySort: 'availability',
-    sellSort: 'availability'
+    sellSort: 'availability',
+    bulkBuyStrategy: 'lowestPrice'
 });
 let shopViewState = defaultShopViewState();
 let bulkModalMode = 'sell'; // 'sell' or 'buy'
@@ -601,7 +602,8 @@ const renderBulkModalContent = () => {
 
         const allListings = [...activeItems, ...activeBoosters];
 
-        body.innerHTML = `
+            const currentStrategy = shopViewState.bulkBuyStrategy || 'lowestPrice';
+            body.innerHTML = `
             <div class="bulk-presets-bar mb-3">
                 <span class="bulk-presets-label">Quick Presets:</span>
                 <button type="button" class="preset-chip active" id="preset-buy-all">
@@ -622,11 +624,11 @@ const renderBulkModalContent = () => {
                 <div class="bulk-strategy-controls">
                     <label class="bulk-strategy-label" for="bulk-buy-strategy-select">Priority Strategy:</label>
                     <select id="bulk-buy-strategy-select" class="bulk-strategy-select" aria-label="Bulk-buy priority strategy">
-                        <option value="lowestPrice" selected>Lowest Price First (Maximize Units)</option>
-                        <option value="highestPrice">Highest Price First (High Value)</option>
-                        <option value="rarestFirst">Rarest / Highest Tier First</option>
-                        <option value="shopOrder">Listed Shop Order</option>
-                        <option value="equalDistribution">Equal Distribution</option>
+                        <option value="lowestPrice" ${currentStrategy === 'lowestPrice' ? 'selected' : ''}>Lowest Price First (Maximize Units)</option>
+                        <option value="highestPrice" ${currentStrategy === 'highestPrice' ? 'selected' : ''}>Highest Price First (High Value)</option>
+                        <option value="rarestFirst" ${currentStrategy === 'rarestFirst' ? 'selected' : ''}>Rarest / Highest Tier First</option>
+                        <option value="shopOrder" ${currentStrategy === 'shopOrder' ? 'selected' : ''}>Listed Shop Order</option>
+                        <option value="equalDistribution" ${currentStrategy === 'equalDistribution' ? 'selected' : ''}>Equal Distribution</option>
                     </select>
                 </div>
                 <div class="bulk-selection-actions">
@@ -738,6 +740,9 @@ const renderBulkModalContent = () => {
         document.getElementById('bulk-buy-master-check')?.addEventListener('change', (e) => {
             document.querySelectorAll('.bulk-buy-item-check').forEach(cb => cb.checked = e.target.checked);
             setActiveBuyChip(e.target.checked ? 'preset-buy-all' : 'preset-buy-deselect');
+        });
+        document.getElementById('bulk-buy-strategy-select')?.addEventListener('change', (e) => {
+            shopViewState.bulkBuyStrategy = e.target.value;
         });
         document.querySelectorAll('.bulk-buy-item-check').forEach(cb => {
             cb.addEventListener('change', () => {
@@ -865,7 +870,7 @@ const showPreviewModal = (previewResult) => {
             </div>
             <div class="preview-stat-card">
                 <div class="stat-title">${amountLabel}</div>
-                <div class="stat-num ${isSell ? 'text-success' : ''}">${isSell ? '+' : '-'}${formatMoney(totalAmount)}</div>
+                <div class="stat-num ${isSell ? 'text-success' : ''}">${isSell ? '+' : ''}${formatMoney(totalAmount)}</div>
             </div>
             <div class="preview-stat-card">
                 <div class="stat-title">Cash After</div>
@@ -891,7 +896,7 @@ const showPreviewModal = (previewResult) => {
                             <td><b>${escapeHtml(displayItemName(item.itemName))}</b></td>
                             <td>${formatDisplayNumber(item.quantity)}</td>
                             <td>${formatMoney(item.unitPrice)}</td>
-                            <td class="${isSell ? 'text-success' : ''}">${isSell ? '+' : '-'}${formatMoney(item.subtotal)}</td>
+                            <td class="${isSell ? 'text-success' : ''}">${isSell ? '+' : ''}${formatMoney(item.subtotal)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
