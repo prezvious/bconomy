@@ -19,18 +19,26 @@ import { openDialog, closeDialog } from './modal.js';
 let authModalEl = null;
 let currentTab = 'signin'; // 'signin' | 'signup'
 
-const USERNAME_PREFIXES = [
-    'Iron', 'Gold', 'Silver', 'Copper', 'Amber', 'Shadow', 'Solar', 'Lunar', 'Astral',
-    'Diamond', 'Emerald', 'Ruby', 'Obsidian', 'Mythic', 'Grand', 'Arcane', 'Crystal',
-    'Noble', 'Vanguard', 'Swift', 'Brave', 'Keen', 'Apex', 'Crown', 'Frost', 'Ember',
-    'Thunder', 'Mystic', 'Runic', 'Velvet', 'Silent', 'Titan'
+const ENGLISH_ADJECTIVES = [
+    'Orange', 'Blue', 'Green', 'Golden', 'Silver', 'Crimson', 'Amber', 'Violet', 'Indigo', 'Emerald',
+    'Ruby', 'Coral', 'Ivory', 'Jade', 'Opal', 'Topaz', 'Bronze', 'Copper', 'Cedar', 'Hazel',
+    'Bright', 'Silent', 'Swift', 'Brave', 'Clever', 'Quiet', 'Wild', 'Noble', 'Calm', 'Gentle',
+    'Fierce', 'Keen', 'Grand', 'Pure', 'Lucky', 'Sunny', 'Cozy', 'Rapid', 'Sharp', 'Mighty',
+    'Ancient', 'Radiant', 'Jolly', 'Sturdy', 'Serene', 'Vibrant', 'Daring', 'Smooth', 'Crisp', 'Frosty',
+    'Breezy', 'Sparkling', 'Shining', 'Rustic', 'Humble', 'Velvet', 'Mystic', 'Cosmic', 'Solar', 'Lunar',
+    'Astral', 'Timber', 'Alpine', 'Coastal', 'Highland', 'Nordic', 'Sylvan', 'Verdant', 'Brisk', 'Mellow'
 ];
 
-const USERNAME_SUFFIXES = [
-    'Baron', 'Merchant', 'Tycoon', 'Smith', 'Miner', 'Harvester', 'Keeper', 'Trader',
-    'Artisan', 'Crafter', 'Seeker', 'Knight', 'Alchemist', 'Chancellor', 'Investor',
-    'Architect', 'Treasurer', 'Guildmaster', 'Ranger', 'Explorer', 'Warden', 'Strategist',
-    'Pioneer', 'Overlord', 'Foreman', 'Botanist'
+const ENGLISH_NOUNS = [
+    'Boat', 'Tree', 'River', 'Mountain', 'Valley', 'Forest', 'Castle', 'Bridge', 'Tower', 'Meadow',
+    'Garden', 'Island', 'Harbor', 'Village', 'Cottage', 'Lantern', 'Compass', 'Anchor', 'Whistle', 'Feather',
+    'Pebble', 'Crystal', 'Falcon', 'Eagle', 'Wolf', 'Fox', 'Bear', 'Stag', 'Otter', 'Owl',
+    'Hawk', 'Robin', 'Sparrow', 'Badger', 'Beaver', 'Panda', 'Tiger', 'Lion', 'Dolphin', 'Starling',
+    'Heron', 'Crane', 'Dragonfly', 'Butterfly', 'Firefly', 'Cricket', 'Acorn', 'Chestnut', 'Hazel', 'Walnut',
+    'Maple', 'Willow', 'Birch', 'Pine', 'Cedar', 'Spruce', 'Clover', 'Sunflower', 'Tulip', 'Daisy',
+    'Lily', 'Rose', 'Breeze', 'Cloud', 'Storm', 'Rain', 'Frost', 'Dawn', 'Dusk', 'Morning',
+    'Evening', 'Twilight', 'Sunset', 'Sunrise', 'Moonlight', 'Starlight', 'Shadow', 'Glow', 'Spark', 'Beacon',
+    'Haven', 'Brook', 'Creek', 'Canyon', 'Lagoon', 'Oasis', 'Ridge', 'Spire', 'Summit', 'Glade'
 ];
 
 let lastSuggestedName = '';
@@ -38,10 +46,27 @@ let lastSuggestedName = '';
 export function generateRandomUsernameSuggestion() {
     let name = '';
     do {
-        const prefix = USERNAME_PREFIXES[Math.floor(Math.random() * USERNAME_PREFIXES.length)];
-        const suffix = USERNAME_SUFFIXES[Math.floor(Math.random() * USERNAME_SUFFIXES.length)];
-        name = `${prefix}${suffix}`;
+        const adj = ENGLISH_ADJECTIVES[Math.floor(Math.random() * ENGLISH_ADJECTIVES.length)];
+        const noun1 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
+        
+        const roll = Math.random();
+        if (roll < 0.65) {
+            // Pattern 1: Adjective + Noun (e.g. OrangeBoat, BlueFalcon, GoldenFox)
+            name = `${adj}${noun1}`;
+        } else if (roll < 0.85) {
+            // Pattern 2: Adjective + Noun + Noun (e.g. OrangeBoatTree, SilentPineHaven)
+            let noun2 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
+            while (noun2 === noun1) {
+                noun2 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
+            }
+            name = `${adj}${noun1}${noun2}`;
+        } else {
+            // Pattern 3: Adjective + Noun + Number (e.g. SwiftEagle42, BrightRiver88)
+            const num = Math.floor(Math.random() * 90) + 10;
+            name = `${adj}${noun1}${num}`;
+        }
     } while (name === lastSuggestedName);
+    
     lastSuggestedName = name;
     return name;
 }
