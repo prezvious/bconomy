@@ -50,20 +50,23 @@ export function generateRandomUsernameSuggestion() {
         const noun1 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
         
         const roll = Math.random();
-        if (roll < 0.65) {
-            // Pattern 1: Adjective + Noun (e.g. OrangeBoat, BlueFalcon, GoldenFox)
+        if (roll < 0.25) {
+            // Pattern 1: Single Word (e.g. Falcon, River, Willow, Ember, Haven, Crystal)
+            name = noun1;
+        } else if (roll < 0.65) {
+            // Pattern 2: Adjective + Noun (e.g. OrangeBoat, BlueFalcon, GoldenFox)
             name = `${adj}${noun1}`;
         } else if (roll < 0.85) {
-            // Pattern 2: Adjective + Noun + Noun (e.g. OrangeBoatTree, SilentPineHaven)
+            // Pattern 3: Adjective + Noun + Noun (e.g. OrangeBoatTree, SilentPineHaven)
             let noun2 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
             while (noun2 === noun1) {
                 noun2 = ENGLISH_NOUNS[Math.floor(Math.random() * ENGLISH_NOUNS.length)];
             }
             name = `${adj}${noun1}${noun2}`;
         } else {
-            // Pattern 3: Adjective + Noun + Number (e.g. SwiftEagle42, BrightRiver88)
+            // Pattern 4: Word + Number (e.g. Falcon42, SwiftEagle99, River88)
             const num = Math.floor(Math.random() * 90) + 10;
-            name = `${adj}${noun1}${num}`;
+            name = (Math.random() > 0.5 ? `${adj}${noun1}` : noun1) + num;
         }
     } while (name === lastSuggestedName);
     
@@ -348,8 +351,8 @@ async function handleSignUp(e) {
     const confirmPassword = document.getElementById('signup-confirm-password')?.value;
     const submitBtn = document.getElementById('signup-submit-btn');
 
-    if (!username || username.trim().length < 3) {
-        showAuthError('auth-pane-signup', 'Username must be at least 3 characters long.');
+    if (!username || username.trim().length < 2) {
+        showAuthError('auth-pane-signup', 'Username must be at least 2 characters long.');
         return;
     }
 

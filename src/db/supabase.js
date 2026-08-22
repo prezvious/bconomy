@@ -166,8 +166,8 @@ async function signUpUserAdmin({ username, email, password, defaultState }) {
     if (!admin) throw new Error('Supabase is not configured');
 
     const cleanUsername = username.trim();
-    if (!cleanUsername || cleanUsername.length < 3) {
-        throw new Error('Username must be at least 3 characters long.');
+    if (!cleanUsername || cleanUsername.length < 2) {
+        throw new Error('Username must be at least 2 characters long.');
     }
 
     // Check if username already exists
