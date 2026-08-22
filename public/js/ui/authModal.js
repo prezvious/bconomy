@@ -395,6 +395,43 @@ async function handleSignUp(e) {
 }
 
 /**
+ * Open the Player Account Details modal
+ */
+export function openAccountDetailsModal(returnFocus = null) {
+    const profile = getAuthProfile();
+    const session = getAuthSession();
+    if (!profile) return;
+
+    const modal = document.getElementById('account-profile-modal');
+    if (!modal) return;
+
+    const playerIdFormatted = profile.formatted_player_id || `#${profile.player_id}`;
+    const idEl = document.getElementById('account-modal-player-id');
+    const userEl = document.getElementById('account-modal-username');
+    const emailEl = document.getElementById('account-modal-email');
+    const signoutBtn = document.getElementById('account-modal-signout-btn');
+
+    if (idEl) idEl.textContent = `Player ${playerIdFormatted}`;
+    if (userEl) userEl.textContent = profile.username || 'Guild Master';
+    if (emailEl) emailEl.textContent = session?.user?.email || profile.email || 'None';
+
+    if (signoutBtn) {
+        signoutBtn.onclick = async () => {
+            closeDialog(modal, { reason: 'signout' });
+            await signOutUser();
+            showToast('Signed out of Bconomy.', 'info');
+            updateAccountHeaderUI();
+            renderAll();
+        };
+    }
+
+    openDialog(modal, {
+        closeOnBackdrop: true,
+        returnFocus: returnFocus || document.getElementById('header-account-btn') || document.activeElement
+    });
+}
+
+/**
  * Render Player ID and Account info in Header / UI
  */
 export function updateAccountHeaderUI() {
@@ -407,41 +444,31 @@ export function updateAccountHeaderUI() {
     if (session && profile) {
         const playerIdFormatted = profile.formatted_player_id || `#${profile.player_id}`;
         accountContainer.innerHTML = `
-            <div class="player-account-badge" title="Logged in as ${profile.username}">
-                <div class="player-id-tag">
-                    <iconify-icon icon="lucide:user-check" class="player-icon" aria-hidden="true"></iconify-icon>
-                    <span class="player-id-text">Player ${playerIdFormatted}</span>
-                </div>
-                <span class="player-username">${profile.username}</span>
-                <button type="button" id="header-signout-btn" class="header-auth-btn signout" title="Sign Out" aria-label="Sign Out">
-                    <iconify-icon icon="lucide:log-out" aria-hidden="true"></iconify-icon>
-                </button>
-            </div>
+            <button type="button" id="header-account-btn" class="player-account-btn" title="View Account Profile (${profile.username})" aria-label="Player Account Profile">
+                <iconify-icon icon="lucide:user-check" class="player-account-icon" aria-hidden="true"></iconify-icon>
+                <span class="player-account-id">Player ${playerIdFormatted}</span>
+                <iconify-icon icon="lucide:chevron-down" class="player-account-chevron" aria-hidden="true"></iconify-icon>
+            </button>
         `;
 
-        const signoutBtn = document.getElementById('header-signout-btn');
-        if (signoutBtn) {
-            signoutBtn.addEventListener('click', async () => {
-                await signOutUser();
-                showToast('Signed out of Bconomy.', 'info');
-                updateAccountHeaderUI();
-                renderAll();
+        const accountBtn = document.getElementById('header-account-btn');
+        if (accountBtn) {
+            accountBtn.addEventListener('click', () => {
+                openAccountDetailsModal(accountBtn);
             });
         }
     } else {
         accountContainer.innerHTML = `
-            <div class="player-guest-badge">
-                <button type="button" id="header-signin-btn" class="header-auth-btn signin">
-                    <iconify-icon icon="lucide:shield" aria-hidden="true"></iconify-icon>
-                    <span>Sign In / Enlist</span>
-                </button>
-            </div>
+            <button type="button" id="header-signin-btn" class="player-guest-btn" title="Sign In or Enlist" aria-label="Sign In or Enlist">
+                <iconify-icon icon="lucide:shield" class="player-guest-icon" aria-hidden="true"></iconify-icon>
+                <span>Sign In</span>
+            </button>
         `;
 
         const signinBtn = document.getElementById('header-signin-btn');
         if (signinBtn) {
             signinBtn.addEventListener('click', () => {
-                openAuthModal('signin');
+                openAuthModal('signin', signinBtn);
             });
         }
     }

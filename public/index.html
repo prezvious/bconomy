@@ -95,21 +95,23 @@
                         <iconify-icon icon="lucide:medal" class="stat-icon" aria-hidden="true"></iconify-icon>
                         <div class="stat-info">
                             <span class="stat-label">Rank</span>
-                            <span class="stat-value" id="header-rank">Rank 0</span>
+                            <span class="stat-value" id="header-rank">Rank 1 - Peasant</span>
                         </div>
                     </div>
                 </div>
 
-                <div id="header-account-status" class="header-account-status"></div>
+                <div class="header-controls">
+                    <div id="header-account-status" class="header-account-status"></div>
 
-                <div class="header-action-btns">
-                    <button id="btn-toggle-console" class="theme-toggle console-toggle-btn" type="button" aria-label="Toggle Console Feed" title="Toggle Console Feed">
-                        <iconify-icon icon="lucide:terminal" class="theme-icon" aria-hidden="true"></iconify-icon>
-                    </button>
-                    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark theme" title="Toggle Dark/Light Mode">
-                        <iconify-icon icon="lucide:moon" class="theme-icon theme-icon-light" aria-hidden="true"></iconify-icon>
-                        <iconify-icon icon="lucide:sun" class="theme-icon theme-icon-dark" aria-hidden="true"></iconify-icon>
-                    </button>
+                    <div class="header-action-btns">
+                        <button id="btn-toggle-console" class="theme-toggle console-toggle-btn" type="button" aria-label="Toggle Console Feed" title="Toggle Console Feed">
+                            <iconify-icon icon="lucide:terminal" class="theme-icon" aria-hidden="true"></iconify-icon>
+                        </button>
+                        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark theme" title="Toggle Dark/Light Mode">
+                            <iconify-icon icon="lucide:moon" class="theme-icon theme-icon-light" aria-hidden="true"></iconify-icon>
+                            <iconify-icon icon="lucide:sun" class="theme-icon theme-icon-dark" aria-hidden="true"></iconify-icon>
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -1106,6 +1108,55 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- User Account Profile / Details Modal -->
+    <dialog id="account-profile-modal" class="modal hidden account-profile-dialog" data-app-dialog aria-labelledby="account-profile-title">
+        <div class="modal-content card account-profile-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <div class="account-header-badge">
+                        <iconify-icon icon="lucide:user-check" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 id="account-profile-title" class="auth-title">Player Account</h3>
+                        <p class="modal-header-subtitle">Your active Guild Master profile details</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn account-profile-close" type="button" aria-label="Close account profile modal" data-dialog-close>
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="modal-body account-profile-body">
+                <div class="account-info-grid">
+                    <div class="account-info-item">
+                        <span class="account-info-label">Player ID</span>
+                        <span id="account-modal-player-id" class="account-info-value font-mono">#—</span>
+                    </div>
+                    <div class="account-info-item">
+                        <span class="account-info-label">Guild Master Username</span>
+                        <span id="account-modal-username" class="account-info-value font-semibold">—</span>
+                    </div>
+                    <div class="account-info-item">
+                        <span class="account-info-label">Linked Email</span>
+                        <span id="account-modal-email" class="account-info-value">—</span>
+                    </div>
+                    <div class="account-info-item">
+                        <span class="account-info-label">Account Standing</span>
+                        <span class="account-status-tag">Active & Verified</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions account-modal-actions">
+                <button id="account-modal-close-btn" class="action-btn secondary-btn" type="button" data-dialog-close>Close</button>
+                <button id="account-modal-signout-btn" class="action-btn danger-btn" type="button">
+                    <iconify-icon icon="lucide:log-out" aria-hidden="true"></iconify-icon>
+                    <span>Sign Out</span>
+                </button>
             </div>
         </div>
     </dialog>
