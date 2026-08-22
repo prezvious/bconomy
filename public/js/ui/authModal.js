@@ -19,6 +19,52 @@ import { openDialog, closeDialog } from './modal.js';
 let authModalEl = null;
 let currentTab = 'signin'; // 'signin' | 'signup'
 
+const USERNAME_PREFIXES = [
+    'Iron', 'Gold', 'Silver', 'Copper', 'Amber', 'Shadow', 'Solar', 'Lunar', 'Astral',
+    'Diamond', 'Emerald', 'Ruby', 'Obsidian', 'Mythic', 'Grand', 'Arcane', 'Crystal',
+    'Noble', 'Vanguard', 'Swift', 'Brave', 'Keen', 'Apex', 'Crown', 'Frost', 'Ember',
+    'Thunder', 'Mystic', 'Runic', 'Velvet', 'Silent', 'Titan'
+];
+
+const USERNAME_SUFFIXES = [
+    'Baron', 'Merchant', 'Tycoon', 'Smith', 'Miner', 'Harvester', 'Keeper', 'Trader',
+    'Artisan', 'Crafter', 'Seeker', 'Knight', 'Alchemist', 'Chancellor', 'Investor',
+    'Architect', 'Treasurer', 'Guildmaster', 'Ranger', 'Explorer', 'Warden', 'Strategist',
+    'Pioneer', 'Overlord', 'Foreman', 'Botanist'
+];
+
+let lastSuggestedName = '';
+
+export function generateRandomUsernameSuggestion() {
+    let name = '';
+    do {
+        const prefix = USERNAME_PREFIXES[Math.floor(Math.random() * USERNAME_PREFIXES.length)];
+        const suffix = USERNAME_SUFFIXES[Math.floor(Math.random() * USERNAME_SUFFIXES.length)];
+        name = `${prefix}${suffix}`;
+    } while (name === lastSuggestedName);
+    lastSuggestedName = name;
+    return name;
+}
+
+export function refreshModalSuggestions() {
+    const randomName = generateRandomUsernameSuggestion();
+    
+    const signupUsernameInput = document.getElementById('signup-username');
+    if (signupUsernameInput) {
+        signupUsernameInput.placeholder = `e.g. ${randomName}`;
+    }
+
+    const signupEmailInput = document.getElementById('signup-email');
+    if (signupEmailInput) {
+        signupEmailInput.placeholder = `e.g. ${randomName.toLowerCase()}@bconomy.game`;
+    }
+
+    const signinIdentifierInput = document.getElementById('signin-identifier');
+    if (signinIdentifierInput) {
+        signinIdentifierInput.placeholder = `e.g. ${randomName} or user@domain.com`;
+    }
+}
+
 export function setupAuthModal() {
     authModalEl = document.getElementById('auth-modal');
     if (!authModalEl) return;
@@ -60,12 +106,14 @@ export function setupAuthModal() {
         updateAccountHeaderUI();
     });
 
+    refreshModalSuggestions();
     updateAccountHeaderUI();
 }
 
 export function openAuthModal(defaultTab = 'signin', returnFocus = null) {
     if (!authModalEl) authModalEl = document.getElementById('auth-modal');
     if (!authModalEl) return;
+    refreshModalSuggestions();
     switchAuthTab(defaultTab);
     clearAuthForms();
     openDialog(authModalEl, {
