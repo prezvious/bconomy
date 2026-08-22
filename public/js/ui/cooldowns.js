@@ -1,8 +1,9 @@
 // Cooldown & Real-Time UI Loop
 import { getState } from '../state.js';
-import { ACTIONS } from '../utils.js';
+import { ACTIONS, formatDurationMs, formatDisplayNumber, formatMoney } from '../utils.js';
 import { doFarmState } from '../api.js';
 import { renderFarm } from './farm.js';
+import { renderActiveBoosts } from './actions.js';
 
 let isSyncingFarm = false;
 let lastFarmSyncTime = 0;
@@ -55,7 +56,127 @@ export const cooldownLoop = () => {
                 btn.classList.add('ready-highlight');
             }
         }
+
     });
+
+    // Real-time Active Boosts Updates
+    const activeBoostRows = document.querySelectorAll('#active-boosts-container .boost-row[data-expire]');
+    let anyBoostExpired = false;
+
+    activeBoostRows.forEach(row => {
+        const expireAt = parseInt(row.dataset.expire, 10);
+        const durationMs = parseInt(row.dataset.duration, 10) || (15 * 60 * 1000);
+        const remain = Math.max(0, expireAt - now);
+
+        const timerEl = row.querySelector('.boost-timer');
+        if (timerEl) {
+            timerEl.textContent = formatDurationMs(remain);
+        }
+
+        const barFillEl = row.querySelector('.boost-duration-bar-fill');
+        if (barFillEl) {
+            const pct = Math.min(100, Math.max(0, (remain / durationMs) * 100));
+            barFillEl.style.width = `${pct}%`;
+        }
+
+        if (remain <= 0) {
+            anyBoostExpired = true;
+        }
+    });
+
+    if (anyBoostExpired) {
+        renderActiveBoosts();
+    }
+
+    // Real-time Faction Treasury & Boost Timers
+    if (playerState.faction && playerState.faction.created && playerState.faction.boosts) {
+        const faction = playerState.faction;
+        let fpChanged = false;
+
+        // Process continuous drain in real-time
+        ['mine', 'explore', 'hunt', 'fish', 'work'].forEach(actId => {
+            const boost = faction.boosts[actId];
+            if (!boost || boost.level === 0) return;
+
+            if (boost.mode === 'continuous' && boost.costPerHour > 0) {
+                const lastUp = boost.lastUpdated || now;
+                const elapsedMs = Math.max(0, now - lastUp);
+                if (elapsedMs >= 1000) { // update every second
+                    const elapsedHours = elapsedMs / (3600 * 1000);
+                    const fpCost = Math.floor(elapsedHours * boost.costPerHour);
+                    if (fpCost > 0) {
+                        if (faction.points >= fpCost) {
+                            faction.points -= fpCost;
+                            boost.lastUpdated = now;
+                            fpChanged = true;
+                        } else {
+                            faction.points = 0;
+                            boost.level = 0;
+                            boost.multiplier = 1.0;
+                            boost.activeUntil = 0;
+                            boost.costPerHour = 0;
+                            boost.lastUpdated = now;
+                            fpChanged = true;
+                        }
+                    }
+                }
+            } else if (boost.mode === 'duration') {
+                if (boost.activeUntil > 0 && now >= boost.activeUntil) {
+                    boost.level = 0;
+                    boost.multiplier = 1.0;
+                    boost.activeUntil = 0;
+                    boost.costPerHour = 0;
+                    boost.lastUpdated = now;
+                    fpChanged = true;
+                }
+            }
+        });
+
+        // Live update Treasury DOM elements
+        const fpEl = document.getElementById('treasury-fp-value');
+        if (fpEl) {
+            fpEl.textContent = `${formatDisplayNumber(faction.points || 0)} FP`;
+        }
+
+        const lifetimeEl = document.getElementById('treasury-lifetime-value');
+        if (lifetimeEl) {
+            lifetimeEl.textContent = formatMoney(faction.lifetimeContributed || 0);
+        }
+
+        // Live update action booster timer displays
+        ['mine', 'explore', 'hunt', 'fish', 'work'].forEach(actId => {
+            const timerEl = document.getElementById(`faction-timer-${actId}`);
+            const boost = faction.boosts[actId];
+            if (!timerEl || !boost || boost.level === 0) return;
+
+            let remainMs = 0;
+            if (boost.mode === 'continuous') {
+                const totalRemainHours = boost.costPerHour > 0 ? (faction.points / boost.costPerHour) : 0;
+                remainMs = Math.floor(totalRemainHours * 3600 * 1000);
+            } else {
+                remainMs = Math.max(0, boost.activeUntil - now);
+            }
+
+            timerEl.textContent = formatDurationMs(remainMs);
+        });
+    }
+
+    // Real-time Found Faction Eligibility Updates (for Unaffiliated view)
+    const foundStatusEl = document.getElementById('found-faction-cash-status');
+    const btnSubmitFound = document.getElementById('btn-submit-found-faction');
+    if (foundStatusEl) {
+        const cash = playerState.cash || 0;
+        const canAfford = cash >= 1000000;
+        if (canAfford) {
+            foundStatusEl.textContent = `✓ Ready to Found (${formatMoney(cash)} available)`;
+            foundStatusEl.className = 'found-cash-status text-success';
+            if (btnSubmitFound) btnSubmitFound.disabled = false;
+        } else {
+            foundStatusEl.textContent = `✗ Need ${formatMoney(1000000 - cash)} more cash`;
+            foundStatusEl.className = 'found-cash-status text-danger';
+            if (btnSubmitFound) btnSubmitFound.disabled = true;
+        }
+    }
 
     // Real-time Farm Updates
     if (playerState.farm) {
@@ -89,7 +210,8 @@ export const cooldownLoop = () => {
             farm.plots.forEach(plot => {
                 if (!plot.crop) return;
 
-                const duration = growTimes[plot.crop] || 20000;
+                const level = Math.min(16, Math.max(0, Math.floor(Number(plot.level) || 0)));
+                const duration = Math.max(1, Math.round((growTimes[plot.crop] || 20000) * (1 - (level * 0.05))));
                 const remain = Math.max(0, plot.nextHarvestAt - now);
                 const elapsed = duration - remain;
                 const pct = Math.min(100, Math.max(0, (elapsed / duration) * 100));

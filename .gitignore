@@ -16,8 +16,8 @@ build/
 out/
 .cache/
 *.tsbuildinfo
-js/
-index.html
+/js/
+/index.html
 
 # Lock files
 package-lock.json
@@ -66,5 +66,7 @@ coverage/
 # Temporary files & caches
 tmp/
 temp/
+scratch/
+release_notes_*.json
 *.tmp
 *.bak

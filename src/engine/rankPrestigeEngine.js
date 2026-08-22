@@ -8,25 +8,26 @@ const { RANKS, PERK_DEFINITIONS } = require('./dropTables');
 class RankPrestigeEngine {
     /**
      * Gets discounted cost for next rank.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {number|null} Cost or null if max rank
      */
     static getRankUpCost(playerState) {
         const currentIndex = playerState.rankIndex || 0;
         if (currentIndex >= RANKS.length - 1) return null; // Max rank reached
-        
+
         const nextIndex = currentIndex + 1;
         const nextRank = RANKS[nextIndex];
         const cronyismLevel = (playerState.perks && playerState.perks.cronyism) || 0;
         const investitureLevel = (playerState.perks && playerState.perks.investiture) || 0;
         const isGodRank = (nextIndex === 106 || nextRank.name === 'God');
 
-        return getRankUpCost(nextRank.basePrice, cronyismLevel, investitureLevel, isGodRank);
+        const tier = playerState.prestigeCount || 0;
+        return getRankUpCost(nextRank.basePrice, cronyismLevel, investitureLevel, isGodRank, tier);
     }
 
     /**
      * Checks if player can rank up.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {boolean}
      */
     static canRankUp(playerState) {
@@ -37,7 +38,7 @@ class RankPrestigeEngine {
 
     /**
      * Ranks up the player.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {Object}
      */
     static rankUp(playerState) {
@@ -48,7 +49,7 @@ class RankPrestigeEngine {
 
         playerState.cash -= cost;
         playerState.rankIndex = (playerState.rankIndex || 0) + 1;
-        
+
         const newRank = RANKS[playerState.rankIndex];
 
         return {
@@ -61,7 +62,7 @@ class RankPrestigeEngine {
 
     /**
      * Checks if player can ascend.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {boolean}
      */
     static canAscend(playerState) {
@@ -71,7 +72,7 @@ class RankPrestigeEngine {
 
     /**
      * Ascends the player.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {Object}
      */
     static ascend(playerState) {
@@ -79,7 +80,7 @@ class RankPrestigeEngine {
             return { error: 'Cannot ascend. Must reach rank God (Rank 107).' };
         }
 
-        playerState.cash = 0;
+        // Cash is preserved upon prestige ascension
         playerState.rankIndex = 0; // Peasant
         playerState.prestigeCount = (playerState.prestigeCount || 0) + 1;
         playerState.prestigePoints = (playerState.prestigePoints || 0) + 5;
@@ -92,30 +93,93 @@ class RankPrestigeEngine {
     }
 
     /**
-     * Upgrades a perk.
-     * @param {Object} playerState 
-     * @param {string} perkName 
+     * Executes targeted rank up across ranks and tiers.
+     * @param {Object} playerState
+     * @param {number} targetTier
+     * @param {number} targetRankIndex
+     * @param {boolean} isMaxAffordable
      * @returns {Object}
      */
-    static upgradePerk(playerState, perkName) {
+    static targetedRankUp(playerState, targetTier, targetRankIndex, isMaxAffordable = false) {
+        const { calculateTargetedRankUpCost } = require('../utils/formulas');
+        const calc = calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, RANKS, isMaxAffordable);
+
+        if (!calc.affordable || playerState.cash < calc.totalCost) {
+            return { error: 'Not enough cash for targeted rank up.' };
+        }
+
+        const initialTier = playerState.prestigeCount || 0;
+        const initialRank = playerState.rankIndex || 0;
+
+        if (calc.targetTier === initialTier && calc.targetRankIndex === initialRank) {
+            return { error: 'Already at or above requested target rank/tier.' };
+        }
+
+        playerState.cash -= calc.totalCost;
+        const tiersAscended = Math.max(0, calc.targetTier - initialTier);
+        playerState.prestigeCount = calc.targetTier;
+        playerState.prestigePoints = (playerState.prestigePoints || 0) + (tiersAscended * 5);
+        playerState.rankIndex = calc.targetRankIndex;
+
+        const newRankInfo = RANKS[calc.targetRankIndex] || { index: calc.targetRankIndex, name: 'Unknown' };
+
+        return {
+            success: true,
+            totalCost: calc.totalCost,
+            newRank: calc.targetRankIndex,
+            newRankName: newRankInfo.name,
+            newPrestigeCount: playerState.prestigeCount,
+            pointsAwarded: tiersAscended * 5,
+            tiersAscended
+        };
+    }
+
+    /**
+     * Upgrades a perk (supports single, +5, or max affordable upgrades).
+     * @param {Object} playerState
+     * @param {string} perkName
+     * @param {number|string} [countOrMax=1] - Number of levels to upgrade or 'max'
+     * @returns {Object}
+     */
+    static upgradePerk(playerState, perkName, countOrMax = 1) {
+        if (!playerState.perks) playerState.perks = {};
         const perkDef = PERK_DEFINITIONS[perkName];
         if (!perkDef) return { error: 'Invalid perk' };
 
         const currentLevel = playerState.perks[perkName] || 0;
-        if (currentLevel >= perkDef.maxLevel) {
-            return { error: 'Perk is at max level' };
+        const maxLevel = perkDef.maxLevel || 0;
+        if (currentLevel >= maxLevel) {
+            return { error: 'Perk is already at max level' };
         }
 
-        if ((playerState.prestigePoints || 0) < 1) {
+        const availablePoints = Math.max(0, Math.floor(Number(playerState.prestigePoints) || 0));
+        if (availablePoints < 1) {
             return { error: 'Not enough prestige points' };
         }
 
-        playerState.prestigePoints -= 1;
-        playerState.perks[perkName] = currentLevel + 1;
+        const remainingLevels = maxLevel - currentLevel;
+        let levelsToBuy = 1;
+
+        if (countOrMax === 'max') {
+            levelsToBuy = Math.min(availablePoints, remainingLevels);
+        } else {
+            const requested = parseInt(countOrMax, 10);
+            const count = isNaN(requested) || requested < 1 ? 1 : requested;
+            levelsToBuy = Math.min(count, availablePoints, remainingLevels);
+        }
+
+        if (levelsToBuy < 1) {
+            return { error: 'Cannot upgrade perk' };
+        }
+
+        playerState.prestigePoints = availablePoints - levelsToBuy;
+        playerState.perks[perkName] = currentLevel + levelsToBuy;
 
         return {
             success: true,
             perkName,
+            levelsAdded: levelsToBuy,
+            cost: levelsToBuy,
             newLevel: playerState.perks[perkName],
             remainingPoints: playerState.prestigePoints
         };
@@ -123,7 +187,7 @@ class RankPrestigeEngine {
 
     /**
      * Gets player prestige info.
-     * @param {Object} playerState 
+     * @param {Object} playerState
      * @returns {Object}
      */
     static getPlayerPrestigeInfo(playerState) {

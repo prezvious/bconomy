@@ -1,20 +1,33 @@
-// Tools Workshop Renderer
+// Tools Workshop Renderer - Level 1-500 Expansion & Socket Modules
 import { getState, getToolRecipes, setToolRecipe } from '../state.js';
-import { TOOLS, ACTIONS, iconHtml, formatNumberCommas, displayItemName } from '../utils.js';
-import { apiCall, doUpgradeTool } from '../api.js';
-import { getToolMultiplier, renderActions } from './actions.js';
+import { TOOLS, ACTIONS, iconHtml, formatDisplayNumber, displayItemName, SOCKET_MODULE_DEFINITIONS } from '../utils.js';
+import {
+    apiCall,
+    doUpgradeTool,
+    doUpgradeToolBulk,
+    doPreviewToolUpgrade,
+    doInstallSocketModule,
+    doUninstallSocketModule,
+    doCraftSocketModule,
+    doGetToolDefinitions
+} from '../api.js';
+import { getToolMultiplier, getToolCooldownReduction, getUnlockedSockets, renderActions } from './actions.js';
 import { renderHeader } from './header.js';
 import { renderInventory } from './inventory.js';
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
-import { showConfirmation } from './modal.js';
+import { showConfirmation, openDialog, closeDialog } from './modal.js';
+
+const MAX_TOOL_LEVEL = 500;
+let cachedDefinitions = null;
+let activeSocketTool = null;
 
 export const updateAllToolRecipes = async () => {
     const playerState = getState();
     if (!playerState || !playerState.tools) return;
     for (const type of TOOLS) {
         const level = playerState.tools[type] || 1;
-        if (level < 50) {
+        if (level < MAX_TOOL_LEVEL) {
             try {
                 const recipe = await apiCall(`/api/data/tools/${type}/recipe/${level + 1}`, 'GET');
                 setToolRecipe(type, recipe);
@@ -25,29 +38,361 @@ export const updateAllToolRecipes = async () => {
     }
 };
 
+const getModuleDefinitions = async () => {
+    if (cachedDefinitions && Object.keys(cachedDefinitions).length > 0) return cachedDefinitions;
+    try {
+        const res = await doGetToolDefinitions();
+        if (res && res.socketModules) {
+            cachedDefinitions = res.socketModules;
+            return cachedDefinitions;
+        }
+    } catch (e) {
+        console.warn('Failed to fetch tool definitions, using local fallback:', e);
+    }
+    return SOCKET_MODULE_DEFINITIONS;
+};
+
+export const openSocketsModal = async (toolType) => {
+    activeSocketTool = toolType;
+    const playerState = getState();
+    if (!playerState) return;
+
+    const moduleDefs = await getModuleDefinitions();
+    const actionInfo = ACTIONS.find(a => a.id === toolType) || { name: toolType, icon: 'lucide:wrench' };
+    const level = playerState.tools ? (playerState.tools[toolType] || 1) : 1;
+    const unlockedCount = getUnlockedSockets(level);
+    const sockets = (playerState.toolSockets && playerState.toolSockets[toolType]) || new Array(10).fill(null);
+    const myModules = playerState.toolModules || {};
+
+    let modalEl = document.getElementById('sockets-workshop-modal');
+    if (!modalEl) {
+        modalEl = document.createElement('dialog');
+        modalEl.id = 'sockets-workshop-modal';
+        modalEl.className = 'modal hidden';
+        modalEl.dataset.appDialog = '';
+        modalEl.setAttribute('aria-labelledby', 'sockets-modal-title');
+        document.body.appendChild(modalEl);
+    }
+
+    let socketsListHtml = '';
+    for (let i = 0; i < 10; i++) {
+        const isUnlocked = i < unlockedCount;
+        const unlockLevel = (i + 1) * 50;
+        const moduleId = sockets[i];
+        const modDef = moduleId ? (moduleDefs[moduleId] || SOCKET_MODULE_DEFINITIONS[moduleId]) : null;
+
+        if (isUnlocked) {
+            if (modDef) {
+                socketsListHtml += `
+                    <div class="socket-slot-card equipped" data-slot-index="${i}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="font-bold text-accent">${iconHtml('lucide:zap')} Slot ${i + 1} (Lv. ${unlockLevel})</span>
+                            <span class="charter-badge font-mono">Tier ${modDef.tier}</span>
+                        </div>
+                        <div class="font-bold text-base mt-1">${modDef.name}</div>
+                        <div class="text-xs text-subtle mt-1">${modDef.description}</div>
+                        <div class="mt-2" style="display:flex; gap:8px;">
+                            <button class="action-btn secondary-btn btn-sm btn-uninstall-mod" data-slot="${i}" type="button">
+                                ${iconHtml('lucide:x')} Unequip Module
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // List available modules in inventory to equip
+                const availableKeys = Object.keys(myModules).filter(mId => (myModules[mId] || 0) > 0 && (moduleDefs[mId] || SOCKET_MODULE_DEFINITIONS[mId]));
+                const availableOpts = availableKeys.map(mId => {
+                    const def = moduleDefs[mId] || SOCKET_MODULE_DEFINITIONS[mId];
+                    return `<option value="${mId}">${def.name} (${myModules[mId]} owned)</option>`;
+                }).join('');
+
+                socketsListHtml += `
+                    <div class="socket-slot-card" data-slot-index="${i}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="font-bold text-subtle">${iconHtml('lucide:circle-dot')} Slot ${i + 1} (Lv. ${unlockLevel})</span>
+                            <span class="text-xs text-muted">Empty Socket</span>
+                        </div>
+                        ${availableOpts.length > 0 ? `
+                            <div style="display:flex; gap:8px; margin-top:8px;">
+                                <select class="form-select select-mod-equip" data-slot="${i}" style="flex:1;">
+                                    ${availableOpts}
+                                </select>
+                                <button class="action-btn primary-btn btn-sm btn-install-mod" data-slot="${i}" type="button">
+                                    ${iconHtml('lucide:plus')} Equip
+                                </button>
+                            </div>
+                        ` : `
+                            <div class="text-xs text-muted italic mt-1">No compatible modules in inventory. Craft below!</div>
+                        `}
+                    </div>
+                `;
+            }
+        } else {
+            socketsListHtml += `
+                <div class="socket-slot-card locked">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span class="font-bold text-muted">${iconHtml('lucide:lock')} Slot ${i + 1}</span>
+                        <span class="text-xs text-muted">🔒 Unlocks at Lv. ${unlockLevel}</span>
+                    </div>
+                    <div class="text-xs text-muted mt-1">Reach Level ${unlockLevel} on your ${actionInfo.name} tool to unlock this socket.</div>
+                </div>
+            `;
+        }
+    }
+
+    // Craftable Modules List
+    let craftListHtml = '';
+    const allDefs = Object.keys(moduleDefs).length > 0 ? moduleDefs : SOCKET_MODULE_DEFINITIONS;
+    for (const [mId, mod] of Object.entries(allDefs)) {
+        const owned = myModules[mId] || 0;
+        let canCraft = true;
+        let reqsHtml = '';
+
+        for (const req of (mod.recipe || [])) {
+            const have = (playerState.inventory && playerState.inventory[req.item]) || 0;
+            const sufficient = have >= req.quantity;
+            if (!sufficient) canCraft = false;
+
+            reqsHtml += `
+                <div class="req-item ${sufficient ? 'sufficient' : 'insufficient'}">
+                    <span>${displayItemName(req.item)}</span>
+                    <span class="tabular-nums">${formatDisplayNumber(have)} / ${formatDisplayNumber(req.quantity)}</span>
+                </div>
+            `;
+        }
+
+        craftListHtml += `
+            <div class="module-craft-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="font-bold">${mod.name}</span>
+                    <span class="charter-badge font-mono">Tier ${mod.tier} · Owned: ${owned}</span>
+                </div>
+                <div class="text-xs text-subtle mt-1">${mod.description}</div>
+                <div class="reqs-list mt-2">
+                    ${reqsHtml}
+                </div>
+                <button class="action-btn secondary-btn btn-sm btn-craft-mod mt-2" data-module-id="${mId}" ${!canCraft ? 'disabled' : ''} type="button">
+                    ${iconHtml('lucide:hammer')} Craft Module
+                </button>
+            </div>
+        `;
+    }
+
+    modalEl.innerHTML = `
+        <div class="modal-content card charter-modal modal-dialog modal-wide sockets-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="${actionInfo.icon}" class="modal-icon text-accent" aria-hidden="true"></iconify-icon>
+                    <h3 id="sockets-modal-title">${actionInfo.name} Tool Modification Workshop</h3>
+                </div>
+                <button id="btn-close-sockets-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body sockets-modal-body">
+                <div class="mb-4 p-3 card" style="background:var(--bg-card); display:flex; justify-content:space-between; align-items:center;">
+                    <div class="text-sm">
+                        Tool Level: <strong class="text-primary">Lv. ${level}</strong>
+                    </div>
+                    <div class="text-sm">
+                        Modification Sockets Unlocked: <strong class="text-accent">${unlockedCount} / 10</strong>
+                    </div>
+                </div>
+                <div class="socket-modal-grid">
+                    <div>
+                        <h4 class="card-title-sm mb-3">
+                            ${iconHtml('lucide:sliders')} Active Tool Sockets (${unlockedCount}/10 Unlocked)
+                        </h4>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            ${socketsListHtml}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="card-title-sm mb-3">
+                            ${iconHtml('lucide:sparkles')} Module Foundry (Crafting)
+                        </h4>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            ${craftListHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const returnFocus = document.activeElement;
+    openDialog(modalEl, {
+        initialFocus: '#btn-close-sockets-modal',
+        closeOnBackdrop: false,
+        returnFocus
+    });
+
+    // Close handlers
+    const closeBtn = modalEl.querySelector('#btn-close-sockets-modal');
+    if (closeBtn) {
+        closeBtn.onclick = () => closeDialog(modalEl, { reason: 'close' });
+    }
+
+    // Install Module handler
+    modalEl.querySelectorAll('.btn-install-mod').forEach(btn => {
+        btn.onclick = async (e) => {
+            const triggerBtn = e.target.closest('button');
+            const slot = parseInt(triggerBtn.dataset.slot, 10);
+            const selectEl = modalEl.querySelector(`select.select-mod-equip[data-slot="${slot}"]`);
+            if (!selectEl) return;
+            const moduleId = selectEl.value;
+            try {
+                await doInstallSocketModule(toolType, slot, moduleId, triggerBtn);
+                showToast(`Equipped module in Slot ${slot + 1}!`, 'success');
+                renderTools();
+                renderActions();
+                openSocketsModal(toolType);
+            } catch (err) {
+                showToast(err.message || 'Failed to equip module', 'error');
+            }
+        };
+    });
+
+    // Uninstall Module handler
+    modalEl.querySelectorAll('.btn-uninstall-mod').forEach(btn => {
+        btn.onclick = async (e) => {
+            const triggerBtn = e.target.closest('button');
+            const slot = parseInt(triggerBtn.dataset.slot, 10);
+            try {
+                await doUninstallSocketModule(toolType, slot, triggerBtn);
+                showToast(`Unequipped module from Slot ${slot + 1}!`, 'info');
+                renderTools();
+                renderActions();
+                openSocketsModal(toolType);
+            } catch (err) {
+                showToast(err.message || 'Failed to unequip module', 'error');
+            }
+        };
+    });
+
+    // Craft Module handler
+    modalEl.querySelectorAll('.btn-craft-mod').forEach(btn => {
+        btn.onclick = async (e) => {
+            const triggerBtn = e.target.closest('button');
+            const moduleId = triggerBtn.dataset.moduleId;
+            try {
+                await doCraftSocketModule(moduleId, 1, triggerBtn);
+                showToast(`Crafted module successfully!`, 'success');
+                renderInventory();
+                renderTools();
+                openSocketsModal(toolType);
+            } catch (err) {
+                showToast(err.message || 'Failed to craft module', 'error');
+            }
+        };
+    });
+};
+
 export const renderTools = () => {
     const playerState = getState();
     if (!playerState) return;
 
     const grid = document.getElementById('tools-grid');
     if (!grid) return;
-    grid.innerHTML = '';
+
+    if (grid.dataset.delegated !== 'true') {
+        grid.innerHTML = '';
+        grid.dataset.delegated = 'true';
+
+        grid.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button.action-btn');
+            if (!btn || !btn.dataset.toolType) return;
+
+            const type = btn.dataset.toolType;
+            const action = btn.dataset.upgradeAction;
+
+            if (action === 'manage-sockets') {
+                openSocketsModal(type);
+                return;
+            }
+
+            const playerState = getState();
+            const level = playerState.tools ? (playerState.tools[type] || 1) : 1;
+            const actionInfo = ACTIONS.find(a => a.id === type) || { name: type, icon: 'lucide:wrench' };
+
+            let count = 1;
+            let label = `Level ${level + 1}`;
+            let isCount = false;
+            let targetOrCount = level + 1;
+
+            if (action === 'bulk-10') {
+                count = 10;
+                targetOrCount = 10;
+                isCount = true;
+                label = `+10 Levels (to Lv. ${Math.min(MAX_TOOL_LEVEL, level + 10)})`;
+            } else if (action === 'bulk-50') {
+                count = 50;
+                targetOrCount = 50;
+                isCount = true;
+                label = `+50 Levels (to Lv. ${Math.min(MAX_TOOL_LEVEL, level + 50)})`;
+            } else if (action === 'bulk-max') {
+                targetOrCount = 'max';
+                isCount = false;
+                label = 'Max Affordable Levels';
+            }
+
+            const isBulkUpgrade = action !== 'single';
+            const confirmAction = await showConfirmation(
+                isBulkUpgrade ? 'bulkToolUpgrade' : 'toolUpgrade',
+                'Upgrade Tool?',
+                `Are you sure you want to upgrade your ${actionInfo.name} tool by ${label}? Required materials will be consumed.`,
+                isBulkUpgrade ? {
+                    bulkAction: true,
+                    ignoreLabel: "Don't show this preview again"
+                } : {}
+            );
+            if (!confirmAction) return;
+
+            try {
+                if (action === 'single') {
+                    await doUpgradeTool(type, btn);
+                } else {
+                    await doUpgradeToolBulk(type, targetOrCount, isCount, btn);
+                }
+
+                showToast(`Upgraded ${type} tool to level ${getState().tools[type]}!`, 'success');
+                addLogEntry(`Upgraded ${type} tool to level ${getState().tools[type]}`, 'success');
+
+                await updateAllToolRecipes();
+                renderHeader();
+                renderInventory();
+                renderTools();
+                renderActions();
+            } catch (err) {
+                showToast(err.message || `Failed to upgrade ${type} tool`, 'error');
+            }
+        });
+    }
 
     const toolRecipes = getToolRecipes();
 
     TOOLS.forEach(type => {
         const level = playerState.tools ? (playerState.tools[type] || 1) : 1;
         const recipe = toolRecipes[type];
-        const isMax = level >= 50;
-
-        const card = document.createElement('div');
-        card.className = 'tool-card card';
-
-        let reqsHTML = '';
+        const isMax = level >= MAX_TOOL_LEVEL;
         let canUpgrade = !isMax;
 
+        const cooldownReduction = getToolCooldownReduction(level);
+        const unlockedSocketsCount = getUnlockedSockets(level);
+        const sockets = (playerState.toolSockets && playerState.toolSockets[type]) || new Array(10).fill(null);
+
+        let pipsHtml = '';
+        for (let i = 0; i < 10; i++) {
+            const isUnlocked = i < unlockedSocketsCount;
+            const isEquipped = !!sockets[i];
+            const className = isEquipped ? 'equipped' : (isUnlocked ? 'unlocked' : 'locked');
+            const icon = isEquipped ? 'lucide:zap' : (isUnlocked ? 'lucide:circle-dot' : 'lucide:lock');
+            pipsHtml += `<div class="tool-socket-pip ${className}" title="Socket ${i + 1}: ${isEquipped ? 'Equipped' : (isUnlocked ? 'Unlocked' : 'Locked at Lv ' + ((i+1)*50))}">${iconHtml(icon)}</div>`;
+        }
+
+        let reqsHTML = '';
         if (isMax) {
-            reqsHTML = `<div class="req-item sufficient"><span class="req-item-left">${iconHtml('lucide:check-circle', 'req-icon')} MAX LEVEL REACHED</span></div>`;
+            reqsHTML = `<div class="req-item sufficient"><span class="req-item-left">${iconHtml('lucide:check-circle', 'req-icon')} MAX LEVEL REACHED (Lv. 500)</span></div>`;
         } else if (recipe) {
             const reqs = Array.isArray(recipe) ? recipe : [];
             for (const req of reqs) {
@@ -60,7 +405,7 @@ export const renderTools = () => {
                 reqsHTML += `
                     <div class="req-item ${sufficient ? 'sufficient' : 'insufficient'}">
                         <span class="req-item-left">${iconHtml(reqIcon, 'req-icon')} ${displayName}</span>
-                        <span class="tabular-nums">${formatNumberCommas(owned)} / ${formatNumberCommas(req.quantity)}</span>
+                        <span class="tabular-nums">${formatDisplayNumber(owned)} / ${formatDisplayNumber(req.quantity)}</span>
                     </div>
                 `;
             }
@@ -71,53 +416,69 @@ export const renderTools = () => {
 
         const actionInfo = ACTIONS.find(a => a.id === type) || { name: type, icon: 'lucide:wrench' };
 
+        let card = grid.querySelector(`[data-tool-type="${type}"]`);
+        if (!card) {
+            card = document.createElement('div');
+            card.className = 'tool-card card';
+            card.dataset.toolType = type;
+            grid.appendChild(card);
+        }
+
         card.innerHTML = `
             <div class="tool-header">
                 <div class="tool-title-row">
                     <div class="tool-icon-well">${iconHtml(actionInfo.icon, 'tool-icon')}</div>
-                    <div class="tool-title">${actionInfo.name} Tool</div>
+                    <div>
+                        <div class="tool-title">${actionInfo.name} Tool</div>
+                        ${cooldownReduction > 0 ? `
+                            <span class="tool-overclock-tag">
+                                ${iconHtml('lucide:zap')} -${cooldownReduction}s Cooldown
+                            </span>
+                        ` : ''}
+                    </div>
                 </div>
                 <div class="tool-multiplier">Lv.${level} (${getToolMultiplier(level)})</div>
             </div>
+
             <div class="progress-bar-bg">
-                <div class="progress-bar-fill progress-accent" style="width: ${(level / 50) * 100}%"></div>
+                <div class="progress-bar-fill progress-accent" style="width: ${(level / MAX_TOOL_LEVEL) * 100}%"></div>
             </div>
+
+            <div class="tool-sockets-container">
+                <div class="tool-sockets-header">
+                    <span>Modification Sockets (${unlockedSocketsCount}/10)</span>
+                </div>
+                <div class="tool-socket-pips">
+                    ${pipsHtml}
+                </div>
+                <button class="tool-manage-sockets-btn action-btn mt-1" data-tool-type="${type}" data-upgrade-action="manage-sockets" type="button">
+                    ${iconHtml('lucide:sliders')} Sockets & Modules
+                </button>
+            </div>
+
             <div class="reqs-list">
                 ${reqsHTML}
             </div>
-            <button class="action-btn secondary-btn btn-large" id="btn-upg-${type}" ${!canUpgrade ? 'disabled' : ''}>
-                Upgrade Tool
-            </button>
+
+            <div class="flex flex-col gap-2">
+                <button class="action-btn secondary-btn btn-large" id="btn-upg-${type}" data-tool-type="${type}" data-upgrade-action="single" ${!canUpgrade ? 'disabled' : ''} type="button">
+                    Upgrade (+1)
+                </button>
+
+                ${!isMax ? `
+                    <div class="tool-bulk-controls">
+                        <button class="action-btn secondary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-10" type="button">
+                            +10 Lvls
+                        </button>
+                        <button class="action-btn secondary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-50" type="button">
+                            +50 Lvls
+                        </button>
+                        <button class="action-btn primary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-max" type="button">
+                            Max Affordable
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
         `;
-
-        grid.appendChild(card);
-
-        if (canUpgrade) {
-            const upgBtn = document.getElementById(`btn-upg-${type}`);
-            if (upgBtn) {
-                upgBtn.addEventListener('click', async (e) => {
-                    const confirmAction = await showConfirmation(
-                        'toolUpgrade',
-                        'Upgrade Tool?',
-                        `Are you sure you want to upgrade your ${actionInfo.name} tool to Level ${level + 1}? Required materials will be consumed.`
-                    );
-                    if (!confirmAction) return;
-
-                    try {
-                        await doUpgradeTool(type, e.currentTarget);
-                        showToast(`Upgraded ${type} tool to level ${getState().tools[type]}!`, 'success');
-                        addLogEntry(`Upgraded ${type} tool to level ${getState().tools[type]}`, 'success');
-
-                        await updateAllToolRecipes();
-                        renderHeader();
-                        renderInventory();
-                        renderTools();
-                        renderActions();
-                    } catch (err) {
-                        showToast(err.message || `Failed to upgrade ${type} tool`, 'error');
-                    }
-                });
-            }
-        }
     });
 };

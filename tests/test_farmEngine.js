@@ -1,137 +1,124 @@
-/**
- * Unit tests for FarmEngine module.
- */
-
+/** Unit and integration tests for level-aware FarmEngine behavior. */
 const assert = require('assert');
-const { FarmEngine, CROP_DEFINITIONS } = require('../src/engine/farmEngine');
+const { FarmEngine } = require('../src/engine/farmEngine');
 
-function runTests() {
-    console.log('--- Starting FarmEngine Unit Tests ---');
+const noBurst = () => 0.99;
+const now = 1700000000000;
 
-    let now = 1000000000;
+const createState = () => ({
+    cash: 5000,
+    inventory: {},
+    perks: { water_byproducts: 0 },
+    cooldowns: { work: 0, mine: 0, explore: 0, hunt: 0, fish: 0 },
+    farm: { waterAvailableAt: 0, storage: {}, plots: [] }
+});
 
-    // Test 1: State Normalization
-    const playerState = {};
-    FarmEngine.ensureFarmState(playerState);
-    assert.ok(playerState.farm);
-    assert.strictEqual(playerState.farm.plots.length, 1);
-    assert.strictEqual(playerState.farm.waterAvailableAt, 0);
-    assert.strictEqual(playerState.farm.storage['Blueberry'], 0);
-    console.log('✓ Test 1: State Normalization passed');
+console.log('--- Starting FarmEngine Unit Tests ---');
 
-    // Test 2: Planting & Automatic Harvest offline catchup
-    FarmEngine.plantCrop(playerState, 1, 'Blueberry', now);
-    assert.strictEqual(playerState.farm.plots[0].crop, 'Blueberry');
-    assert.strictEqual(playerState.farm.plots[0].nextHarvestAt, now + 20000);
+// Normalization creates one baseline plot and strips legacy farm flags.
+const state = createState();
+state.farm.plots = [{ id: 1, level: 99, crop: null, plantedAt: 0, nextHarvestAt: 0, composted: true, watered: true }];
+FarmEngine.ensureFarmState(state);
+assert.strictEqual(state.farm.plots.length, 1);
+assert.strictEqual(state.farm.plots[0].level, 16);
+assert.strictEqual('composted' in state.farm.plots[0], false);
+assert.strictEqual('watered' in state.farm.plots[0], false);
+state.farm.plots[0].level = 0;
+console.log('✓ Plot state normalization and legacy-field removal passed');
 
-    // Fast-forward 65 seconds (3 completed cycles of Blueberry @ 20s)
-    // Use deterministic RNG (no Berry Burst hits)
-    const noBurstRng = () => 0.50; // > 0.02
-    FarmEngine.processFarmState(playerState, now + 65000, noBurstRng);
+// Level 0 and Level 16 planting durations use 0% and 80% reductions.
+FarmEngine.plantCrop(state, 1, 'Blueberry', now);
+assert.strictEqual(state.farm.plots[0].nextHarvestAt, now + 20000);
+FarmEngine.uprootPlot(state, 1, now);
+state.farm.plots[0].level = 16;
+FarmEngine.plantCrop(state, 1, 'Blueberry', now);
+assert.strictEqual(state.farm.plots[0].nextHarvestAt, now + 4000);
+assert.deepStrictEqual(FarmEngine.getPlotStats(state.farm.plots[0]), {
+    level: 16,
+    reductionPercent: 80,
+    maximumLevelReached: true,
+    crop: 'Blueberry',
+    baseYield: 3,
+    baseGrowTimeMs: 20000,
+    effectiveGrowTimeMs: 4000
+});
+console.log('✓ Level-adjusted planting duration passed');
 
-    // Should yield 3 cycles * 3 = 9 Blueberries in storage
-    assert.strictEqual(playerState.farm.storage['Blueberry'], 9);
-    assert.strictEqual(playerState.farm.plots[0].nextHarvestAt, now + 80000);
-    console.log('✓ Test 2: Planting & Offline catchup passed');
+// Offline auto-repeat catch-up uses the adjusted cycle duration.
+FarmEngine.processFarmState(state, now + 12500, noBurst);
+assert.strictEqual(state.farm.storage.Blueberry, 9);
+assert.strictEqual(state.farm.plots[0].plantedAt, now + 12000);
+assert.strictEqual(state.farm.plots[0].nextHarvestAt, now + 16000);
+console.log('✓ Level-adjusted offline catch-up passed');
 
-    // Test 3: Berry Burst 2% Double Yield
-    playerState.farm.storage['Blueberry'] = 0;
-    playerState.farm.plots[0].nextHarvestAt = now + 80000;
-    const burstRng = () => 0.01; // < 0.02 (Berry Burst hits!)
-    FarmEngine.processFarmState(playerState, now + 80000, burstRng);
-    // 1 cycle completed * (3 base * 2 burst) = 6 Blueberries
-    assert.strictEqual(playerState.farm.storage['Blueberry'], 6);
-    console.log('✓ Test 3: Berry Burst double yield passed');
+// Upgrade recalculates from the current cycle start and immediately settles catch-up.
+const upgradeState = createState();
+upgradeState.farm.plots = [{ id: 1, level: 0, crop: 'Blueberry', plantedAt: now, nextHarvestAt: now + 20000 }];
+upgradeState.inventory = { Gravel: 340, 'Fence Post': 34, 'Irrigation Tubing': 2 };
+const upgraded = FarmEngine.upgradePlot(upgradeState, 1, 'next', now + 19500, noBurst);
+assert.strictEqual(upgraded.success, true);
+assert.strictEqual(upgraded.level, 1);
+assert.strictEqual(upgraded.catchUpCycles, 1);
+assert.strictEqual(upgradeState.farm.storage.Blueberry, 3);
+assert.strictEqual(upgradeState.farm.plots[0].nextHarvestAt, now + 38000);
+assert.strictEqual(upgradeState.cash, 5000, 'Plot upgrades never spend cash');
+assert.strictEqual(upgradeState.inventory.Gravel, undefined);
+console.log('✓ Active-crop upgrade recalculation and material-only spending passed');
 
-    // Test 4: Compost ordering and single harvest expiry
-    playerState.farm.storage['Pumpkin'] = 0;
-    playerState.inventory['Pumpkin'] = 2;
-    playerState.farm.plots[0].nextHarvestAt = now + 100000;
-    const compostRes = FarmEngine.applyCompost(playerState, 1, now + 85000);
-    assert.strictEqual(compostRes.success, true);
-    assert.strictEqual(playerState.farm.plots[0].composted, true);
-    assert.strictEqual(playerState.inventory['Pumpkin'], 1);
+// Upgrade-to-max consumes only the affordable sequential prefix.
+const maxState = createState();
+maxState.farm.plots = [FarmEngine.createEmptyPlot(1)];
+maxState.inventory = {
+    Gravel: 340 + 342,
+    'Fence Post': 34 + 35,
+    'Irrigation Tubing': 2 + 2
+};
+const maxUpgrade = FarmEngine.upgradePlot(maxState, 1, 'max', now, noBurst);
+assert.strictEqual(maxUpgrade.level, 2);
+assert.strictEqual(maxUpgrade.levelsGained, 2);
+assert.strictEqual(maxState.inventory.Gravel, undefined);
+assert.strictEqual(maxState.cash, 5000);
+console.log('✓ Upgrade-as-far-as-possible stops at the first unaffordable level');
 
-    // Process harvest with Compost (round(3 * 1.7) = 5) and Berry Burst (5 * 2 = 10)
-    playerState.farm.storage['Blueberry'] = 0;
-    FarmEngine.processFarmState(playerState, now + 105000, burstRng);
-    assert.strictEqual(playerState.farm.storage['Blueberry'], 10);
-    assert.strictEqual(playerState.farm.plots[0].composted, false); // Expired!
-    console.log('✓ Test 4: Compost ordering & expiry passed');
+// Global water performs all accelerated cycles and preserves remainder.
+const waterState = createState();
+waterState.perks.water_byproducts = 2; // +30% per accelerated cycle
+waterState.farm.plots = [{ id: 1, level: 12, crop: 'Blueberry', plantedAt: now, nextHarvestAt: now + 8000 }];
+const water = FarmEngine.waterAllPlots(waterState, now, noBurst);
+assert.strictEqual(water.acceleratedCycles, 225);
+// With corrected rounding: accumulate fractional yield across 225 cycles, round once.
+// waterMultiplier = 1 + 2*0.15 = 1.30; baseYield=3 for Blueberry
+assert.strictEqual(water.totalHarvested, 878); // round(3 * 1.30 * 225) = round(877.5) = 878
+assert.strictEqual(waterState.farm.storage.Blueberry, 878);
+assert.strictEqual(water.byproducts.Weeds, 585); // round(2 * 1.30 * 225) = round(585) = 585
+assert.strictEqual(water.byproducts.RedMushroom, 293); // round(1 * 1.30 * 225) = round(292.5) = 293
+assert.strictEqual(waterState.farm.plots[0].nextHarvestAt, now + 8000);
+console.log('✓ Global watering awards every accelerated cycle and preserves remainder');
 
-    // Test 5: Precise Watering rules (remaining <= 30 mins)
-    playerState.farm.plots[0].nextHarvestAt = now + 115000; // 10s remaining (< 30m)
-    playerState.farm.waterAvailableAt = 0;
-    const waterRes = FarmEngine.waterPlot(playerState, 1, now + 105000, noBurstRng);
-    assert.strictEqual(waterRes.success, true);
-    // Generated exactly 1 harvest (3 blueberries)
-    assert.strictEqual(playerState.farm.storage['Blueberry'], 13); 
-    // Global water cooldown set to now + 10 mins (600,000 ms)
-    assert.strictEqual(playerState.farm.waterAvailableAt, now + 105000 + 600000);
-    console.log('✓ Test 5: Precise Watering single harvest passed');
+// Uproot one and same-crop discard planted crops while preserving storage.
+const uprootState = createState();
+uprootState.farm.storage.Blueberry = 50;
+uprootState.farm.plots = [
+    { id: 1, level: 0, crop: 'Blueberry', plantedAt: now, nextHarvestAt: now + 20000 },
+    { id: 2, level: 4, crop: 'Blueberry', plantedAt: now, nextHarvestAt: now + 16000 },
+    { id: 3, level: 0, crop: 'Coffee', plantedAt: now, nextHarvestAt: now + 300000 }
+];
+assert.strictEqual(FarmEngine.uprootPlot(uprootState, 1, now).uprootedCrop, 'Blueberry');
+const bulkUproot = FarmEngine.uprootSameCrop(uprootState, 'Blueberry', now);
+assert.strictEqual(bulkUproot.uprootedCount, 1);
+assert.strictEqual(uprootState.farm.plots[2].crop, 'Coffee');
+assert.strictEqual(uprootState.farm.storage.Blueberry, 50);
+console.log('✓ Single and same-crop uprooting discard plots without touching storage');
 
-    // Test 6: Melon Hydration usage
-    playerState.inventory['Melon'] = 1;
-    const melonRes = FarmEngine.useMelon(playerState, now + 105000);
-    assert.strictEqual(melonRes.success, true);
-    assert.strictEqual(playerState.farm.waterAvailableAt, 0);
-    assert.strictEqual(playerState.inventory['Melon'], 0);
-    console.log('✓ Test 6: Melon Hydration usage passed');
+// Existing crop claim effects remain intact.
+uprootState.farm.storage['Golden Wheat'] = 10;
+uprootState.farm.storage.Coffee = 5;
+uprootState.cooldowns.work = now + 60000;
+const claim = FarmEngine.claimCrops(uprootState, 'all', now);
+assert.strictEqual(claim.cashBonus, 100000);
+assert.strictEqual(claim.caffeineTriggered, true);
+assert.strictEqual(claim.cooldownReductionMs, 1000);
+assert.strictEqual(uprootState.cooldowns.work, now + 59000);
+console.log('✓ Crop storage claim effects remain intact');
 
-    // Test 7: Golden Wheat & Golden Pay Claiming
-    playerState.farm.plots[0].crop = null;
-    FarmEngine.plantCrop(playerState, 1, 'Golden Wheat', now + 110000);
-    playerState.farm.storage['Golden Wheat'] = 10;
-    playerState.cash = 5000;
-
-    const claimRes = FarmEngine.claimCrops(playerState, 'Golden Wheat', now + 110000);
-    assert.strictEqual(claimRes.success, true);
-    assert.strictEqual(playerState.inventory['Golden Wheat'], 10);
-    assert.strictEqual(playerState.farm.storage['Golden Wheat'], 0);
-    // Cash increased by 10 * 10,000 = 100,000
-    assert.strictEqual(playerState.cash, 105000);
-    console.log('✓ Test 7: Golden Pay wheat claiming passed');
-
-    // Test 8: Coffee Caffeine benefit
-    FarmEngine.addPlot(playerState, now + 110000); // Plot 2
-    FarmEngine.removePlant(playerState, 1, now + 110000);
-    FarmEngine.plantCrop(playerState, 1, 'Coffee', now + 110000);
-    FarmEngine.plantCrop(playerState, 2, 'Coffee', now + 110000);
-
-    playerState.farm.storage['Coffee'] = 5;
-    playerState.cooldowns = {
-        work: now + 110000 + 100000,
-        mine: now + 110000 + 50000,
-        explore: now + 110000 + 50000,
-        hunt: now + 110000 + 50000,
-        fish: now + 110000 + 50000
-    };
-
-    const claimCoffeeRes = FarmEngine.claimCrops(playerState, 'Coffee', now + 110000);
-    assert.strictEqual(claimCoffeeRes.success, true);
-    assert.strictEqual(claimCoffeeRes.caffeineTriggered, true);
-    assert.strictEqual(claimCoffeeRes.cooldownReductionMs, 2000); // 2 active coffee plots = 2s = 2000ms
-    assert.strictEqual(playerState.cooldowns.work, now + 110000 + 98000);
-    console.log('✓ Test 8: Coffee Caffeine cooldown reduction passed');
-
-    // Test 9: Bulk Plant All Plots for Free
-    playerState.farm.plots.forEach(p => { p.crop = null; });
-    const plantAllRes = FarmEngine.plantAllPlots(playerState, 'Melon', now + 120000);
-    assert.strictEqual(plantAllRes.success, true);
-    assert.strictEqual(plantAllRes.plantedCount, 2);
-    assert.strictEqual(playerState.farm.plots[0].crop, 'Melon');
-    assert.strictEqual(playerState.farm.plots[1].crop, 'Melon');
-    console.log('✓ Test 9: Bulk plant all plots for free passed');
-
-    // Test 10: Bulk Water All Plots
-    playerState.farm.waterAvailableAt = 0;
-    const waterAllRes = FarmEngine.waterAllPlots(playerState, now + 120000, noBurstRng);
-    assert.strictEqual(waterAllRes.success, true);
-    assert.strictEqual(waterAllRes.wateredCount, 2);
-    assert.strictEqual(playerState.farm.waterAvailableAt, now + 120000 + 600000);
-    console.log('✓ Test 10: Bulk water all plots passed');
-
-    console.log('--- All FarmEngine Unit Tests Passed Successfully! ---');
-}
-
-runTests();
+console.log('--- All FarmEngine Unit Tests Passed Successfully! ---');

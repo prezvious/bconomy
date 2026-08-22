@@ -4,7 +4,7 @@
  */
 
 const FISH_DROP_TABLE = [
-    { item: 'Seaweed', chance: 44.0585 }, { item: 'Sardine', chance: 22.0292 },
+    { item: 'Seaweed', chance: 44.0587 }, { item: 'Sardine', chance: 22.0292 },
     { item: 'TatteredBoot', chance: 11.0146 }, { item: 'Prawn', chance: 7.3431 },
     { item: 'Lobster', chance: 4.4058 }, { item: 'Jellyfish', chance: 3.1470 },
     { item: 'AntiqueBottle', chance: 2.2029 }, { item: 'Octopus', chance: 1.7623 },
@@ -126,13 +126,15 @@ const RANKS = [
 ];
 
 const PERK_DEFINITIONS = {
-  investiture: { name: 'Investiture', maxLevel: 25, description: 'Reduces the price of Rank 107 (God) before ascension', formula: 'Level × 2.5% discount (max 62.5%)' },
-  cronyism: { name: 'Cronyism', maxLevel: 25, description: 'Lowers the price of ranking up', formula: 'Level × 2.5% discount (max 62.5%)' },
-  backchannel: { name: 'Backchannel', maxLevel: 25, description: 'Reduces the percentage fee taken on market trades (Coming Soon)', formula: 'Level × 1.12% fee reduction' },
-  partiality: { name: 'Partiality', maxLevel: 15, description: 'Improves odds and stacks of work bonus payouts', formula: 'Base 30% + Level × 15% bonus chance' },
-  serendipity: { name: 'Serendipity', maxLevel: 29, description: 'Increases the multiplier applied to rare item finds', formula: 'Multiplier = Level + 2' },
-  numismatist: { name: 'Numismatist', maxLevel: 20, description: 'Raises the maximum bet allowed on a coinflip (Coming Soon)', formula: 'Level × 5,000,000,000 limit increase' },
-  amnesiac: { name: 'Amnesiac', maxLevel: 24, description: 'Chance that an action cooldown gets instantly reset', formula: 'Level × 2% chance' }
+  investiture: { name: 'Final Rank Discount', maxLevel: 25, description: 'Reduces the price of Rank 107 (God) before prestige', formula: 'Level × 2.5% discount (max 62.5%)' },
+  cronyism: { name: 'Rank Subsidy', maxLevel: 25, description: 'Lowers the price of ranking up', formula: 'Level × 2.5% discount (max 62.5%)' },
+  backchannel: { name: 'Market Fee Reduction', maxLevel: 25, description: 'Reduces the percentage fee taken on market trades (Coming Soon)', formula: 'Level × 1.12% fee reduction' },
+  partiality: { name: 'Overtime Bonus', maxLevel: 15, description: 'Improves odds and stacks of work bonus payouts', formula: 'Base 30% + Level × 15% bonus chance' },
+  serendipity: { name: 'Lucky Drops', maxLevel: 29, description: 'Increases the multiplier applied to rare item finds', formula: 'Multiplier = Level + 1 (for rare drops ≤ 5%)' },
+  numismatist: { name: 'Bet Limit Boost', maxLevel: 20, description: 'Raises the maximum bet allowed on a coinflip', formula: 'Base $1B + Level × $5B max bet limit' },
+  jackpot_fever: { name: 'High Roller', maxLevel: 20, description: 'Increases slot machine win payouts and free spin reward multipliers', formula: 'Level × 5% payout boost (max +100%)' },
+  amnesiac: { name: 'Cooldown Reset', maxLevel: 24, description: 'Chance that an action cooldown gets instantly reset', formula: 'Level × 2% chance' },
+  water_byproducts: { name: 'Water Abundance', maxLevel: 10, description: 'Increases farm water byproducts (Weeds & Red Mushrooms) and boosts harvest yields on watered plots', formula: '+15% crop yield & +15% water byproducts per level (max +150%)' }
 };
 
 const parseRecipe = (str) => {
@@ -144,56 +146,56 @@ const parseRecipe = (str) => {
 
 const TOOL_UPGRADE_RECIPES = {
     fish: {
-        1: parseRecipe("Blueberry×1, Mushroom×1, Weeds×1"),
-        2: parseRecipe("Blueberry×3, Mushroom×3, Weeds×4"),
-        3: parseRecipe("Blueberry×13, Mushroom×14, Weeds×19"),
-        4: parseRecipe("Blueberry×35, Mushroom×38, Weeds×50"),
-        5: parseRecipe("Blueberry×72, Mushroom×77, Weeds×102"),
-        6: parseRecipe("Strawberry×13, Mushroom×134, Weeds×178"),
-        7: parseRecipe("Strawberry×20, Mushroom×210, Weeds×280"),
-        8: parseRecipe("Strawberry×29, Mushroom×309, Weeds×412"),
-        9: parseRecipe("Strawberry×41, Mushroom×431, Weeds×575"),
-        10: parseRecipe("Strawberry×54, Mushroom×579, Weeds×772"),
-        11: parseRecipe("Kiwi×43, Mushroom×753, Bones×753"),
-        12: parseRecipe("Kiwi×54, Mushroom×956, Bones×956"),
-        13: parseRecipe("Kiwi×67, Mushroom×1188, Bones×1188"),
-        14: parseRecipe("Kiwi×82, Mushroom×1451, Bones×1451"),
-        15: parseRecipe("Kiwi×98, Mushroom×1746, Bones×1746"),
-        16: parseRecipe("Mango×59, Mushroom×2075, Bones×2075"),
-        17: parseRecipe("Mango×69, Mushroom×2438, Bones×2438"),
-        18: parseRecipe("Mango×80, Mushroom×2837, Bones×2837"),
-        19: parseRecipe("Mango×92, Mushroom×3272, Bones×3272"),
-        20: parseRecipe("Mango×105, Mushroom×3746, Bones×3746"),
-        21: parseRecipe("Melon×60, Mushroom×2129, Steak×1420"),
-        22: parseRecipe("Melon×68, Mushroom×2405, Steak×1604"),
-        23: parseRecipe("Melon×76, Mushroom×2702, Steak×1801"),
-        24: parseRecipe("Melon×85, Mushroom×3020, Steak×2013"),
-        25: parseRecipe("Melon×95, Mushroom×3358, Steak×2239"),
-        26: parseRecipe("Coconut×7, Mushroom×3719, Steak×2480"),
-        27: parseRecipe("Coconut×8, Mushroom×4102, Steak×2735"),
-        28: parseRecipe("Coconut×9, Mushroom×4508, Steak×3006"),
-        29: parseRecipe("Coconut×10, Mushroom×4937, Steak×3292"),
-        30: parseRecipe("Coconut×11, Mushroom×5390, Steak×3593"),
-        31: parseRecipe("Pumpkin×2, Mushroom×5867, Steak×3911"),
-        32: parseRecipe("Pumpkin×2, Mushroom×6368, Steak×4245"),
-        33: parseRecipe("Pumpkin×2, Mushroom×6894, Steak×4596"),
-        34: parseRecipe("Pumpkin×2, Mushroom×7445, Steak×4963"),
-        35: parseRecipe("Pumpkin×2, Mushroom×8022, Steak×5348"),
-        36: parseRecipe("Melon×242, Diamond×35, Steak×5750"),
-        37: parseRecipe("Melon×260, Diamond×38, Steak×6169"),
-        38: parseRecipe("Melon×278, Diamond×40, Steak×6607"),
-        39: parseRecipe("Melon×297, Diamond×43, Steak×7062"),
-        40: parseRecipe("Melon×317, Diamond×46, Steak×7536"),
-        41: parseRecipe("Coconut×23, Urn×241, Steak×8028"),
-        42: parseRecipe("Coconut×24, Urn×257, Steak×8540"),
-        43: parseRecipe("Coconut×26, Urn×273, Steak×9070"),
-        44: parseRecipe("Coconut×27, Urn×289, Steak×9619"),
-        45: parseRecipe("Coconut×29, Urn×306, Steak×10188"),
-        46: parseRecipe("Pumpkin×4, Uranium×7, Steak×10777"),
-        47: parseRecipe("Pumpkin×4, Uranium×7, Steak×11386"),
-        48: parseRecipe("Pumpkin×4, Uranium×8, Steak×12015"),
-        49: parseRecipe("Pumpkin×4, Uranium×8, Steak×12664"),
-        50: parseRecipe("Pumpkin×4, Uranium×8, Steak×13334")
+        1: parseRecipe("Blueberry×1, RedMushroom×1, Weeds×1"),
+        2: parseRecipe("Blueberry×3, RedMushroom×3, Weeds×4"),
+        3: parseRecipe("Blueberry×13, RedMushroom×14, Weeds×19"),
+        4: parseRecipe("Blueberry×35, RedMushroom×38, Weeds×50"),
+        5: parseRecipe("Blueberry×72, RedMushroom×77, Weeds×102"),
+        6: parseRecipe("Strawberry×13, RedMushroom×134, Weeds×178"),
+        7: parseRecipe("Strawberry×20, RedMushroom×210, Weeds×280"),
+        8: parseRecipe("Strawberry×29, RedMushroom×309, Weeds×412"),
+        9: parseRecipe("Strawberry×41, RedMushroom×431, Weeds×575"),
+        10: parseRecipe("Strawberry×54, RedMushroom×579, Weeds×772"),
+        11: parseRecipe("Kiwi×43, RedMushroom×753, OldBones×753"),
+        12: parseRecipe("Kiwi×54, RedMushroom×956, OldBones×956"),
+        13: parseRecipe("Kiwi×67, RedMushroom×1188, OldBones×1188"),
+        14: parseRecipe("Kiwi×82, RedMushroom×1451, OldBones×1451"),
+        15: parseRecipe("Kiwi×98, RedMushroom×1746, OldBones×1746"),
+        16: parseRecipe("Mango×59, RedMushroom×2075, OldBones×2075"),
+        17: parseRecipe("Mango×69, RedMushroom×2438, OldBones×2438"),
+        18: parseRecipe("Mango×80, RedMushroom×2837, OldBones×2837"),
+        19: parseRecipe("Mango×92, RedMushroom×3272, OldBones×3272"),
+        20: parseRecipe("Mango×105, RedMushroom×3746, OldBones×3746"),
+        21: parseRecipe("Melon×60, RedMushroom×2129, PrimeSteak×1420"),
+        22: parseRecipe("Melon×68, RedMushroom×2405, PrimeSteak×1604"),
+        23: parseRecipe("Melon×76, RedMushroom×2702, PrimeSteak×1801"),
+        24: parseRecipe("Melon×85, RedMushroom×3020, PrimeSteak×2013"),
+        25: parseRecipe("Melon×95, RedMushroom×3358, PrimeSteak×2239"),
+        26: parseRecipe("Coconut×7, RedMushroom×3719, PrimeSteak×2480"),
+        27: parseRecipe("Coconut×8, RedMushroom×4102, PrimeSteak×2735"),
+        28: parseRecipe("Coconut×9, RedMushroom×4508, PrimeSteak×3006"),
+        29: parseRecipe("Coconut×10, RedMushroom×4937, PrimeSteak×3292"),
+        30: parseRecipe("Coconut×11, RedMushroom×5390, PrimeSteak×3593"),
+        31: parseRecipe("Pumpkin×2, RedMushroom×5867, PrimeSteak×3911"),
+        32: parseRecipe("Pumpkin×2, RedMushroom×6368, PrimeSteak×4245"),
+        33: parseRecipe("Pumpkin×2, RedMushroom×6894, PrimeSteak×4596"),
+        34: parseRecipe("Pumpkin×2, RedMushroom×7445, PrimeSteak×4963"),
+        35: parseRecipe("Pumpkin×2, RedMushroom×8022, PrimeSteak×5348"),
+        36: parseRecipe("Melon×242, Diamond×35, PrimeSteak×5750"),
+        37: parseRecipe("Melon×260, Diamond×38, PrimeSteak×6169"),
+        38: parseRecipe("Melon×278, Diamond×40, PrimeSteak×6607"),
+        39: parseRecipe("Melon×297, Diamond×43, PrimeSteak×7062"),
+        40: parseRecipe("Melon×317, Diamond×46, PrimeSteak×7536"),
+        41: parseRecipe("Coconut×23, RitualUrn×241, PrimeSteak×8028"),
+        42: parseRecipe("Coconut×24, RitualUrn×257, PrimeSteak×8540"),
+        43: parseRecipe("Coconut×26, RitualUrn×273, PrimeSteak×9070"),
+        44: parseRecipe("Coconut×27, RitualUrn×289, PrimeSteak×9619"),
+        45: parseRecipe("Coconut×29, RitualUrn×306, PrimeSteak×10188"),
+        46: parseRecipe("Pumpkin×4, Uranium×7, PrimeSteak×10777"),
+        47: parseRecipe("Pumpkin×4, Uranium×7, PrimeSteak×11386"),
+        48: parseRecipe("Pumpkin×4, Uranium×8, PrimeSteak×12015"),
+        49: parseRecipe("Pumpkin×4, Uranium×8, PrimeSteak×12664"),
+        50: parseRecipe("Pumpkin×4, Uranium×8, PrimeSteak×13334")
     },
     hunt: {
         1: parseRecipe("Copper×1, Jellyfish×1, DiscardedButt×1, BigLog×1, RustyKnife×1"),
@@ -353,6 +355,192 @@ const TOOL_UPGRADE_RECIPES = {
     }
 };
 
+const SOCKET_MODULE_DEFINITIONS = {
+    'multistrike_1': {
+        id: 'multistrike_1',
+        name: 'Multistrike Matrix I',
+        family: 'multistrike',
+        tier: 1,
+        description: '+10% chance to trigger a bonus duplicate roll pool.',
+        effect: { multistrikeChance: 0.10 },
+        recipe: [ { item: 'Copper', quantity: 250 }, { item: 'ScrapMetal', quantity: 150 }, { item: 'CircuitShard', quantity: 5 } ]
+    },
+    'multistrike_2': {
+        id: 'multistrike_2',
+        name: 'Multistrike Matrix II',
+        family: 'multistrike',
+        tier: 2,
+        description: '+25% chance to trigger a bonus duplicate roll pool.',
+        effect: { multistrikeChance: 0.25 },
+        recipe: [ { item: 'Gold', quantity: 500 }, { item: 'TitaniumOre', quantity: 100 }, { item: 'CircuitShard', quantity: 25 } ]
+    },
+    'multistrike_3': {
+        id: 'multistrike_3',
+        name: 'Multistrike Matrix III',
+        family: 'multistrike',
+        tier: 3,
+        description: '+50% chance to trigger a bonus duplicate roll pool.',
+        effect: { multistrikeChance: 0.50 },
+        recipe: [ { item: 'Diamond', quantity: 100 }, { item: 'Uranium', quantity: 20 }, { item: 'AncientCoinCache', quantity: 5 } ]
+    },
+    'prospector_1': {
+        id: 'prospector_1',
+        name: 'Prospector Core I',
+        family: 'prospector',
+        tier: 1,
+        description: '+15% rare item drop multiplier (for items ≤ 5% chance).',
+        effect: { rareDropBonus: 0.15 },
+        recipe: [ { item: 'Silver', quantity: 300 }, { item: 'Quartz', quantity: 200 }, { item: 'Ruby', quantity: 50 } ]
+    },
+    'prospector_2': {
+        id: 'prospector_2',
+        name: 'Prospector Core II',
+        family: 'prospector',
+        tier: 2,
+        description: '+35% rare item drop multiplier (for items ≤ 5% chance).',
+        effect: { rareDropBonus: 0.35 },
+        recipe: [ { item: 'Sapphire', quantity: 200 }, { item: 'Emerald', quantity: 150 }, { item: 'BlackPearl', quantity: 10 } ]
+    },
+    'prospector_3': {
+        id: 'prospector_3',
+        name: 'Prospector Core III',
+        family: 'prospector',
+        tier: 3,
+        description: '+75% rare item drop multiplier (for items ≤ 5% chance).',
+        effect: { rareDropBonus: 0.75 },
+        recipe: [ { item: 'Alexandrite', quantity: 25 }, { item: 'PearledOyster', quantity: 20 }, { item: 'FossilizedDragonScale', quantity: 2 } ]
+    },
+    'transmuter_1': {
+        id: 'transmuter_1',
+        name: 'Alchemical Catalyst I',
+        family: 'transmuter',
+        tier: 1,
+        description: 'Transmutes 5% of common junk drops into higher-tier resources.',
+        effect: { transmutationRate: 0.05 },
+        recipe: [ { item: 'Obsidian', quantity: 250 }, { item: 'GlowingMushroom', quantity: 50 }, { item: 'RitualUrn', quantity: 10 } ]
+    },
+    'transmuter_2': {
+        id: 'transmuter_2',
+        name: 'Alchemical Catalyst II',
+        family: 'transmuter',
+        tier: 2,
+        description: 'Transmutes 12% of common junk drops into higher-tier resources.',
+        effect: { transmutationRate: 0.12 },
+        recipe: [ { item: 'Petroleum', quantity: 150 }, { item: 'CorruptedMemoryCard', quantity: 30 }, { item: 'AncientFossil', quantity: 10 } ]
+    },
+    'transmuter_3': {
+        id: 'transmuter_3',
+        name: 'Alchemical Catalyst III',
+        family: 'transmuter',
+        tier: 3,
+        description: 'Transmutes 25% of common junk drops into higher-tier resources.',
+        effect: { transmutationRate: 0.25 },
+        recipe: [ { item: 'Platinum', quantity: 50 }, { item: 'EncryptedDrive', quantity: 5 }, { item: 'HeartwoodCore', quantity: 5 } ]
+    },
+    'chrono_1': {
+        id: 'chrono_1',
+        name: 'Chrono Resonator I',
+        family: 'chrono',
+        tier: 1,
+        description: 'Reduces action cooldown by an additional 5 seconds.',
+        effect: { cooldownReduction: 5 },
+        recipe: [ { item: 'Neodymium', quantity: 300 }, { item: 'FloppyDisk', quantity: 100 }, { item: 'InsulatingResin', quantity: 40 } ]
+    },
+    'chrono_2': {
+        id: 'chrono_2',
+        name: 'Chrono Resonator II',
+        family: 'chrono',
+        tier: 2,
+        description: 'Reduces action cooldown by an additional 10 seconds.',
+        effect: { cooldownReduction: 10 },
+        recipe: [ { item: 'Lithium', quantity: 200 }, { item: 'RubberTire', quantity: 80 }, { item: 'ConductiveAlgae', quantity: 20 } ]
+    },
+    'chrono_3': {
+        id: 'chrono_3',
+        name: 'Chrono Resonator III',
+        family: 'chrono',
+        tier: 3,
+        description: 'Reduces action cooldown by an additional 15 seconds.',
+        effect: { cooldownReduction: 15 },
+        recipe: [ { item: 'Tungsten', quantity: 150 }, { item: 'Iridium', quantity: 50 }, { item: 'OldCrown', quantity: 10 } ]
+    },
+    'fortune_1': {
+        id: 'fortune_1',
+        name: 'Fortune Amplifier I',
+        family: 'fortune',
+        tier: 1,
+        description: '+1 to Serendipity rare multiplier.',
+        effect: { serendipityBonus: 1 },
+        recipe: [ { item: 'RabbitFoot', quantity: 150 }, { item: 'Honeycomb', quantity: 50 }, { item: 'BlackTruffle', quantity: 10 } ]
+    },
+    'fortune_2': {
+        id: 'fortune_2',
+        name: 'Fortune Amplifier II',
+        family: 'fortune',
+        tier: 2,
+        description: '+2 to Serendipity rare multiplier.',
+        effect: { serendipityBonus: 2 },
+        recipe: [ { item: 'ElkAntlers', quantity: 30 }, { item: 'OrnateNecklace', quantity: 15 }, { item: 'TreasureChest', quantity: 5 } ]
+    },
+    'fortune_3': {
+        id: 'fortune_3',
+        name: 'Fortune Amplifier III',
+        family: 'fortune',
+        tier: 3,
+        description: '+4 to Serendipity rare multiplier.',
+        effect: { serendipityBonus: 4 },
+        recipe: [ { item: 'AlphaWolfFang', quantity: 15 }, { item: 'GiantSquid', quantity: 5 }, { item: 'Manuscript', quantity: 5 } ]
+    }
+};
+
+const DROP_TABLE_MAP = {
+    mine: MINE_DROP_TABLE,
+    explore: EXPLORE_DROP_TABLE,
+    hunt: HUNT_DROP_TABLE,
+    fish: FISH_DROP_TABLE
+};
+
+/**
+ * Generates deterministic pure-gathering material recipes for tool levels 51-500.
+ * @param {string} toolType - 'mine', 'explore', 'hunt', 'fish'
+ * @param {number} level - Target level (51-500)
+ * @returns {Array<{item: string, quantity: number}>|null}
+ */
+function generateProceduralRecipe(toolType, level) {
+    const table = DROP_TABLE_MAP[toolType];
+    if (!table || level < 51 || level > 500) return null;
+
+    const common = table.filter(d => d.chance > 8.0).map(d => d.item);
+    const uncommon = table.filter(d => d.chance > 2.0 && d.chance <= 8.0).map(d => d.item);
+    const rare = table.filter(d => d.chance > 0.20 && d.chance <= 2.0).map(d => d.item);
+    const ultraRare = table.filter(d => d.chance <= 0.20).map(d => d.item);
+
+    const X = level - 50;
+
+    const item1 = common[X % common.length];
+    const qty1 = Math.floor(2000 * Math.pow(1 + (0.05 * X), 1.6));
+
+    const item2 = uncommon[(X + 1) % uncommon.length];
+    const qty2 = Math.floor(250 * Math.pow(1 + (0.04 * X), 1.4));
+
+    const item3 = rare[Math.floor(X / 5) % rare.length];
+    const qty3 = Math.floor(20 * Math.pow(1 + (0.035 * X), 1.25));
+
+    const recipe = [
+        { item: item1, quantity: Math.max(1, qty1) },
+        { item: item2, quantity: Math.max(1, qty2) },
+        { item: item3, quantity: Math.max(1, qty3) }
+    ];
+
+    if (level % 25 === 0 && ultraRare.length > 0) {
+        const item4 = ultraRare[Math.floor(level / 25) % ultraRare.length];
+        const qty4 = Math.max(1, Math.floor(level / 50));
+        recipe.push({ item: item4, quantity: qty4 });
+    }
+
+    return recipe;
+}
+
 const ACTION_COOLDOWNS = { mine: 300, explore: 300, hunt: 300, fish: 300, work: 1800 };
 
 module.exports = {
@@ -363,5 +551,7 @@ module.exports = {
     RANKS,
     PERK_DEFINITIONS,
     TOOL_UPGRADE_RECIPES,
-    ACTION_COOLDOWNS
+    ACTION_COOLDOWNS,
+    SOCKET_MODULE_DEFINITIONS,
+    generateProceduralRecipe
 };

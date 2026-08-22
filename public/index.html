@@ -3,28 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bconomy — Merchant Guild Command Desk</title>
-    <meta name="description" content="Manage your guild, execute work and gathering operations, upgrade tools, and ascend ranks in Bconomy.">
+    <title>Bconomy — Console</title>
+    <meta name="description" content="Manage operations, execute gathering actions, upgrade tools, and ascend ranks in Bconomy.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&family=Public+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&family=Public+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <a href="#panel-actions" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
     <div class="app-container">
-        <!-- Guild Sidebar Navigation -->
-        <nav class="guild-sidebar" aria-label="Guild Ledger Navigation">
+        <!-- Sidebar Navigation -->
+        <nav class="guild-sidebar" aria-label="Main Navigation">
             <div class="logo-container">
                 <div class="guild-crest">
                     <iconify-icon icon="lucide:shield-half" class="crest-icon" aria-hidden="true"></iconify-icon>
                 </div>
                 <div class="logo-text-group">
                     <h1 class="logo-text"><span class="logo-accent">B</span>conomy</h1>
-                    <span class="logo-subtitle">Guild Command Desk</span>
                 </div>
             </div>
 
@@ -41,34 +44,46 @@
                     <iconify-icon icon="lucide:backpack" class="nav-icon" aria-hidden="true"></iconify-icon>
                     <span class="nav-text">Inventory</span>
                 </button>
+                <button class="nav-btn" data-tab="shop" type="button" aria-controls="panel-shop" aria-label="Shop" title="Shop">
+                    <iconify-icon icon="lucide:store" class="nav-icon" aria-hidden="true"></iconify-icon>
+                    <span class="nav-text">Shop</span>
+                </button>
                 <button class="nav-btn" data-tab="tools" type="button" aria-controls="panel-tools" aria-label="Tools" title="Tools">
                     <iconify-icon icon="lucide:wrench" class="nav-icon" aria-hidden="true"></iconify-icon>
                     <span class="nav-text">Tools</span>
                 </button>
-                <button class="nav-btn" data-tab="rank" type="button" aria-controls="panel-rank" aria-label="Rank" title="Rank">
+                <button class="nav-btn" data-tab="rank-prestige" type="button" aria-controls="panel-rank-prestige" aria-label="Rank & Ascension" title="Rank & Ascension">
                     <iconify-icon icon="lucide:award" class="nav-icon" aria-hidden="true"></iconify-icon>
-                    <span class="nav-text">Rank</span>
+                    <span class="nav-text">Rank & Ascension</span>
                 </button>
-                <button class="nav-btn" data-tab="prestige" type="button" aria-controls="panel-prestige" aria-label="Prestige" title="Prestige">
-                    <iconify-icon icon="lucide:sparkles" class="nav-icon" aria-hidden="true"></iconify-icon>
-                    <span class="nav-text">Prestige</span>
+                <button class="nav-btn" data-tab="gambling" type="button" aria-controls="panel-gambling" aria-label="Gambling" title="Gambling">
+                    <iconify-icon icon="lucide:dices" class="nav-icon" aria-hidden="true"></iconify-icon>
+                    <span class="nav-text">Gambling</span>
+                </button>
+                <button class="nav-btn" data-tab="faction" type="button" aria-controls="panel-faction" aria-label="Faction" title="Faction">
+                    <iconify-icon icon="lucide:flag" class="nav-icon" aria-hidden="true"></iconify-icon>
+                    <span class="nav-text">Faction</span>
+                </button>
+                <button class="nav-btn" data-tab="settings" type="button" aria-controls="panel-settings" aria-label="Settings" title="Settings">
+                    <iconify-icon icon="lucide:settings" class="nav-icon" aria-hidden="true"></iconify-icon>
+                    <span class="nav-text">Settings</span>
                 </button>
             </div>
 
             <div class="sidebar-footer">
-                <span class="guild-seal-tag">Official Ledger</span>
+                <span class="guild-seal-tag">Bconomy v2.0</span>
             </div>
         </nav>
 
-        <!-- Main Workspace (Stat Folio Header + Ledger Panels) -->
+        <!-- Main Workspace (Header + Panels) -->
         <div class="workspace-wrapper">
             <header class="stat-folio-header">
                 <div class="stat-folio-branding">
-                    <span class="folio-label">Guild Folio</span>
+                    <span class="folio-label">Home</span>
                 </div>
 
                 <div class="header-stats">
-                    <div class="header-stat stat-cash" title="Total Liquid Guild Cash">
+                    <div class="header-stat stat-cash" title="Liquid Cash Balance">
                         <iconify-icon icon="lucide:coins" class="stat-icon" aria-hidden="true"></iconify-icon>
                         <div class="stat-info">
                             <span class="stat-label">Cash</span>
@@ -76,37 +91,36 @@
                         </div>
                     </div>
 
-                    <div class="header-stat stat-rank" title="Current Rank">
+                    <div class="header-stat stat-rank" title="Current Standing Rank">
                         <iconify-icon icon="lucide:medal" class="stat-icon" aria-hidden="true"></iconify-icon>
                         <div class="stat-info">
                             <span class="stat-label">Rank</span>
                             <span class="stat-value" id="header-rank">Rank 0</span>
                         </div>
                     </div>
-
-                    <div class="header-stat stat-prestige" title="Prestige Points available for Perks">
-                        <iconify-icon icon="lucide:star" class="stat-icon" aria-hidden="true"></iconify-icon>
-                        <div class="stat-info">
-                            <span class="stat-label">Prestige Points</span>
-                            <span class="stat-value" id="header-prestige">0</span>
-                        </div>
-                    </div>
                 </div>
 
-                <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark vault theme">
-                    <iconify-icon icon="lucide:moon" class="theme-icon theme-icon-light" aria-hidden="true"></iconify-icon>
-                    <iconify-icon icon="lucide:sun" class="theme-icon theme-icon-dark" aria-hidden="true"></iconify-icon>
-                </button>
+                <div id="header-account-status" class="header-account-status"></div>
+
+                <div class="header-action-btns">
+                    <button id="btn-toggle-console" class="theme-toggle console-toggle-btn" type="button" aria-label="Toggle Console Feed" title="Toggle Console Feed">
+                        <iconify-icon icon="lucide:terminal" class="theme-icon" aria-hidden="true"></iconify-icon>
+                    </button>
+                    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark theme" title="Toggle Dark/Light Mode">
+                        <iconify-icon icon="lucide:moon" class="theme-icon theme-icon-light" aria-hidden="true"></iconify-icon>
+                        <iconify-icon icon="lucide:sun" class="theme-icon theme-icon-dark" aria-hidden="true"></iconify-icon>
+                    </button>
+                </div>
             </header>
 
-            <main class="ledger-main">
+            <main class="ledger-main" id="main-content" tabindex="-1">
                 <div class="panels-container">
-                    <!-- Actions Panel (Command Desk) -->
+                    <!-- Actions Panel -->
                     <section id="panel-actions" class="panel active" aria-labelledby="panel-actions-heading">
                         <div class="section-header">
                             <div>
-                                <h2 id="panel-actions-heading">Command Desk</h2>
-                                <p class="section-desc">Issue guild dispatches to gather resources and earn cash</p>
+                                <h2 id="panel-actions-heading">Operations & Gathering</h2>
+                                <p class="section-desc">Dispatch gathering actions to harvest commodities and generate revenue.</p>
                             </div>
                         </div>
                         <div class="actions-grid" id="actions-grid"></div>
@@ -116,8 +130,8 @@
                     <section id="panel-farm" class="panel" aria-labelledby="panel-farm-heading">
                         <div class="section-header">
                             <div>
-                                <h2 id="panel-farm-heading">Guild Farm & Agriculture</h2>
-                                <p class="section-desc">Cultivate crops, water plots, and claim produce with unique benefits</p>
+                                <h2 id="panel-farm-heading">Agricultural Operations</h2>
+                                <p class="section-desc">Cultivate crops, hydrate plots, and harvest produce with unique bonuses.</p>
                             </div>
                             <div class="farm-header-actions">
                                 <button id="btn-farm-manage" class="action-btn secondary-btn" type="button">
@@ -129,19 +143,19 @@
                             </div>
                         </div>
 
-                        <!-- Global Watering & Hydration Banner -->
+                        <!-- Global Watering Banner -->
                         <div class="farm-banner card charter-card mb-6">
                             <div class="farm-banner-info">
                                 <div class="banner-title-row">
                                     <iconify-icon icon="lucide:droplets" class="banner-icon" aria-hidden="true"></iconify-icon>
-                                    <h3>Global Farm Watering</h3>
+                                    <h3>Global Farm Hydration</h3>
                                 </div>
-                                <p id="water-status-msg">Watering reduces growth timer by 30 mins.</p>
+                                <p id="water-status-msg">Watering reduces crop maturation timer by 30 minutes.</p>
                                 <div class="water-timer-display" id="water-timer-display">Status: Ready to Water</div>
                             </div>
                             <div class="banner-actions">
                                 <button id="btn-global-water" class="action-btn primary-btn" type="button">
-                                    <iconify-icon icon="lucide:droplets" aria-hidden="true"></iconify-icon> Water
+                                    <iconify-icon icon="lucide:droplets" aria-hidden="true"></iconify-icon> Water All
                                 </button>
                                 <button id="btn-use-melon" class="action-btn secondary-btn" type="button">
                                     <iconify-icon icon="lucide:sparkles" aria-hidden="true"></iconify-icon> Use Melon (Reset Cooldown)
@@ -149,12 +163,12 @@
                             </div>
                         </div>
 
-                        <!-- Farm Storage & Claiming Card -->
+                        <!-- Farm Storage & Harvest Card -->
                         <div class="farm-storage-card card charter-card mb-6">
                             <div class="storage-header">
                                 <div class="storage-title">
                                     <iconify-icon icon="lucide:archive" class="storage-icon" aria-hidden="true"></iconify-icon>
-                                    <h3>Farm Storage</h3>
+                                    <h3>Crop Storage & Logistics</h3>
                                 </div>
                                 <div class="claim-controls">
                                     <select id="claim-crop-select" class="crop-select" aria-label="Select crop to claim">
@@ -168,8 +182,22 @@
                             <div class="farm-storage-grid" id="farm-storage-grid"></div>
                         </div>
 
-                        <!-- Farm Plots Grid -->
-                        <h3 class="subsection-title">Active Farm Plots</h3>
+                        <!-- Active Farm Plots Grid -->
+                        <div class="plot-section-heading">
+                            <h3 class="subsection-title">Active Field Plots</h3>
+                            <div class="plot-selection-toolbar" aria-label="Plot marking controls">
+                                <span id="marked-plots-count" class="marked-plots-count" aria-live="polite">0 Marked</span>
+                                <button id="btn-mark-all-plots" class="plot-selection-btn" type="button">
+                                    <iconify-icon icon="lucide:bookmarks" aria-hidden="true"></iconify-icon> Mark All
+                                </button>
+                                <button id="btn-invert-plot-marks" class="plot-selection-btn" type="button">
+                                    <iconify-icon icon="lucide:arrow-left-right" aria-hidden="true"></iconify-icon> Invert
+                                </button>
+                                <button id="btn-clear-plot-marks" class="plot-selection-btn" type="button" disabled>
+                                    <iconify-icon icon="lucide:bookmark-x" aria-hidden="true"></iconify-icon> Clear
+                                </button>
+                            </div>
+                        </div>
                         <div class="farm-plots-grid" id="farm-plots-grid"></div>
                     </section>
 
@@ -177,116 +205,214 @@
                     <section id="panel-inventory" class="panel" aria-labelledby="panel-inventory-heading">
                         <div class="section-header">
                             <div>
-                                <h2 id="panel-inventory-heading">Guild Inventory</h2>
-                                <p class="section-desc">Inspect gathered commodities and raw materials</p>
+                                <h2 id="panel-inventory-heading">Inventory</h2>
+                                <p class="section-desc">Browse every commodity, material, crop, and booster you own.</p>
                             </div>
-                            <div class="inventory-controls">
-                                <iconify-icon icon="lucide:search" class="search-icon" aria-hidden="true"></iconify-icon>
-                                <input type="text" id="inventory-search" placeholder="Search inventory items..." class="search-input" aria-label="Search inventory items">
+                        </div>
+
+                        <div class="summary-rail inventory-summary-rail" aria-label="Inventory summary">
+                            <div class="summary-metric">
+                                <span class="summary-label">Item Types</span>
+                                <strong id="inventory-type-count" class="summary-value">0</strong>
+                            </div>
+                            <div class="summary-metric">
+                                <span class="summary-label">Total Units</span>
+                                <strong id="inventory-unit-count" class="summary-value">0</strong>
+                            </div>
+                            <div id="inventory-stats-badge" class="summary-context">0 Types · 0 Units</div>
+                        </div>
+
+                        <div class="page-toolbar inventory-toolbar" aria-label="Inventory controls">
+                            <label class="toolbar-search" for="inventory-search">
+                                <span class="sr-only">Search inventory</span>
+                                <iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon>
+                                <input type="search" id="inventory-search" name="inventory-search" placeholder="Search inventory…" class="search-input" autocomplete="off">
+                            </label>
+                            <label class="toolbar-field" for="inventory-category">
+                                <span>Category</span>
+                                <select id="inventory-category" name="inventory-category" class="form-select" autocomplete="off">
+                                    <option value="all">All categories</option>
+                                </select>
+                            </label>
+                            <label class="toolbar-field" for="inventory-sort">
+                                <span>Sort</span>
+                                <select id="inventory-sort" name="inventory-sort" class="form-select" autocomplete="off">
+                                    <option value="name-asc">Name A–Z</option>
+                                    <option value="quantity-desc">Quantity: High to Low</option>
+                                    <option value="quantity-asc">Quantity: Low to High</option>
+                                    <option value="category">Category</option>
+                                </select>
+                            </label>
+                            <div class="view-toggle" role="group" aria-label="Inventory card size">
+                                <button id="inventory-view-grid" class="view-toggle-btn" type="button" aria-pressed="true" title="Regular grid">
+                                    <iconify-icon icon="lucide:grid-2x2" aria-hidden="true"></iconify-icon><span>Grid</span>
+                                </button>
+                                <button id="inventory-view-compact" class="view-toggle-btn" type="button" aria-pressed="false" title="Compact grid">
+                                    <iconify-icon icon="lucide:grid-3x3" aria-hidden="true"></iconify-icon><span>Compact</span>
+                                </button>
+                            </div>
+                            <div id="inventory-booster-action-wrap" class="inventory-booster-action">
+                                <button id="btn-open-bulk-boosters" class="action-btn primary-btn" type="button" disabled title="No boosters owned">
+                                    <iconify-icon icon="lucide:zap" aria-hidden="true"></iconify-icon>
+                                    <span id="inventory-booster-action-label">Activate Boosters (0)</span>
+                                </button>
                             </div>
                         </div>
                         <div class="inventory-grid" id="inventory-grid"></div>
-                        <div id="inventory-empty" class="empty-state hidden">
+                        <div id="inventory-empty" class="empty-state-card hidden" role="status">
                             <iconify-icon icon="lucide:package-open" class="empty-icon" aria-hidden="true"></iconify-icon>
-                            <p>Your inventory is empty.</p>
+                            <h3 class="empty-title">Inventory Empty</h3>
+                            <p class="empty-desc">Gather resources or harvest crops to fill your inventory.</p>
                         </div>
                     </section>
 
-                    <!-- Tools Panel -->
+                    <!-- Tools Workshop Panel -->
                     <section id="panel-tools" class="panel" aria-labelledby="panel-tools-heading">
                         <div class="section-header">
                             <div>
-                                <h2 id="panel-tools-heading">Tool Workshop</h2>
-                                <p class="section-desc">Upgrade equipment to yield richer harvests and multipliers</p>
+                                <h2 id="panel-tools-heading">Tool Workshop & Overclocking</h2>
+                                <p class="section-desc">Upgrade gathering equipment up to Level 500 and install socket overclock modules.</p>
                             </div>
                         </div>
                         <div class="tools-grid" id="tools-grid"></div>
                     </section>
 
-                    <!-- Rank Panel -->
-                    <section id="panel-rank" class="panel" aria-labelledby="panel-rank-heading">
+                    <!-- Rank & Ascension Panel -->
+                    <section id="panel-rank-prestige" class="panel" aria-labelledby="panel-rank-prestige-heading">
                         <div class="section-header">
                             <div>
-                                <h2 id="panel-rank-heading">Rank Warrant</h2>
-                                <p class="section-desc">Elevate your standing within the Merchant Guild hierarchy</p>
+                                <h2 id="panel-rank-prestige-heading">Rank Advancement & Prestige Ascension</h2>
+                                <p class="section-desc">Advance through career ranks, ascend prestige tiers, and allocate permanent perk points.</p>
                             </div>
                         </div>
-                        <div class="rank-container">
-                            <div class="current-rank-card card charter-card">
-                                <div class="charter-header">
-                                    <iconify-icon icon="lucide:award" class="rank-icon" aria-hidden="true"></iconify-icon>
-                                    <span class="charter-badge">Current Warrant</span>
-                                </div>
-                                <h3 id="current-rank-display">Rank 0</h3>
-                                <div class="rank-progress">
-                                    <div class="progress-bar-bg">
-                                        <div class="progress-bar-fill progress-accent" id="rank-progress-fill" style="width: 0%"></div>
+
+                        <!-- Overview Banner Card -->
+                        <div class="rank-prestige-overview card charter-card mb-6">
+                            <div class="rp-overview-grid">
+                                <div class="rp-overview-item">
+                                    <span class="rp-stat-label">Current Rank</span>
+                                    <h3 id="rp-current-rank-display" class="rp-stat-val text-accent">Rank 0 - Peasant</h3>
+                                    <div class="rank-progress mt-2">
+                                        <div class="progress-bar-bg">
+                                            <div class="progress-bar-fill progress-accent" id="rp-rank-progress-fill" style="width: 0%"></div>
+                                        </div>
+                                        <div class="progress-info-row mt-1">
+                                            <span class="progress-label text-xs text-subtle">Rank Progress</span>
+                                            <span class="progress-text font-mono text-xs" id="rp-rank-progress-text">0 / 106</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-info-row">
-                                        <span class="progress-label">Warrant Progress</span>
-                                        <span class="progress-text" id="rank-progress-text">0 / 107</span>
+                                </div>
+                                <div class="rp-overview-item">
+                                    <span class="rp-stat-label">Current Prestige</span>
+                                    <h3 id="rp-tier-display" class="rp-stat-val text-accent">Tier 0</h3>
+                                    <div class="prestige-points-summary mt-2">
+                                        <span class="text-xs text-subtle">Unspent Prestige Points:</span>
+                                        <span id="rp-prestige-points-display" class="font-mono font-bold highlight text-sm ml-1">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accordion Sections -->
+                        <div class="accordion-container">
+                            <!-- Accordion Item 1: Career Rank & Ascension -->
+                            <div class="accordion-item active" id="acc-item-rank">
+                                <button class="accordion-header" type="button" aria-expanded="true" aria-controls="acc-body-rank">
+                                    <div class="accordion-title">
+                                        <iconify-icon icon="lucide:award" class="accordion-icon" aria-hidden="true"></iconify-icon>
+                                        <span>Career Rank & Ascension</span>
+                                    </div>
+                                    <iconify-icon icon="lucide:chevron-down" class="accordion-arrow" aria-hidden="true"></iconify-icon>
+                                </button>
+                                <div class="accordion-body" id="acc-body-rank">
+                                    <div class="progression-grid">
+                                        <!-- Single Rank Promotion Card -->
+                                        <div class="progression-action-card card">
+                                            <div class="card-title-row">
+                                                <iconify-icon icon="lucide:arrow-up-right" aria-hidden="true"></iconify-icon>
+                                                <h4>Rank Promotion</h4>
+                                            </div>
+                                            <p class="text-subtle mb-2">Advance to the next career standing tier.</p>
+                                            <div class="next-rank-meta mb-3">
+                                                <span id="rp-next-rank-name" class="next-rank-title font-bold">Rank 1</span>
+                                                <div class="cost-display">
+                                                    <span class="cost-label">Promotion Cost:</span>
+                                                    <span class="cost-value font-mono" id="rp-next-rank-cost">$0</span>
+                                                </div>
+                                            </div>
+                                            <button id="btn-rp-promote" class="action-btn primary-btn btn-large" type="button">Promote Rank</button>
+                                        </div>
+
+                                        <!-- Prestige Ascension Card -->
+                                        <div class="progression-action-card card">
+                                            <div class="card-title-row">
+                                                <iconify-icon icon="lucide:sparkles" aria-hidden="true"></iconify-icon>
+                                                <h4>Prestige Ascension</h4>
+                                            </div>
+                                            <p id="rp-ascend-status-msg" class="text-subtle mb-2">Reach Rank 107 (God) to ascend tier.</p>
+                                            <div class="cost-display mb-3">
+                                                <span class="cost-label">Ascension Fee:</span>
+                                                <span class="cost-value highlight">$0 (Free)</span>
+                                            </div>
+                                            <button id="btn-rp-ascend" class="action-btn accent-btn btn-large" type="button" disabled>Ascend Prestige</button>
+                                        </div>
+
+                                        <!-- Targeted Rank Up Card -->
+                                        <div class="progression-action-card card targeted-card">
+                                            <div class="card-title-row">
+                                                <iconify-icon icon="lucide:target" aria-hidden="true"></iconify-icon>
+                                                <h4>Automated Targeted Rank Up</h4>
+                                            </div>
+                                            <p class="text-subtle mb-3">Target max affordable rank or specify custom tier/rank without money reset.</p>
+                                            <button id="btn-open-targeted-modal" class="action-btn primary-btn btn-large" type="button">
+                                                <iconify-icon icon="lucide:sliders" aria-hidden="true"></iconify-icon> Open Targeted Rank Up
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="next-rank-card card charter-card">
-                                <div class="charter-header">
-                                    <iconify-icon icon="lucide:arrow-up-right" class="rank-icon-sm" aria-hidden="true"></iconify-icon>
-                                    <span class="charter-badge">Next Promotion</span>
-                                </div>
-                                <h3>Next Rank</h3>
-                                <div class="next-rank-info">
-                                    <span id="next-rank-name" class="next-rank-title">Rank 1</span>
-                                    <div class="cost-display">
-                                        <span class="cost-label">Promotion Fee:</span>
-                                        <span class="cost-value" id="next-rank-cost">$0</span>
+                            <!-- Accordion Item 2: Prestige Perks -->
+                            <div class="accordion-item" id="acc-item-perks">
+                                <button class="accordion-header" type="button" aria-expanded="false" aria-controls="acc-body-perks">
+                                    <div class="accordion-title">
+                                        <iconify-icon icon="lucide:star" class="accordion-icon" aria-hidden="true"></iconify-icon>
+                                        <span>Prestige Perks</span>
                                     </div>
+                                    <iconify-icon icon="lucide:chevron-down" class="accordion-arrow" aria-hidden="true"></iconify-icon>
+                                </button>
+                                <div class="accordion-body" id="acc-body-perks">
+                                    <div class="perks-grid" id="rp-perks-grid"></div>
                                 </div>
-                                <button id="btn-rank-up" class="action-btn primary-btn btn-large" type="button">Promote Rank</button>
                             </div>
                         </div>
                     </section>
 
-                    <!-- Prestige Panel -->
-                    <section id="panel-prestige" class="panel" aria-labelledby="panel-prestige-heading">
-                        <div class="section-header">
-                            <div>
-                                <h2 id="panel-prestige-heading">Grand Ascension</h2>
-                                <p class="section-desc">Ascend to higher planes to unlock permanent guild perks</p>
-                            </div>
-                        </div>
+                    <!-- Shop Panel -->
+                    <section id="panel-shop" class="panel" aria-labelledby="panel-shop-heading">
+                    </section>
 
-                        <div class="ascend-container card charter-card mb-6">
-                            <div class="ascend-info">
-                                <div class="ascend-title-row">
-                                    <iconify-icon icon="lucide:sparkles" class="ascend-icon" aria-hidden="true"></iconify-icon>
-                                    <h3>Ascension Charter</h3>
-                                </div>
-                                <p id="ascend-status-msg">Reach Rank 107 (God) to ascend</p>
-                                <div class="prestige-stats">
-                                    <div class="prestige-stat-item">Ascensions: <span id="prestige-count-display" class="highlight">0</span></div>
-                                    <div class="prestige-stat-item">Unspent Points: <span id="prestige-points-display" class="highlight">0</span></div>
-                                </div>
-                            </div>
-                            <div class="ascend-action">
-                                <button id="btn-ascend" class="action-btn accent-btn btn-large" type="button" disabled>Ascend Guild</button>
-                                <div id="ascend-cost-container" class="ascend-cost-tag hidden">Fee: <span id="ascend-cost"></span></div>
-                            </div>
-                        </div>
+                    <!-- Gambling Panel -->
+                    <section id="panel-gambling" class="panel" aria-labelledby="panel-gambling-heading">
+                    </section>
 
-                        <h3 class="subsection-title">Guild Perks & Privileges</h3>
-                        <div class="perks-grid" id="perks-grid"></div>
+                    <!-- Faction Panel -->
+                    <section id="panel-faction" class="panel" aria-labelledby="panel-faction-heading">
+                    </section>
+
+                    <!-- Settings Panel -->
+                    <section id="panel-settings" class="panel" aria-labelledby="panel-settings-heading">
                     </section>
                 </div>
             </main>
         </div>
 
-        <!-- Activity Log Rail (Console Chat Stream) -->
+        <!-- Activity Ledger Rail (Console Chat Stream) -->
         <aside class="activity-ledger-rail" aria-label="Console">
             <div class="log-header">
                 <div class="log-header-title">
                     <iconify-icon icon="lucide:terminal" class="log-header-icon" aria-hidden="true"></iconify-icon>
-                    <h3>Guild Console</h3>
+                    <h3>Console</h3>
                 </div>
                 <div class="log-header-status">
                     <button id="btn-status-dot" class="live-dot-btn status-ok" type="button" title="No errors detected (0 errors). Click to check status." aria-label="System status: No errors">
@@ -299,22 +425,12 @@
                 </div>
             </div>
 
-            <div class="log-feed" id="activity-log" aria-live="polite" aria-atomic="false">
-                <div class="log-entry system">
-                    <div class="log-entry-header">
-                        <span class="log-entry-title">System</span>
-                        <span class="log-entry-time">Now</span>
-                    </div>
-                    <div class="log-entry-body">
-                        <div class="chat-standard-text">Merchant Guild Console ready. Enter action commands or use dashboard controls.</div>
-                    </div>
-                </div>
-            </div>
+            <div class="log-feed" id="activity-log" aria-live="polite" aria-atomic="false"></div>
 
             <!-- Interactive Console Input Bar -->
             <div class="log-prompt-bar">
                 <span class="prompt-icon"><iconify-icon icon="lucide:chevron-right" aria-hidden="true"></iconify-icon></span>
-                <input type="text" id="console-cmd-input" class="console-cmd-input" placeholder="Type /mine, /explore, /work, /help..." aria-label="Console command input" />
+                <input type="text" id="console-cmd-input" name="console-cmd-input" autocomplete="off" class="console-cmd-input" placeholder="Type /mine, /explore, /work, /help..." aria-label="Console command input" />
                 <button id="btn-console-send" class="btn-console-send" type="button" title="Send Command">
                     <iconify-icon icon="lucide:send" aria-hidden="true"></iconify-icon>
                 </button>
@@ -328,41 +444,671 @@
         </aside>
     </div>
 
-    <!-- Manage Seeds Modal -->
-    <div id="manage-seeds-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="manage-modal-title">
-        <div class="modal-content card charter-modal manage-seeds-modal-content">
+    <!-- General Farm Management Modal -->
+    <dialog id="farm-manage-modal" class="modal hidden" data-app-dialog aria-labelledby="farm-manage-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide farm-manage-modal-content">
             <div class="modal-header">
-                <iconify-icon icon="lucide:sprout" class="modal-icon" aria-hidden="true"></iconify-icon>
-                <h3 id="manage-modal-title">Manage Farm Seeds</h3>
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:sliders" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="farm-manage-title">Manage Farm</h3>
+                </div>
+                <button id="btn-close-farm-manage" class="modal-close-btn" type="button" aria-label="Close farm management">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
             </div>
-            <p class="manage-modal-desc">Plant any available seed across your empty farm plots for free. No cost required.</p>
-            <div class="seeds-list" id="seeds-list"></div>
+            <div class="farm-manage-tabs" role="tablist" aria-label="Farm management mode">
+                <button id="farm-manage-tab-plant" class="farm-manage-tab active" type="button" role="tab" aria-selected="true" aria-controls="farm-manage-plant-panel" data-farm-manage-tab="plant">
+                    <iconify-icon icon="lucide:sprout" aria-hidden="true"></iconify-icon> Plant Seeds
+                </button>
+                <button id="farm-manage-tab-upgrade" class="farm-manage-tab" type="button" role="tab" aria-selected="false" aria-controls="farm-manage-upgrade-panel" data-farm-manage-tab="upgrade">
+                    <iconify-icon icon="lucide:chevrons-up" aria-hidden="true"></iconify-icon> Upgrade Plots
+                </button>
+            </div>
+            <div class="modal-body farm-manage-body">
+                <section id="farm-manage-plant-panel" role="tabpanel" aria-labelledby="farm-manage-tab-plant">
+                    <p class="manage-modal-desc">Plant any available seed across your empty farm plots for free. No cost required.</p>
+                    <div class="seeds-list" id="seeds-list"></div>
+                </section>
+                <section id="farm-manage-upgrade-panel" class="hidden" role="tabpanel" aria-labelledby="farm-manage-tab-upgrade">
+                    <div class="farm-bulk-config-section">
+                        <div class="farm-bulk-section-heading">
+                            <div>
+                                <h4>Choose Plots</h4>
+                                <p>Select every plot, enter plot numbers and ranges, or reuse the marked set.</p>
+                            </div>
+                            <span id="farm-bulk-target-summary" class="farm-bulk-summary" aria-live="polite"></span>
+                        </div>
+                        <div class="farm-bulk-choice-grid" role="group" aria-label="Bulk plot target">
+                            <button class="farm-bulk-choice active" type="button" data-bulk-target="all" aria-pressed="true">All Plots</button>
+                            <button class="farm-bulk-choice" type="button" data-bulk-target="specific" aria-pressed="false">Specific Plots</button>
+                            <button class="farm-bulk-choice" type="button" data-bulk-target="marked" aria-pressed="false">Marked Plots</button>
+                        </div>
+                        <div id="farm-specific-plots-field" class="farm-bulk-field hidden">
+                            <label for="farm-specific-plots-input">Plot Numbers or Ranges</label>
+                            <input id="farm-specific-plots-input" name="farm-specific-plots" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="240" placeholder="e.g., 1, 3, 5-8…" aria-describedby="farm-available-plots farm-specific-plots-error">
+                            <span id="farm-available-plots" class="farm-bulk-helper"></span>
+                            <span id="farm-specific-plots-error" class="farm-bulk-error" role="status" aria-live="polite"></span>
+                        </div>
+                        <div id="farm-marked-plots-summary" class="farm-marked-summary hidden" role="status"></div>
+                    </div>
+
+                    <div class="farm-bulk-config-section">
+                        <div class="farm-bulk-section-heading">
+                            <div>
+                                <h4>Upgrade Mode</h4>
+                                <p>Materials are allocated to the lowest-level plots first, then by plot number.</p>
+                            </div>
+                        </div>
+                        <div class="farm-bulk-choice-grid two-column" role="group" aria-label="Bulk plot upgrade mode">
+                            <button class="farm-bulk-choice active" type="button" data-bulk-upgrade-mode="next" aria-pressed="true">One Level</button>
+                            <button class="farm-bulk-choice" type="button" data-bulk-upgrade-mode="max" aria-pressed="false">As Far As Possible</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
             <div class="modal-actions">
                 <button id="btn-manage-close" class="action-btn secondary-btn" type="button">Close</button>
+                <button id="btn-preview-bulk-plot-upgrade" class="action-btn upgrade-plot-btn hidden" type="button">
+                    <iconify-icon icon="lucide:calculator" aria-hidden="true"></iconify-icon> Preview Bulk Upgrade
+                </button>
             </div>
         </div>
-    </div>
+    </dialog>
+
+    <!-- Bulk Plot Upgrade Preview Modal -->
+    <dialog id="farm-bulk-upgrade-preview-modal" class="modal hidden" data-app-dialog aria-labelledby="farm-bulk-upgrade-preview-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide farm-bulk-preview-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:calculator" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="farm-bulk-upgrade-preview-title">Preview Bulk Plot Upgrade</h3>
+                </div>
+                <button class="modal-close-btn" type="button" aria-label="Close bulk plot upgrade preview" data-dialog-close="close">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="farm-bulk-upgrade-preview-body" class="modal-body farm-bulk-preview-body"></div>
+            <div class="modal-actions">
+                <button id="btn-back-bulk-plot-upgrade" class="action-btn secondary-btn" type="button">Back</button>
+                <button id="btn-confirm-bulk-plot-upgrade" class="action-btn upgrade-plot-btn" type="button" disabled>
+                    <iconify-icon icon="lucide:chevrons-up" aria-hidden="true"></iconify-icon> Upgrade Plots
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Individual Plot Management Modal -->
+    <dialog id="plot-management-modal" class="modal hidden" data-app-dialog aria-labelledby="plot-management-title">
+        <div class="modal-content card charter-modal modal-dialog modal-compact plot-management-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:sprout" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="plot-management-title">Manage Plot</h3>
+                </div>
+                <button class="modal-close-btn" type="button" aria-label="Close plot management" data-dialog-close="close">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="plot-management-body" class="modal-body plot-management-body"></div>
+            <div id="plot-management-actions" class="modal-actions plot-management-actions"></div>
+        </div>
+    </dialog>
+
+    <!-- Single Plot Crop Selection Modal -->
+    <dialog id="plant-crop-modal" class="modal hidden" data-app-dialog aria-labelledby="plant-crop-title">
+        <div class="modal-content card charter-modal modal-dialog modal-standard plant-crop-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:leaf" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="plant-crop-title">Plant Crops</h3>
+                </div>
+                <button class="modal-close-btn" type="button" aria-label="Close crop selection" data-dialog-close="close">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="plant-crop-body" class="modal-body plant-crop-body"></div>
+            <div class="modal-actions">
+                <button class="action-btn secondary-btn" type="button" data-plant-back>Back</button>
+                <button class="action-btn plant-crops-btn" type="button" data-plant-submit>
+                    <iconify-icon icon="lucide:sprout" aria-hidden="true"></iconify-icon> Plant
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Plot Upgrade Modal -->
+    <dialog id="plot-upgrade-modal" class="modal hidden" data-app-dialog aria-labelledby="plot-upgrade-title">
+        <div class="modal-content card charter-modal modal-dialog modal-standard plot-upgrade-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:arrow-up-circle" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="plot-upgrade-title">Upgrade Plot</h3>
+                </div>
+                <button class="modal-close-btn" type="button" aria-label="Close plot upgrade" data-dialog-close="close">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div class="plot-upgrade-mode" role="group" aria-label="Plot upgrade mode">
+                <button class="upgrade-mode-btn active" type="button" data-upgrade-mode="next" aria-pressed="true">Upgrade One Level</button>
+                <button class="upgrade-mode-btn" type="button" data-upgrade-mode="max" aria-pressed="false">Upgrade to Max Level</button>
+            </div>
+            <div id="plot-upgrade-body" class="modal-body plot-upgrade-body"></div>
+            <div class="modal-actions">
+                <button class="action-btn secondary-btn" type="button" data-upgrade-back>Back</button>
+                <button id="btn-execute-plot-upgrade" class="action-btn upgrade-plot-btn" type="button" disabled>Upgrade Plot</button>
+            </div>
+        </div>
+    </dialog>
 
     <!-- Confirmation Modal -->
-    <div id="confirmation-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div class="modal-content card charter-modal">
+    <dialog id="confirmation-modal" class="modal hidden" data-app-dialog aria-labelledby="modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-compact">
             <div class="modal-header">
-                <iconify-icon icon="lucide:alert-circle" class="modal-icon" aria-hidden="true"></iconify-icon>
-                <h3 id="modal-title">Confirm Action</h3>
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:alert-circle" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="modal-title">Confirm Action</h3>
+                </div>
+                <button id="btn-close-confirmation-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
             </div>
-            <p id="modal-message">Are you sure?</p>
-            <div class="modal-options">
-                <label class="modal-checkbox-label">
-                    <input type="checkbox" id="modal-dont-ask-again">
-                    <span>Don't ask me again for this action</span>
-                </label>
+            <div class="modal-body">
+                <p id="modal-message">Are you sure?</p>
+                <div class="modal-options">
+                    <label class="modal-checkbox-label">
+                        <input type="checkbox" id="modal-dont-ask-again">
+                        <span id="modal-dont-ask-label">Don't ask me again for this action</span>
+                    </label>
+                </div>
             </div>
             <div class="modal-actions">
                 <button id="btn-modal-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
                 <button id="btn-modal-confirm" class="action-btn primary-btn" type="button">Confirm</button>
             </div>
         </div>
-    </div>
+    </dialog>
+
+    <!-- Bulk Actions Config Modal -->
+    <dialog id="bulk-actions-modal" class="modal hidden" data-app-dialog aria-labelledby="bulk-actions-modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide bulk-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:layers" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="bulk-actions-modal-title">Bulk Trade Operations</h3>
+                </div>
+                <button id="btn-close-bulk-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="bulk-mode-tabs mb-4" role="tablist" aria-label="Bulk trade mode">
+                <button id="bulk-mode-sell" class="bulk-tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="bulk-modal-body">
+                    <iconify-icon icon="lucide:arrow-up-right" aria-hidden="true"></iconify-icon> Bulk Sell Market
+                </button>
+                <button id="bulk-mode-buy" class="bulk-tab-btn" type="button" role="tab" aria-selected="false" aria-controls="bulk-modal-body">
+                    <iconify-icon icon="lucide:shopping-bag" aria-hidden="true"></iconify-icon> Bulk Buy Shop
+                </button>
+            </div>
+
+            <div id="bulk-modal-body" class="modal-body bulk-body-content">
+                <!-- Dynamically rendered -->
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-bulk-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-bulk-preview" class="action-btn primary-btn" type="button">
+                    <iconify-icon icon="lucide:calculator" aria-hidden="true"></iconify-icon> Preview Bulk Action
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Bulk Action Preview Confirmation Modal -->
+    <dialog id="bulk-preview-modal" class="modal hidden" data-app-dialog aria-labelledby="bulk-preview-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide bulk-preview-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:calculator" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="bulk-preview-title">Bulk Trade Summary Preview</h3>
+                </div>
+                <button id="btn-close-preview-modal" class="modal-close-btn" type="button" aria-label="Close preview modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="bulk-preview-body" class="modal-body bulk-preview-body-content">
+                <!-- Dynamically populated calculation summary -->
+            </div>
+            <div class="modal-actions">
+                <button id="btn-preview-back" class="action-btn secondary-btn" type="button">
+                    Close Preview
+                </button>
+                <button id="btn-preview-confirm" class="action-btn primary-btn" type="button">
+                    <iconify-icon icon="lucide:check-circle" aria-hidden="true"></iconify-icon> Confirm & Execute
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Bulk Booster Activation Config Modal -->
+    <dialog id="bulk-booster-modal" class="modal hidden" data-app-dialog aria-labelledby="bulk-booster-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide bulk-modal-content bulk-booster-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:zap" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="bulk-booster-title">Activate Boosters</h3>
+                </div>
+                <button id="btn-close-bulk-booster-modal" class="modal-close-btn" type="button" aria-label="Close booster activation dialog">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="bulk-booster-modal-body" class="modal-body bulk-body-content">
+                <!-- Dynamically populated from owned booster inventory -->
+            </div>
+            <div class="modal-actions">
+                <button id="btn-bulk-booster-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-bulk-booster-preview" class="action-btn primary-btn" type="button">
+                    <iconify-icon icon="lucide:calculator" aria-hidden="true"></iconify-icon> Preview Activation
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Bulk Booster Activation Preview Modal -->
+    <dialog id="bulk-booster-preview-modal" class="modal hidden" data-app-dialog aria-labelledby="bulk-booster-preview-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide bulk-preview-modal-content bulk-booster-preview-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:timer-reset" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="bulk-booster-preview-title">Booster Activation Preview</h3>
+                </div>
+                <button id="btn-close-bulk-booster-preview" class="modal-close-btn" type="button" aria-label="Close booster activation preview">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div id="bulk-booster-preview-body" class="modal-body bulk-preview-body-content">
+                <!-- Dynamically populated activation summary -->
+            </div>
+            <div class="modal-options bulk-booster-preview-options">
+                <label class="modal-checkbox-label">
+                    <input type="checkbox" id="bulk-booster-preview-dont-show-again">
+                    <span>Don't show this preview again</span>
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-bulk-booster-preview-back" class="action-btn secondary-btn" type="button">Close Preview</button>
+                <button id="btn-bulk-booster-confirm" class="action-btn primary-btn" type="button">
+                    <iconify-icon icon="lucide:zap" aria-hidden="true"></iconify-icon> Activate Selected Boosters
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Targeted Rank Up Modal -->
+    <dialog id="targeted-rankup-modal" class="modal hidden" data-app-dialog aria-labelledby="targeted-modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-standard targeted-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:award" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="targeted-modal-title">Rank Advancement & Promotion</h3>
+                </div>
+                <button id="btn-close-targeted-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="modal-body targeted-modal-body">
+                <div class="targeted-checkbox-row mb-4">
+                    <label class="modal-checkbox-label">
+                        <input type="checkbox" id="targeted-rankup-checkbox" checked disabled>
+                        <span class="checkbox-title">Targeted rank up</span>
+                    </label>
+                    <p class="checkbox-subtitle">Calculate and advance across career standing tiers in a single promotion.</p>
+                </div>
+
+                <div class="form-group mb-4">
+                    <div class="label-with-checkbox">
+                        <label class="form-label font-bold" for="targeted-max-checkbox">Options:</label>
+                    </div>
+                    <label class="modal-checkbox-label mt-1">
+                        <input type="checkbox" id="targeted-max-checkbox">
+                        <span>Calculate Max Affordable Ranks</span>
+                    </label>
+                </div>
+
+                <div id="targeted-custom-controls" class="targeted-custom-group mb-4">
+                    <div class="form-group mb-3">
+                        <label for="targeted-tier-input" class="form-label">Target Tier:</label>
+                        <input type="number" id="targeted-tier-input" class="form-input" min="0" value="0">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="targeted-rank-select" class="form-label">Target Rank:</label>
+                        <select id="targeted-rank-select" class="form-input"></select>
+                    </div>
+                </div>
+
+                <div class="targeted-dynamic-card card mb-4">
+                    <div class="flavor-text-row">
+                        <iconify-icon icon="lucide:file-text" class="flavor-icon" aria-hidden="true"></iconify-icon>
+                        <p class="flavor-text" id="targeted-flavor-text">Reviewing your economic standing and accumulated capital for career advancement...</p>
+                    </div>
+                    <div class="prompt-text-row mt-2">
+                        <p class="prompt-text" id="targeted-prompt-text">Would you like to advance to Tier 0 at Rank God?</p>
+                    </div>
+                    <div class="cost-banner mt-3" id="targeted-cost-banner-container">
+                        <span class="cost-pill" id="targeted-cost-banner">Total Advancement Cost: $0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-targeted-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-targeted-confirm" class="action-btn primary-btn" type="button">Confirm ($0)</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Item Details & Action Modal -->
+    <dialog id="item-details-modal" class="modal hidden" data-app-dialog aria-labelledby="item-modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-standard item-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <div id="item-modal-icon-wrap" class="item-modal-icon-wrap"></div>
+                    <div class="item-modal-header-text">
+                        <h3 id="item-modal-title">Item Name</h3>
+                        <span id="item-modal-category" class="charter-badge">Category</span>
+                    </div>
+                </div>
+                <button id="btn-close-item-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="modal-body item-modal-body">
+                <p id="item-modal-description" class="item-desc-text mb-4"></p>
+
+                <section id="item-modal-details" class="item-modal-details mb-4" aria-labelledby="item-specifications-title">
+                    <h4 id="item-specifications-title" class="card-title-sm item-specifications-title">
+                        <iconify-icon icon="lucide:info" aria-hidden="true"></iconify-icon>
+                        Item Specifications
+                    </h4>
+                    <div class="details-content-grid">
+                        <div class="detail-row">
+                            <span class="detail-label">Owned:</span>
+                            <span id="item-modal-owned" class="detail-value">0 owned</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Base Worth:</span>
+                            <span id="item-modal-base-worth" class="detail-value">$0</span>
+                        </div>
+                        <div class="detail-row" id="item-modal-duration-row">
+                            <span class="detail-label">Active Duration:</span>
+                            <span id="item-modal-duration" class="detail-value">N/A</span>
+                        </div>
+                        <div class="detail-row" id="item-modal-effect-row">
+                            <span class="detail-label">Usable Effect:</span>
+                            <span id="item-modal-effect" class="detail-value">N/A</span>
+                        </div>
+                        <div class="detail-row hidden" id="item-modal-loot-chance-row">
+                            <span class="detail-label">Loot Chance:</span>
+                            <span id="item-modal-loot-chance" class="detail-value">N/A</span>
+                        </div>
+                        <div class="detail-row hidden" id="item-modal-drop-stack-row">
+                            <span class="detail-label">Drop Stack:</span>
+                            <span id="item-modal-drop-stack" class="detail-value">N/A</span>
+                        </div>
+                        <div class="detail-row hidden" id="item-modal-market-range-row">
+                            <span class="detail-label">Market Ranges:</span>
+                            <span id="item-modal-market-range" class="detail-value">N/A</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Action Section 1: Use Item -->
+                <div id="item-modal-use-section" class="item-action-card card mb-4 hidden">
+                    <div class="item-action-copy">
+                        <strong>Usable Item</strong>
+                        <span>Activate this item from the action bar below.</span>
+                    </div>
+                </div>
+
+                <!-- Action Section 2: Market Selling -->
+                <div id="item-modal-sell-section" class="item-action-card card mb-2">
+                    <h4 class="card-title-sm mb-3">
+                        <iconify-icon icon="lucide:coins" aria-hidden="true"></iconify-icon> Sell to System Shop
+                    </h4>
+
+                    <div class="preset-chips-row mb-3">
+                        <button type="button" class="preset-chip" data-qty="1">Sell 1</button>
+                        <button type="button" class="preset-chip" data-qty="10">Sell 10</button>
+                        <button type="button" class="preset-chip" data-qty="100">Sell 100</button>
+                        <button type="button" class="preset-chip" data-qty="max">Sell Max</button>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="item-modal-sell-qty" class="form-label" style="margin-bottom: 0;">Quantity to Sell:</label>
+                            <span id="item-modal-sell-qty-preview" class="qty-preview-badge-container"></span>
+                        </div>
+                        <input type="text" id="item-modal-sell-qty" name="item-sell-quantity" class="form-input" value="1" autocomplete="off" placeholder="Enter a number or expression…">
+                    </div>
+
+                    <div class="payout-banner mb-3">
+                        <span class="payout-label">Estimated Payout:</span>
+                        <span id="item-modal-sell-payout" class="payout-value">$0</span>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-actions item-modal-actions">
+                <button id="btn-item-modal-close-footer" class="action-btn secondary-btn" type="button">Close</button>
+                <button id="btn-item-modal-use" class="action-btn primary-btn hidden" type="button">Use Item</button>
+                <button id="btn-item-modal-sell" class="action-btn primary-btn hidden" type="button">Sell Item</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Sockets & Module Workshop Modal -->
+    <dialog id="sockets-workshop-modal" class="modal hidden" data-app-dialog aria-labelledby="sockets-modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide sockets-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:sliders" class="modal-icon text-accent" aria-hidden="true"></iconify-icon>
+                    <h3 id="sockets-modal-title">Tool Modification & Overclock Workshop</h3>
+                </div>
+                <button id="btn-close-sockets-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="modal-body sockets-modal-body" id="sockets-modal-body">
+                <!-- Injected dynamically by tools.js -->
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Create Faction Modal -->
+    <dialog id="create-faction-modal" class="modal hidden" data-app-dialog aria-labelledby="create-faction-modal-title">
+        <div class="modal-content card modal-dialog modal-standard create-faction-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:shield-plus" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <div>
+                        <h3 id="create-faction-modal-title">Create Faction</h3>
+                        <p class="modal-header-subtitle">Establish a permanent faction for $1,000,000.</p>
+                    </div>
+                </div>
+                <button id="btn-close-create-faction" class="modal-close-btn" type="button" aria-label="Close Create Faction dialog">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="create-faction-readiness" class="transaction-notice" role="status"></div>
+                <div class="form-group">
+                    <label for="create-faction-name" class="form-label">Faction Name <span>32 characters maximum</span></label>
+                    <input type="text" id="create-faction-name" name="faction-name" class="form-input" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Enter a faction name…">
+                    <span id="create-faction-name-error" class="field-error hidden" role="alert"></span>
+                </div>
+                <div class="form-group">
+                    <label for="create-faction-description" class="form-label">Motto or Description <span>160 characters maximum</span></label>
+                    <textarea id="create-faction-description" name="faction-description" class="form-input" rows="4" maxlength="160" autocomplete="off" placeholder="Describe your faction…"></textarea>
+                </div>
+                <p class="permanence-note"><strong>Permanent choice:</strong> factions cannot currently be dissolved.</p>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-create-faction-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-create-faction-submit" class="action-btn primary-btn" type="button">Review & Create</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Edit Faction Modal -->
+    <dialog id="edit-faction-modal" class="modal hidden" data-app-dialog aria-labelledby="edit-faction-modal-title">
+        <div class="modal-content card charter-modal modal-dialog modal-compact edit-faction-modal-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:flag" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="edit-faction-modal-title">Edit Faction Details</h3>
+                </div>
+                <button id="btn-close-faction-modal" class="modal-close-btn" type="button" aria-label="Close modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="modal-body edit-faction-modal-body">
+                <div class="form-group mb-4">
+                    <label for="faction-name-input" class="form-label">Faction Name (max 32 characters):</label>
+                    <input type="text" id="faction-name-input" class="form-input" maxlength="32" placeholder="Add your faction name...">
+                </div>
+
+                <div class="form-group mb-4">
+                    <label for="faction-desc-input" class="form-label">Faction Motto / Creed (max 160 characters):</label>
+                    <textarea id="faction-desc-input" class="form-input" rows="3" maxlength="160" placeholder="Declare your faction's rallying cry, creed, or purpose..."></textarea>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-faction-modal-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-faction-modal-save" class="action-btn primary-btn" type="button">Save Details</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Guild Master Authentication Modal -->
+    <dialog id="auth-modal" class="modal hidden auth-dialog" data-app-dialog aria-labelledby="auth-modal-title">
+        <div class="modal-content card auth-modal-content">
+            <div class="modal-header auth-modal-header">
+                <div class="modal-header-title">
+                    <div class="auth-header-crest">
+                        <iconify-icon icon="lucide:shield-check" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 id="auth-modal-title" class="auth-title">Guild Master Access</h3>
+                        <p class="modal-header-subtitle">Sync progress, protect your economy, and access your personal vault.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn auth-modal-close" type="button" aria-label="Close authentication modal">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="auth-tabs" role="tablist">
+                <button type="button" class="auth-tab-btn active" data-tab="signin" role="tab" aria-selected="true">
+                    <iconify-icon icon="lucide:log-in"></iconify-icon>
+                    <span>Enter Guild (Sign In)</span>
+                </button>
+                <button type="button" class="auth-tab-btn" data-tab="signup" role="tab" aria-selected="false">
+                    <iconify-icon icon="lucide:user-plus"></iconify-icon>
+                    <span>Enlist Novice (Create Account)</span>
+                </button>
+            </div>
+
+            <div class="modal-body auth-modal-body">
+                <!-- Sign In Pane -->
+                <div id="auth-pane-signin" class="auth-pane">
+                    <div class="auth-error-msg hidden" role="alert"></div>
+                    <form id="auth-signin-form" class="auth-form" autocomplete="on">
+                        <div class="form-group mb-3">
+                            <label for="signin-identifier" class="form-label">Username or Email</label>
+                            <input type="text" id="signin-identifier" name="username" class="form-input" placeholder="e.g. GuildMaster or user@domain.com" required autocomplete="username">
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <div class="form-label-row">
+                                <label for="signin-password" class="form-label">Password</label>
+                                <span class="caps-lock-indicator hidden"><iconify-icon icon="lucide:info"></iconify-icon> Caps lock is on</span>
+                            </div>
+                            <div class="password-wrapper">
+                                <input type="password" id="signin-password" name="password" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
+                                <button type="button" class="toggle-password-btn" aria-label="Show password">Show</button>
+                            </div>
+                        </div>
+
+                        <div class="modal-actions auth-actions">
+                            <button type="submit" id="signin-submit-btn" class="action-btn primary-btn btn-block">
+                                <iconify-icon icon="lucide:key-round"></iconify-icon>
+                                <span>Enter Guild</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Sign Up Pane -->
+                <div id="auth-pane-signup" class="auth-pane hidden">
+                    <div class="auth-error-msg hidden" role="alert"></div>
+                    <form id="auth-signup-form" class="auth-form" autocomplete="on">
+                        <div class="form-group mb-3">
+                            <label for="signup-username" class="form-label">Chosen Username <span class="text-muted">(Required, 3+ characters)</span></label>
+                            <input type="text" id="signup-username" name="username" class="form-input" placeholder="e.g. IronBaron" required minlength="3" autocomplete="username">
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="signup-email" class="form-label">Email Address <span class="text-muted">(Optional)</span></label>
+                            <input type="email" id="signup-email" name="email" class="form-input" placeholder="e.g. baron@bconomy.game" autocomplete="email">
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <div class="form-label-row">
+                                <label for="signup-password" class="form-label">New password</label>
+                                <span class="caps-lock-indicator hidden"><iconify-icon icon="lucide:info"></iconify-icon> Caps lock is on</span>
+                            </div>
+                            <div class="password-wrapper">
+                                <input type="password" id="signup-password" name="new-password" class="form-input" placeholder="Create your master password" required minlength="6" autocomplete="new-password">
+                                <button type="button" class="toggle-password-btn" aria-label="Show password">Show</button>
+                            </div>
+                            <!-- 4-Segment Password Strength Meter matching reference UI -->
+                            <div id="signup-password-meter" class="password-strength-meter">
+                                <div class="strength-segments">
+                                    <span class="strength-segment"></span>
+                                    <span class="strength-segment"></span>
+                                    <span class="strength-segment"></span>
+                                    <span class="strength-segment"></span>
+                                </div>
+                                <div class="strength-label">Password strength</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <div class="form-label-row">
+                                <label for="signup-confirm-password" class="form-label">Confirm password</label>
+                                <span class="caps-lock-indicator hidden"><iconify-icon icon="lucide:info"></iconify-icon> Caps lock is on</span>
+                            </div>
+                            <div class="password-wrapper">
+                                <input type="password" id="signup-confirm-password" name="confirm-password" class="form-input" placeholder="Confirm your password" required minlength="6" autocomplete="new-password">
+                                <button type="button" class="toggle-password-btn" aria-label="Show password">Show</button>
+                            </div>
+                        </div>
+
+                        <div class="modal-actions auth-actions">
+                            <button type="submit" id="signup-submit-btn" class="action-btn primary-btn btn-block">
+                                <iconify-icon icon="lucide:sparkles"></iconify-icon>
+                                <span>Create Account & Enlist</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </dialog>
 
     <script type="module" src="app.js"></script>
 </body>

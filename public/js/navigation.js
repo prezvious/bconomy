@@ -1,18 +1,24 @@
 // Navigation & Action Event Listeners
 import { getState, saveState } from './state.js';
-import { formatNumberCommas } from './utils.js';
+import { formatDisplayNumber, formatMoney } from './utils.js';
 import { apiCall, doAddPlot, doClaim, doUseMelon, doRankUp, doWaterAll } from './api.js';
 import { renderAll, renderHeader } from './ui/header.js';
 import { renderInventory } from './ui/inventory.js';
 import { renderTools, updateAllToolRecipes } from './ui/tools.js';
-import { renderRank } from './ui/rank.js';
-import { renderPrestige } from './ui/prestige.js';
+import { renderRankPrestige, setupAccordion, setupTargetedModal } from './ui/rankPrestigeCombined.js';
 import { renderFarm, renderManageModal } from './ui/farm.js';
+import { renderShop } from './ui/shop.js';
+import { renderGambling } from './ui/gambling.js';
+import { renderFaction } from './ui/faction.js';
+import { renderSettings } from './ui/settings.js';
 import { showToast } from './ui/toast.js';
 import { addLogEntry } from './ui/log.js';
-import { showConfirmation } from './ui/modal.js';
+import { showConfirmation, openDialog, closeDialog } from './ui/modal.js';
 
 export const setupNavigation = () => {
+    setupAccordion();
+    setupTargetedModal();
+
     const tabs = document.querySelectorAll('.nav-btn');
     const panels = document.querySelectorAll('.panel');
 
@@ -28,17 +34,15 @@ export const setupNavigation = () => {
             if (targetPanel) targetPanel.classList.add('active');
 
             if (target === 'inventory') renderInventory();
+            if (target === 'shop') renderShop({ resetControls: true });
             if (target === 'tools') renderTools();
             if (target === 'farm') renderFarm();
-            if (target === 'rank') renderRank();
-            if (target === 'prestige') renderPrestige();
+            if (target === 'gambling') renderGambling();
+            if (target === 'faction') renderFaction({ resetTab: true });
+            if (target === 'rank-prestige' || target === 'rank' || target === 'prestige') renderRankPrestige();
+            if (target === 'settings') renderSettings();
         });
     });
-
-    const searchInput = document.getElementById('inventory-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', renderInventory);
-    }
 
     // Farm Action Listeners
     const btnGlobalWater = document.getElementById('btn-global-water');
@@ -47,8 +51,15 @@ export const setupNavigation = () => {
             try {
                 const res = await doWaterAll(e.currentTarget);
                 const count = res.result ? (res.result.wateredCount || 0) : 0;
-                showToast(`Watered all farm plots (${count} watered)! Growth timer reduced by 30 mins.`, 'success');
-                addLogEntry(`Watered all farm plots at once (${count} plot(s) affected).`, 'system');
+                const cycles = res.result ? (res.result.acceleratedCycles || 0) : 0;
+                const harvested = res.result ? (res.result.totalHarvested || 0) : 0;
+                const byp = res.result && res.result.byproducts;
+                let msg = `Watered ${count} plot(s): ${formatDisplayNumber(cycles)} accelerated cycle(s), ${formatDisplayNumber(harvested)} crops stored.`;
+                if (byp && (byp.Weeds > 0 || byp.RedMushroom > 0)) {
+                    msg += ` (+${byp.Weeds} Weeds, +${byp.RedMushroom} Red Mushrooms)`;
+                }
+                showToast(msg, 'success');
+                addLogEntry(`Watered all farm plots at once: ${cycles} accelerated cycle(s), ${harvested} crops stored. Byproducts: ${byp ? `${byp.Weeds} Weeds, ${byp.RedMushroom} Red Mushrooms` : 'None'}.`, 'system');
                 renderFarm();
             } catch (err) {
                 showToast(err.message || 'Failed to water all farm plots', 'error');
@@ -57,21 +68,27 @@ export const setupNavigation = () => {
     }
 
     const btnFarmManage = document.getElementById('btn-farm-manage');
-    const manageModal = document.getElementById('manage-seeds-modal');
+    const manageModal = document.getElementById('farm-manage-modal');
     const btnManageClose = document.getElementById('btn-manage-close');
+    const btnCloseFarmManage = document.getElementById('btn-close-farm-manage');
 
     if (btnFarmManage && manageModal) {
         btnFarmManage.addEventListener('click', () => {
-            renderManageModal();
-            manageModal.classList.remove('hidden');
+            renderManageModal({ resetTab: true });
+            openDialog(manageModal, {
+                initialFocus: '#farm-manage-tab-plant',
+                closeOnBackdrop: false,
+                returnFocus: btnFarmManage
+            });
         });
     }
 
-    if (btnManageClose && manageModal) {
-        btnManageClose.addEventListener('click', () => {
-            manageModal.classList.add('hidden');
-        });
-    }
+    const closeManageModal = () => {
+        closeDialog(manageModal, { reason: 'close' });
+    };
+
+    if (btnManageClose) btnManageClose.addEventListener('click', closeManageModal);
+    if (btnCloseFarmManage) btnCloseFarmManage.addEventListener('click', closeManageModal);
 
     const btnAddPlot = document.getElementById('btn-add-plot');
     if (btnAddPlot) {
@@ -94,14 +111,14 @@ export const setupNavigation = () => {
                 const select = document.getElementById('claim-crop-select');
                 const cropType = select ? select.value : 'all';
                 const res = await doClaim(cropType, e.currentTarget);
-                if (res.result && res.result.success) {
-                    let msg = `Claimed ${formatNumberCommas(res.result.totalClaimedCount)} crops!`;
-                    if (res.result.cashBonus > 0) msg += ` +$${formatNumberCommas(res.result.cashBonus)} Golden Pay!`;
+                if (res.result && res.result.totalClaimedCount > 0) {
+                    let msg = `Claimed ${formatDisplayNumber(res.result.totalClaimedCount)} crops!`;
+                    if (res.result.cashBonus > 0) msg += ` +${formatMoney(res.result.cashBonus)} Golden Pay!`;
                     if (res.result.caffeineTriggered) msg += ` Caffeine reduced action cooldowns by ${res.result.cooldownReductionMs / 1000}s!`;
                     showToast(msg, 'success');
                     addLogEntry(msg, 'rare');
                 } else {
-                    showToast((res.result && res.result.message) || 'No crops available to claim.', 'info');
+                    showToast('No stored crops available to claim.', 'info');
                 }
                 renderAll();
             } catch (err) {
@@ -134,44 +151,59 @@ export const setupNavigation = () => {
         });
     }
 
-    const btnRankUp = document.getElementById('btn-rank-up');
-    if (btnRankUp) {
-        btnRankUp.addEventListener('click', async (e) => {
+    const btnPromote = document.getElementById('btn-rp-promote');
+    if (btnPromote) {
+        btnPromote.addEventListener('click', async (e) => {
             try {
                 const res = await doRankUp(e.currentTarget);
                 const newRankName = res.result ? (res.result.newRankName || 'Unknown') : 'Unknown';
                 showToast(`Ranked up to ${newRankName}!`, 'success');
                 addLogEntry(`Ranked up to Rank ${res.result ? res.result.newRank : ''} - ${newRankName}`, 'rare');
                 renderHeader();
-                renderRank();
-                renderPrestige();
+                renderRankPrestige();
             } catch (err) {
                 showToast(err.message || 'Failed to rank up', 'error');
             }
         });
     }
 
-    const btnAscend = document.getElementById('btn-ascend');
+    const btnAscend = document.getElementById('btn-rp-ascend');
     if (btnAscend) {
         btnAscend.addEventListener('click', async (e) => {
             const confirmed = await showConfirmation(
                 'ascend',
-                'Ascend to a New Era?',
-                'This will reset your cash to $0 and rank to Peasant. Your inventory, tools, perks, and Farm progress will be kept. You will gain 5 Prestige Points. Are you absolutely sure?'
+                'Ascend Tier?',
+                'Ascending will increase your Tier standing and award 5 Prestige Points. Your cash, inventory, tools, perks, and farm progress will be preserved. Are you ready to ascend?'
             );
             if (!confirmed) return;
 
             try {
                 const res = await apiCall('/api/prestige/ascend', 'POST', {}, e.currentTarget);
-                showToast('Ascension successful!', 'success');
-                addLogEntry('ASCENDED TO A HIGHER PLANE!', 'rare');
+                showToast('Prestige Ascension successful!', 'success');
+                addLogEntry('ASCENDED TO A HIGHER PRESTIGE TIER!', 'rare');
                 await updateAllToolRecipes();
                 renderAll();
-
-                const prestigeTab = document.querySelector('[data-tab="prestige"]');
-                if (prestigeTab) prestigeTab.click();
+                renderRankPrestige();
             } catch (err) {
                 showToast(err.message || 'Ascension failed', 'error');
+            }
+        });
+    }
+
+    // Console Rail Drawer Toggle Handling
+    const btnToggleConsole = document.getElementById('btn-toggle-console');
+    const consoleRail = document.querySelector('.activity-ledger-rail');
+    if (btnToggleConsole && consoleRail) {
+        btnToggleConsole.addEventListener('click', (e) => {
+            e.stopPropagation();
+            consoleRail.classList.toggle('drawer-open');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (consoleRail.classList.contains('drawer-open')) {
+                if (!consoleRail.contains(e.target) && e.target !== btnToggleConsole && !btnToggleConsole.contains(e.target)) {
+                    consoleRail.classList.remove('drawer-open');
+                }
             }
         });
     }

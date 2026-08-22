@@ -1,9 +1,7 @@
 // Unit test script for Console Status Indicator Button (Pure Node.js)
 import assert from 'assert';
-import fs from 'fs';
-import path from 'path';
 
-console.log('--- Running Error Indicator Button Tests ---');
+console.log('--- Running Console Handler & Error Indicator Tests ---');
 
 // Create mock DOM environment
 class MockElement {
@@ -19,6 +17,7 @@ class MockElement {
         };
         this.className = className;
         this.children = [];
+        this.dataset = {};
         this.style = {};
         this.title = '';
         this._listeners = {};
@@ -140,8 +139,13 @@ document.elements['toast-container'] = toastContainer;
 const logModule = await import('../public/js/ui/log.js');
 const { addLogEntry, updateLogHeaderStatus, setupConsoleHandlers } = logModule;
 
-// Run initial handlers setup
+// Setup may be called more than once as UI modules are reinitialized. Persistent
+// console controls must still receive exactly one listener per event.
 setupConsoleHandlers();
+setupConsoleHandlers();
+
+assert.strictEqual(statusBtn._listeners.click.length, 1, 'Status control must only bind one click handler');
+assert.strictEqual(clearBtn._listeners.click.length, 1, 'Clear control must only bind one click handler');
 
 // Test 1: Initial state check
 assert.strictEqual(statusBtn.tagName, 'BUTTON', 'Status element must be a <button> tag');
@@ -194,4 +198,5 @@ const latestEntry = activityLog.lastElementChild;
 assert((latestEntry._html || '').includes('0 errors detected'), 'Clicking healthy button generates system status check entry');
 console.log('✓ Test 7 Passed: Clicking healthy status button triggers status check feedback');
 
-console.log('--- All Error Indicator Button Tests Passed Successfully! ---');
+console.log('--- All Console Handler & Error Indicator Tests Passed Successfully! ---');
+process.exit(0);
