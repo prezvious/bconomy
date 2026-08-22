@@ -77,7 +77,9 @@ assert.strictEqual(formatDisplayNumber(1250000, { numberDisplay: 'named' }), '1.
 assert.strictEqual(formatDisplayNumber(999999, { numberDisplay: 'named' }), '1.00 million');
 assert.strictEqual(formatDisplayNumber(-1250000, { numberDisplay: 'named' }), '-1.25 million');
 assert.strictEqual(formatDisplayNumber(1e18, { numberDisplay: 'named' }), '1.00 quintillion');
-assert.strictEqual(formatDisplayNumber(1e21, { numberDisplay: 'named' }), '1000.00 quintillion');
+assert.strictEqual(formatDisplayNumber(1e21, { numberDisplay: 'named' }), '1.00 sextillion');
+assert.strictEqual(formatDisplayNumber(1e24, { numberDisplay: 'named' }), '1.00 septillion');
+assert.strictEqual(formatDisplayNumber(1e27, { numberDisplay: 'named' }), '1000.00 septillion');
 assert.strictEqual(formatDisplayNumber(1250000, { numberDisplay: 'full' }), '1,250,000');
 assert.strictEqual(formatNumberCommas(Infinity), '∞');
 assert.strictEqual(formatMoney(1250000, { numberDisplay: 'named' }), '$1.25 million');

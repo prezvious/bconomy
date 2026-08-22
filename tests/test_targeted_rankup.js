@@ -86,4 +86,82 @@ console.log('Testing RankPrestigeEngine Targeted Rank Up & Cash Preservation...'
     console.log('✔ Test 4 Passed: Max affordable calculation across multiple ascensions successful');
 }
 
+// 5. Verify Max Affordable with 5 Quadrillion cash (5e15)
+{
+    const playerState = {
+        cash: 5000000000000000, // 5 Quadrillion
+        rankIndex: 0,
+        prestigeCount: 0,
+        prestigePoints: 0,
+        perks: {}
+    };
+
+    const startTime = Date.now();
+    const calcMax = calculateTargetedRankUpCost(playerState, 0, 0, RANKS, true);
+    const duration = Date.now() - startTime;
+
+    assert(duration < 500, `Calculation should be fast (<500ms), took ${duration}ms`);
+    assert.strictEqual(calcMax.targetTier, 6212, 'Should reach Tier 6212 with 5 Quadrillion');
+    assert.strictEqual(calcMax.targetRankIndex, 103, 'Should reach Rank 103 (Divine)');
+    assert(calcMax.totalCost <= 5000000000000000, 'Total cost should not exceed 5 Quadrillion');
+    assert(calcMax.affordable, 'Should be affordable');
+
+    const resMax = RankPrestigeEngine.targetedRankUp(playerState, 0, 0, true);
+    assert.strictEqual(resMax.success, true);
+    assert.strictEqual(playerState.prestigeCount, 6212);
+    assert.strictEqual(playerState.rankIndex, 103);
+    assert.strictEqual(playerState.prestigePoints, 6212 * 5);
+    assert.strictEqual(playerState.cash, 5000000000000000 - calcMax.totalCost);
+    assert(playerState.cash >= 0, 'Remaining cash should be non-negative');
+    console.log('✔ Test 5 Passed: 5 Quadrillion cash max affordable calculation & execution verified');
+}
+
+// 6. Verify custom high target tier (Tier 5000)
+{
+    const playerState = {
+        cash: 5000000000000000,
+        rankIndex: 0,
+        prestigeCount: 0,
+        prestigePoints: 0,
+        perks: {}
+    };
+
+    const calc5000 = calculateTargetedRankUpCost(playerState, 5000, 50, RANKS, false);
+    assert.strictEqual(calc5000.targetTier, 5000, 'Target tier must match requested 5000 (not clamped to 1000)');
+    assert.strictEqual(calc5000.targetRankIndex, 50, 'Target rank index must match requested 50');
+    assert.strictEqual(calc5000.affordable, true, 'Should be affordable with 5 Quadrillion');
+    assert(calc5000.totalCost > 0, 'Total cost should be positive');
+
+    const res5000 = RankPrestigeEngine.targetedRankUp(playerState, 5000, 50, false);
+    assert.strictEqual(res5000.success, true);
+    assert.strictEqual(playerState.prestigeCount, 5000);
+    assert.strictEqual(playerState.rankIndex, 50);
+    assert.strictEqual(playerState.prestigePoints, 5000 * 5);
+    assert(playerState.cash >= 0);
+    console.log('✔ Test 6 Passed: Custom target tier 5000 calculation & execution verified');
+}
+
+// 7. Verify safe bounds protection on MAX_SAFE_INTEGER
+{
+    const playerState = {
+        cash: Number.MAX_SAFE_INTEGER,
+        rankIndex: 0,
+        prestigeCount: 0,
+        prestigePoints: 0,
+        perks: { cronyism: 25, investiture: 25 }
+    };
+
+    const calcSafe = calculateTargetedRankUpCost(playerState, 0, 0, RANKS, true);
+    assert(calcSafe.affordable, 'Should be affordable');
+    assert(calcSafe.targetTier > 8000, 'Should reach >8000 tiers with max safe integer and max perks');
+    assert(calcSafe.totalCost <= Number.MAX_SAFE_INTEGER, 'Cost must not exceed MAX_SAFE_INTEGER');
+
+    const resSafe = RankPrestigeEngine.targetedRankUp(playerState, 0, 0, true);
+    assert.strictEqual(resSafe.success, true);
+    assert.strictEqual(playerState.prestigeCount, calcSafe.targetTier);
+    assert.strictEqual(playerState.rankIndex, calcSafe.targetRankIndex);
+    assert(playerState.cash >= 0);
+    console.log('✔ Test 7 Passed: MAX_SAFE_INTEGER bounds & multi-tier leap with max perks verified');
+}
+
 console.log('ALL TARGETED RANK UP ENGINE TESTS PASSED!');

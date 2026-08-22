@@ -72,21 +72,38 @@ document.addEventListener(SETTINGS_CHANGE_EVENT, (event) => {
 });
 
 function parseConsoleAmount(amount) {
-    if (typeof amount === 'number') return amount;
-    const str = String(amount).replace(/,/g, '').replace(/\$/g, '').replace(/bc/gi, '').trim().toLowerCase();
-    if (str.endsWith('k')) return parseFloat(str) * 1e3;
-    if (str.endsWith('m')) return parseFloat(str) * 1e6;
-    if (str.endsWith('b')) return parseFloat(str) * 1e9;
-    if (str.endsWith('t')) return parseFloat(str) * 1e12;
-    if (str.endsWith('q')) return parseFloat(str) * 1e15;
-    return parseFloat(str) || 0;
+    if (typeof amount === 'number') {
+        return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(amount) || 0));
+    }
+    const cleanStr = String(amount).replace(/,/g, '').replace(/\$/g, '').trim().toLowerCase();
+    const match = cleanStr.match(/^([0-9.]+)\s*([a-z]*)$/);
+    if (!match) return 0;
+
+    const numPart = parseFloat(match[1]) || 0;
+    const unitPart = match[2];
+
+    let multiplier = 1;
+    if (unitPart === 'k' || unitPart === 'thousand') {
+        multiplier = 1e3;
+    } else if (unitPart === 'm' || unitPart === 'million') {
+        multiplier = 1e6;
+    } else if ((unitPart === 'b' || unitPart === 'bil' || unitPart === 'billion') && numPart < 1e9) {
+        multiplier = 1e9;
+    } else if (unitPart === 't' || unitPart === 'tril' || unitPart === 'trillion') {
+        multiplier = 1e12;
+    } else if (unitPart === 'q' || unitPart === 'quad' || unitPart === 'quadrillion') {
+        multiplier = 1e15;
+    }
+
+    const finalVal = Math.floor(numPart * multiplier);
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, finalVal || 0));
 }
 
 // Expose JS Console helpers for testing cash balance
 window.addCash = (amount = 10000000000) => {
     const state = loadState() || {};
     const addAmt = parseConsoleAmount(amount);
-    state.cash = (state.cash || 0) + addAmt;
+    state.cash = Math.min(Number.MAX_SAFE_INTEGER, (state.cash || 0) + addAmt);
     setState(state);
     saveState(state);
     renderAll();

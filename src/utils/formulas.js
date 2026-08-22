@@ -178,39 +178,130 @@ function displayItemName(name) {
  * @returns {Object} { totalCost, targetTier, targetRankIndex, affordable }
  */
 function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, ranks, isMaxAffordable = false) {
-    const cronyismLevel = (playerState.perks && playerState.perks.cronyism) || 0;
-    const investitureLevel = (playerState.perks && playerState.perks.investiture) || 0;
+    const cronyismLevel = Math.min(25, (playerState.perks && playerState.perks.cronyism) || 0);
+    const investitureLevel = Math.min(25, (playerState.perks && playerState.perks.investiture) || 0);
 
-    let curTier = playerState.prestigeCount || 0;
-    let curRank = playerState.rankIndex || 0;
-    let availableCash = playerState.cash || 0;
-    let totalCost = 0;
+    let curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+    let curRank = Math.min(106, Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
+    let availableCash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
+
+    // Helper: cost of rank slice within a tier from [fromRankExcl + 1 ... toRankIncl]
+    const getSliceCost = (fromRankExcl, toRankIncl, tier) => {
+        let cost = 0;
+        for (let r = fromRankExcl + 1; r <= toRankIncl; r++) {
+            const rInfo = ranks[r];
+            if (!rInfo) break;
+            const isGod = (r === 106 || rInfo.name === 'God');
+            cost += getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, tier);
+        }
+        return cost;
+    };
+
+    // Helper: cost of an entire tier T (all 106 rank promotions 0 -> 106)
+    const getTierCost = (tier) => {
+        return getSliceCost(0, 106, tier);
+    };
+
+    // Precalculate Tier 0 full cost and linear tier increment for quadratic approximation
+    const fullTier0Cost = getTierCost(0);
+    const fullTier1Cost = getTierCost(1);
+    const tierSlope = fullTier1Cost - fullTier0Cost;
 
     if (isMaxAffordable) {
         let remainingCash = availableCash;
-        while (true) {
-            if (curRank === 106) {
-                // Free ascension to next tier
-                curRank = 0;
-                curTier += 1;
-                continue;
+        let totalCost = 0;
+
+        // Step 1: Finish current tier if not at God
+        if (curRank < 106) {
+            const costToFinish = getSliceCost(curRank, 106, curTier);
+            if (remainingCash < costToFinish) {
+                // Buy as many individual ranks in current tier as possible
+                for (let r = curRank + 1; r <= 106; r++) {
+                    const rInfo = ranks[r];
+                    if (!rInfo) break;
+                    const isGod = (r === 106 || rInfo.name === 'God');
+                    const c = getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, curTier);
+                    if (remainingCash >= c) {
+                        remainingCash -= c;
+                        totalCost += c;
+                        curRank = r;
+                    } else {
+                        break;
+                    }
+                }
+                return {
+                    totalCost,
+                    targetTier: curTier,
+                    targetRankIndex: curRank,
+                    affordable: true
+                };
+            }
+            remainingCash -= costToFinish;
+            totalCost += costToFinish;
+            curTier += 1;
+            curRank = 0;
+        } else {
+            // Already at God (106), ascend to next tier free
+            curTier += 1;
+            curRank = 0;
+        }
+
+        // Step 2: Leap whole tiers using quadratic estimate + single-pass confirmation
+        if (remainingCash > 0 && tierSlope > 0) {
+            const costCurTier = getTierCost(curTier);
+            const a = tierSlope / 2;
+            const b = costCurTier - a;
+            const c = -remainingCash;
+            const discriminant = b * b - 4 * a * c;
+            let estN = 0;
+            if (discriminant >= 0) {
+                estN = Math.max(0, Math.floor((-b + Math.sqrt(discriminant)) / (2 * a)));
             }
 
-            const nextRankIndex = curRank + 1;
-            const nextRank = ranks[nextRankIndex];
-            if (!nextRank) break;
+            // Refine estN to ensure we don't overshoot
+            const computeExactNTiersCost = (n) => {
+                let sum = 0;
+                for (let t = 0; t < n; t++) {
+                    sum += getTierCost(curTier + t);
+                }
+                return sum;
+            };
 
-            const isGodRank = (nextRankIndex === 106 || nextRank.name === 'God');
-            const cost = getRankUpCost(nextRank.basePrice, cronyismLevel, investitureLevel, isGodRank, curTier);
+            let exactCostEst = computeExactNTiersCost(estN);
+            while (estN > 0 && exactCostEst > remainingCash) {
+                estN--;
+                exactCostEst -= getTierCost(curTier + estN);
+            }
+            while (true) {
+                const nextCost = getTierCost(curTier + estN);
+                if (exactCostEst + nextCost <= remainingCash) {
+                    exactCostEst += nextCost;
+                    estN++;
+                } else {
+                    break;
+                }
+            }
 
-            if (remainingCash >= cost) {
-                remainingCash -= cost;
-                totalCost += cost;
-                curRank = nextRankIndex;
+            remainingCash -= exactCostEst;
+            totalCost += exactCostEst;
+            curTier += estN;
+        }
+
+        // Step 3: Buy remaining individual ranks in final tier
+        for (let r = 1; r <= 106; r++) {
+            const rInfo = ranks[r];
+            if (!rInfo) break;
+            const isGod = (r === 106 || rInfo.name === 'God');
+            const c = getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, curTier);
+            if (remainingCash >= c) {
+                remainingCash -= c;
+                totalCost += c;
+                curRank = r;
             } else {
                 break;
             }
         }
+
         return {
             totalCost,
             targetTier: curTier,
@@ -220,11 +311,9 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
     }
 
     // Explicit Target (targetTier, targetRankIndex)
-    let remainingCash = availableCash;
-    const reqTier = Math.min(curTier + 1000, Math.max(curTier, parseInt(targetTier, 10) || 0));
+    const reqTier = Math.max(curTier, parseInt(targetTier, 10) || 0);
     const reqRankIndex = Math.min(106, Math.max(0, parseInt(targetRankIndex, 10) || 0));
 
-    // If target is lower than current state, invalid/no-op
     if (reqTier < curTier || (reqTier === curTier && reqRankIndex <= curRank)) {
         return {
             totalCost: 0,
@@ -234,38 +323,18 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
         };
     }
 
-    const MAX_RANKUP_ITERATIONS = 200000;
-    let iterations = 0;
-
-    while (curTier < reqTier || (curTier === reqTier && curRank < reqRankIndex)) {
-        if (++iterations > MAX_RANKUP_ITERATIONS) {
-            return {
-                totalCost,
-                targetTier: reqTier,
-                targetRankIndex: reqRankIndex,
-                affordable: false,
-                error: 'Target too distant to calculate'
-            };
+    let totalCost = 0;
+    if (reqTier === curTier) {
+        totalCost = getSliceCost(curRank, reqRankIndex, curTier);
+    } else {
+        // 1. Finish current tier
+        totalCost += getSliceCost(curRank, 106, curTier);
+        // 2. Middle full tiers
+        for (let t = curTier + 1; t < reqTier; t++) {
+            totalCost += getTierCost(t);
         }
-        if (curRank === 106) {
-            curRank = 0;
-            curTier += 1;
-            if (curTier === reqTier && reqRankIndex === 0) {
-                break;
-            }
-            continue;
-        }
-
-        const nextRankIndex = curRank + 1;
-        const nextRank = ranks[nextRankIndex];
-        if (!nextRank) break;
-
-        const isGodRank = (nextRankIndex === 106 || nextRank.name === 'God');
-        const cost = getRankUpCost(nextRank.basePrice, cronyismLevel, investitureLevel, isGodRank, curTier);
-
-        totalCost += cost;
-        remainingCash -= cost;
-        curRank = nextRankIndex;
+        // 3. Final tier ranks
+        totalCost += getSliceCost(0, reqRankIndex, reqTier);
     }
 
     return {

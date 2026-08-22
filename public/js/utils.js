@@ -195,7 +195,9 @@ const VALUE_NAME_UNITS = [
     { value: 1e9, name: 'billion' },
     { value: 1e12, name: 'trillion' },
     { value: 1e15, name: 'quadrillion' },
-    { value: 1e18, name: 'quintillion' }
+    { value: 1e18, name: 'quintillion' },
+    { value: 1e21, name: 'sextillion' },
+    { value: 1e24, name: 'septillion' }
 ];
 
 const normalizeDisplayNumber = (value) => {
