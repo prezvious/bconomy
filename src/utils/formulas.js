@@ -75,18 +75,33 @@ function calculateWorkBonuses(partialityLevel) {
  * Gets the discounted cost of ranking up.
  * @param {number} rankBasePrice - The base price of the target rank
  * @param {number} cronyismLevel - Level of Cronyism perk (max 25)
- * @param {number} investitureLevel - Level of Investiture perk (max 25, applies to Rank 107 God)
- * @param {boolean} isGodRank - Whether target rank is God
+ * @param {number} [investitureLevel=0] - Legacy/unused parameter
+ * @param {boolean} [isGodRank=false] - Legacy/unused parameter
+ * @param {number} [tier=0] - Player prestige tier
  * @returns {number} Discounted cost
  */
 function getRankUpCost(rankBasePrice, cronyismLevel = 0, investitureLevel = 0, isGodRank = false, tier = 0) {
-    const cronyism = Math.min(25, cronyismLevel || 0);
-    const tierMult = 1 + (Math.max(0, Math.floor(Number(tier) || 0)) * 0.05);
-    let cost = rankBasePrice * tierMult * (1 - 0.025 * cronyism);
-    if (isGodRank) {
-        const investiture = Math.min(25, investitureLevel || 0);
-        cost = cost * (1 - 0.025 * investiture);
-    }
+    const cronyism = Math.min(25, Math.max(0, Number(cronyismLevel) || 0));
+    const t = Math.max(0, Math.floor(Number(tier) || 0));
+    const tierMult = t + 1;
+    const cost = rankBasePrice * tierMult * (1 - 0.025 * cronyism);
+    return Math.floor(cost);
+}
+
+/**
+ * Gets the discounted cost to ascend prestige tiers.
+ * Tier 0 -> Tier 1 is Free ($0).
+ * Tier t >= 1 -> Tier t+1 is 550,000,000 * (t + 2), discounted by Investiture (Anointment).
+ * @param {number} tier - Current prestige tier (t >= 0)
+ * @param {number} investitureLevel - Level of Investiture perk (max 25)
+ * @returns {number} Discounted ascension cost
+ */
+function getAscensionCost(tier = 0, investitureLevel = 0) {
+    const t = Math.max(0, Math.floor(Number(tier) || 0));
+    if (t === 0) return 0;
+    const investiture = Math.min(25, Math.max(0, Number(investitureLevel) || 0));
+    const baseCost = 550000000 * (t + 2);
+    const cost = baseCost * (1 - 0.025 * investiture);
     return Math.floor(cost);
 }
 
@@ -169,7 +184,8 @@ function displayItemName(name) {
 
 /**
  * Calculates targeted rank up costs across ranks and tiers.
- * Ascension between Tier God (106) to Next Tier Peasant (0) is $0 (free).
+ * Ascension between Tier God (106) to Next Tier Peasant (0) is $0 for Tier 0, and
+ * 550,000,000 * (Tier + 2) * (1 - 0.025 * Investiture) for Tier >= 1.
  * @param {Object} playerState
  * @param {number} targetTier
  * @param {number} targetRankIndex
@@ -191,21 +207,20 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
         for (let r = fromRankExcl + 1; r <= toRankIncl; r++) {
             const rInfo = ranks[r];
             if (!rInfo) break;
-            const isGod = (r === 106 || rInfo.name === 'God');
-            cost += getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, tier);
+            cost += getRankUpCost(rInfo.basePrice, cronyismLevel, 0, false, tier);
         }
         return cost;
     };
 
-    // Helper: cost of an entire tier T (all 106 rank promotions 0 -> 106)
+    // Helper: cost of an entire tier T (all 106 rank promotions 0 -> 106 PLUS ascension to T+1)
     const getTierCost = (tier) => {
-        return getSliceCost(0, 106, tier);
+        return getSliceCost(0, 106, tier) + getAscensionCost(tier, investitureLevel);
     };
 
-    // Precalculate Tier 0 full cost and linear tier increment for quadratic approximation
-    const fullTier0Cost = getTierCost(0);
+    // Precalculate tier slope for quadratic leaping when tier >= 1
     const fullTier1Cost = getTierCost(1);
-    const tierSlope = fullTier1Cost - fullTier0Cost;
+    const fullTier2Cost = getTierCost(2);
+    const tierSlope = fullTier2Cost - fullTier1Cost;
 
     if (isMaxAffordable) {
         let remainingCash = availableCash;
@@ -213,14 +228,13 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
 
         // Step 1: Finish current tier if not at God
         if (curRank < 106) {
-            const costToFinish = getSliceCost(curRank, 106, curTier);
-            if (remainingCash < costToFinish) {
+            const costToFinishRanks = getSliceCost(curRank, 106, curTier);
+            if (remainingCash < costToFinishRanks) {
                 // Buy as many individual ranks in current tier as possible
                 for (let r = curRank + 1; r <= 106; r++) {
                     const rInfo = ranks[r];
                     if (!rInfo) break;
-                    const isGod = (r === 106 || rInfo.name === 'God');
-                    const c = getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, curTier);
+                    const c = getRankUpCost(rInfo.basePrice, cronyismLevel, 0, false, curTier);
                     if (remainingCash >= c) {
                         remainingCash -= c;
                         totalCost += c;
@@ -236,18 +250,58 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
                     affordable: true
                 };
             }
-            remainingCash -= costToFinish;
-            totalCost += costToFinish;
+
+            // Player can afford to reach God (Rank 106).
+            // Now check if player can also afford ascension to curTier + 1:
+            const ascendCost = getAscensionCost(curTier, investitureLevel);
+            if (remainingCash < costToFinishRanks + ascendCost) {
+                // Reach God, but cannot afford ascension fee
+                remainingCash -= costToFinishRanks;
+                totalCost += costToFinishRanks;
+                curRank = 106;
+                return {
+                    totalCost,
+                    targetTier: curTier,
+                    targetRankIndex: curRank,
+                    affordable: true
+                };
+            }
+
+            // Can afford reaching God AND ascending
+            remainingCash -= (costToFinishRanks + ascendCost);
+            totalCost += (costToFinishRanks + ascendCost);
             curTier += 1;
             curRank = 0;
         } else {
-            // Already at God (106), ascend to next tier free
-            curTier += 1;
-            curRank = 0;
+            // Already at God (106), check if can afford ascension
+            const ascendCost = getAscensionCost(curTier, investitureLevel);
+            if (remainingCash >= ascendCost) {
+                remainingCash -= ascendCost;
+                totalCost += ascendCost;
+                curTier += 1;
+                curRank = 0;
+            } else {
+                return {
+                    totalCost: 0,
+                    targetTier: curTier,
+                    targetRankIndex: curRank,
+                    affordable: true
+                };
+            }
         }
 
-        // Step 2: Leap whole tiers using quadratic estimate + single-pass confirmation
-        if (remainingCash > 0 && tierSlope > 0) {
+        // Step 2: Leap whole tiers
+        // If curTier === 0, handle Tier 0 first (since tier 0 ascension cost is 0, linear slope starts from tier 1)
+        if (curTier === 0 && remainingCash > 0) {
+            const costTier0 = getTierCost(0);
+            if (remainingCash >= costTier0) {
+                remainingCash -= costTier0;
+                totalCost += costTier0;
+                curTier = 1;
+            }
+        }
+
+        if (remainingCash > 0 && curTier >= 1 && tierSlope > 0) {
             const costCurTier = getTierCost(curTier);
             const a = tierSlope / 2;
             const b = costCurTier - a;
@@ -258,7 +312,6 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
                 estN = Math.max(0, Math.floor((-b + Math.sqrt(discriminant)) / (2 * a)));
             }
 
-            // Refine estN to ensure we don't overshoot
             const computeExactNTiersCost = (n) => {
                 let sum = 0;
                 for (let t = 0; t < n; t++) {
@@ -291,14 +344,24 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
         for (let r = 1; r <= 106; r++) {
             const rInfo = ranks[r];
             if (!rInfo) break;
-            const isGod = (r === 106 || rInfo.name === 'God');
-            const c = getRankUpCost(rInfo.basePrice, cronyismLevel, investitureLevel, isGod, curTier);
+            const c = getRankUpCost(rInfo.basePrice, cronyismLevel, 0, false, curTier);
             if (remainingCash >= c) {
                 remainingCash -= c;
                 totalCost += c;
                 curRank = r;
             } else {
                 break;
+            }
+        }
+
+        // If player reached God (106) in final tier and can afford ascension to curTier+1, ascend
+        if (curRank === 106) {
+            const ascendCost = getAscensionCost(curTier, investitureLevel);
+            if (remainingCash >= ascendCost) {
+                remainingCash -= ascendCost;
+                totalCost += ascendCost;
+                curTier += 1;
+                curRank = 0;
             }
         }
 
@@ -311,7 +374,7 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
     }
 
     // Explicit Target (targetTier, targetRankIndex)
-    const reqTier = Math.max(curTier, parseInt(targetTier, 10) || 0);
+    const reqTier = Math.max(0, parseInt(targetTier, 10) || 0);
     const reqRankIndex = Math.min(106, Math.max(0, parseInt(targetRankIndex, 10) || 0));
 
     if (reqTier < curTier || (reqTier === curTier && reqRankIndex <= curRank)) {
@@ -327,13 +390,16 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
     if (reqTier === curTier) {
         totalCost = getSliceCost(curRank, reqRankIndex, curTier);
     } else {
-        // 1. Finish current tier
+        // 1. Finish current tier ranks AND ascend to curTier + 1
         totalCost += getSliceCost(curRank, 106, curTier);
-        // 2. Middle full tiers
+        totalCost += getAscensionCost(curTier, investitureLevel);
+
+        // 2. Middle full tiers (all ranks 0->106 + ascension to next tier)
         for (let t = curTier + 1; t < reqTier; t++) {
             totalCost += getTierCost(t);
         }
-        // 3. Final tier ranks
+
+        // 3. Final tier ranks (from 0 to reqRankIndex, without ascension)
         totalCost += getSliceCost(0, reqRankIndex, reqTier);
     }
 
@@ -352,6 +418,7 @@ module.exports = {
     getWorkBasePay,
     calculateWorkBonuses,
     getRankUpCost,
+    getAscensionCost,
     getSerendipityMultiplier,
     getAmnesiacChance,
     displayItemName,

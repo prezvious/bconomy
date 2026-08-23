@@ -3,9 +3,67 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v2.1',
+        version: 'v2.1',
+        isLatest: true,
+        date: '2026-08-23',
+        title: 'v2.1 — Prestige Ascension Costs, Dynamic Tier Scaling & Targeted Rank-Up Optimization',
+        sections: [
+            {
+                type: 'New Features',
+                items: [
+                    {
+                        title: 'Prestige Ascension Fee & Investiture Discount',
+                        bullets: [
+                            'Ascension from Tier 0 to Tier 1 is Free ($0), preserving player cash balances.',
+                            'Ascending to Tier 2+ introduces dynamic scaling ascension costs: $550,000,000 × (t + 2).',
+                            'Investiture perk reduces Tier 1+ prestige ascension costs by 2.5% per level up to 62.5% at Level 25.',
+                            'Interactive confirmation modal and ascension UI display dynamic fees and enforce cash sufficiency.'
+                        ]
+                    },
+                    {
+                        title: 'Career Rank Escalation Multipliers',
+                        bullets: [
+                            'Rank-up costs across all 107 ranks scale linearly by prestige tier multiplier (t + 1): 1x at Tier 0, 2x at Tier 1, 3x at Tier 2, etc.',
+                            'Cronyism perk provides up to 62.5% discount across all 107 ranks uniformly.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Multi-Tier Targeted Rank-Up & Max Affordable Solver',
+                        bullets: [
+                            'Targeted rank-up solver accurately budgets for both individual rank promotion ladders and tier ascension fees across any number of tiers.',
+                            'Max Affordable mode automatically stops at Rank 107 (God) if the player can afford the rank ladder but lacks cash for the tier ascension fee.'
+                        ]
+                    },
+                    {
+                        title: 'Comprehensive Math Invariant & Test Suite Audit',
+                        bullets: [
+                            'Added dedicated audit test suite verifying 100% mathematical integrity across all 107 ranks, formulas, and large-number quadrillion bounds.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'Lower-Tier Target Clamping',
+                        bullets: [
+                            'Fixed an issue in Targeted Rank-Up calculations where targeting a lower tier than the current tier falsely prompted promotions in the current tier instead of reporting zero cost.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v2.0',
         version: 'v2.0',
-        isLatest: true,
         date: '2026-08-23',
         title: 'v2.0 — Timer Precision, Smart Duration Conversion & Display Settings',
         sections: [
@@ -206,7 +264,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v2.0']); // v2.0 expanded by default
+const expandedVersions = new Set(['v2.1']); // v2.1 expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -243,7 +301,7 @@ const renderReleaseAccordion = (release) => {
     );
 
     const badgeHtml = isLatest
-        ? `<span class="badge release-card-badge latest">Latest v2.0</span>`
+        ? `<span class="badge release-card-badge latest">Latest ${escapeHtml(release.version)}</span>`
         : `<span class="badge release-card-badge">${escapeHtml(release.version)}</span>`;
 
     const sectionsHtml = matchingSections.map(section => {

@@ -170,17 +170,24 @@ export const setupNavigation = () => {
     const btnAscend = document.getElementById('btn-rp-ascend');
     if (btnAscend) {
         btnAscend.addEventListener('click', async (e) => {
+            const playerState = getState();
+            const tier = (playerState && playerState.prestigeCount) || 0;
+            const investitureLevel = Math.min(25, (playerState && playerState.perks && playerState.perks.investiture) || 0);
+            const cost = tier === 0 ? 0 : Math.floor(550000000 * (tier + 2) * (1 - 0.025 * investitureLevel));
+            const costMsg = cost === 0 ? 'Ascending to Tier 1 is Free!' : `Ascending to Tier ${tier + 1} will cost ${formatMoney(cost)}.`;
+
             const confirmed = await showConfirmation(
                 'ascend',
                 'Ascend Tier?',
-                'Ascending will increase your Tier standing and award 5 Prestige Points. Your cash, inventory, tools, perks, and farm progress will be preserved. Are you ready to ascend?'
+                `${costMsg} It will increase your Tier standing and award 5 Prestige Points. Your inventory, tools, perks, and farm progress will be preserved. Are you ready to ascend?`
             );
             if (!confirmed) return;
 
             try {
                 const res = await apiCall('/api/prestige/ascend', 'POST', {}, e.currentTarget);
+                const spent = res.result && res.result.cost ? res.result.cost : cost;
                 showToast('Prestige Ascension successful!', 'success');
-                addLogEntry('ASCENDED TO A HIGHER PRESTIGE TIER!', 'rare');
+                addLogEntry(`ASCENDED TO PRESTIGE TIER ${res.result?.newPrestigeCount || (tier + 1)}!${spent > 0 ? ` (Paid ${formatMoney(spent)})` : ''}`, 'rare');
                 await updateAllToolRecipes();
                 renderAll();
                 renderRankPrestige();

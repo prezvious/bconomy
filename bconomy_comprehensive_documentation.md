@@ -228,13 +228,14 @@ For each item entry in an action drop table:
 ### D. Career Rank Escalation Costs & Discounts
 Career progression features 107 ranks ($10\text{k} to $250\text{M} base prices).
 
-*   **Standard Rank Up Cost (Ranks 1 to 106)**:
-    $$\text{RankCost} = \text{BasePrice} \times \left(1 - 0.025 \times \min(25, \text{CronyismLevel})\right)$$
-    *(Maximum 62.5% discount at Cronyism Level 25).*
+*   **Career Rank Up Cost**:
+    $$\text{RankCost}(r, t, N) = \lfloor \text{BasePrice}_r \times (t + 1) \times \left(1 - 0.025 \times \min(25, \text{CronyismLevel})\right) \rfloor$$
+    *(Scales linearly with prestige tier $t+1$; maximum 62.5% discount at Cronyism Level 25).*
 
-*   **Rank 107 (God) Price Calculation**:
-    $$\text{GodCost} = \text{BasePrice} \times \left(1 - 0.025 \times \min(25, \text{CronyismLevel})\right) \times \left(1 - 0.025 \times \min(25, \text{InvestitureLevel})\right)$$
-    *(Reduces Rank 107 God price from $\$200,000,000$ to $\$75,000,000$ when both perks are maxed).*
+*   **Prestige Ascension Fee & Investiture Discount**:
+    $$\text{BaseAscensionCost}(t) = \begin{cases} 0 & \text{if } t = 0 \\ 550,000,000 \times (t + 2) & \text{if } t \ge 1 \end{cases}$$
+    $$\text{AscensionCost}(t, A) = \lfloor \text{BaseAscensionCost}(t) \times \left(1 - 0.025 \times \min(25, \text{InvestitureLevel})\right) \rfloor$$
+    *(Tier 0 ascension to Tier 1 is Free; Tier 1+ ascension fee scales linearly and is discounted up to 62.5% at Investiture Level 25).*
 
 ### E. Amnesiac Cooldown Reset Formula
 Triggered automatically after completing any action (`mine`, `explore`, `hunt`, `fish`, `work`):
@@ -275,7 +276,7 @@ Effect: Instantly sets action cooldown timestamp to 0.
 | Perk Identifier | Display Name | Max Level | Effect Description | Formula |
 | :--- | :--- | :---: | :--- | :--- |
 | `cronyism` | Rank Subsidy | 25 | Lowers the price of ranking up | Level $\times 2.5\%$ discount (max 62.5%) |
-| `investiture` | Final Rank Discount | 25 | Reduces price of Rank 107 (God) | Level $\times 2.5\%$ discount (max 62.5%) |
+| `investiture` | Final Rank Discount | 25 | Reduces price of prestige ascension (Tiers 1+) | Level $\times 2.5\%$ discount (max 62.5%) |
 | `partiality` | Overtime Bonus | 15 | Increases work bonus odds and stacks | Base $30\% + \text{Level} \times 15\%$, multiplier $3^n$ |
 | `serendipity` | Lucky Drops | 29 | Boosts rare drop quantities ($\le 5\%$) | Multiplier $= \text{Level} + 1$ |
 | `amnesiac` | Cooldown Reset | 24 | Chance to bypass action cooldown | Level $\times 2\%$ chance (max 48%) |

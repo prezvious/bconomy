@@ -2,7 +2,7 @@
  * @module rankPrestigeEngine
  * Handles career rank advancement, prestige ascension, and perk upgrades.
  */
-const { getRankUpCost } = require('../utils/formulas');
+const { getRankUpCost, getAscensionCost } = require('../utils/formulas');
 const { RANKS, PERK_DEFINITIONS } = require('./dropTables');
 
 class RankPrestigeEngine {
@@ -18,11 +18,19 @@ class RankPrestigeEngine {
         const nextIndex = currentIndex + 1;
         const nextRank = RANKS[nextIndex];
         const cronyismLevel = (playerState.perks && playerState.perks.cronyism) || 0;
-        const investitureLevel = (playerState.perks && playerState.perks.investiture) || 0;
-        const isGodRank = (nextIndex === 106 || nextRank.name === 'God');
-
         const tier = playerState.prestigeCount || 0;
-        return getRankUpCost(nextRank.basePrice, cronyismLevel, investitureLevel, isGodRank, tier);
+        return getRankUpCost(nextRank.basePrice, cronyismLevel, 0, false, tier);
+    }
+
+    /**
+     * Gets the discounted cost for prestige ascension.
+     * @param {Object} playerState
+     * @returns {number}
+     */
+    static getAscensionCost(playerState) {
+        const tier = playerState.prestigeCount || 0;
+        const investitureLevel = (playerState.perks && playerState.perks.investiture) || 0;
+        return getAscensionCost(tier, investitureLevel);
     }
 
     /**
@@ -67,7 +75,9 @@ class RankPrestigeEngine {
      */
     static canAscend(playerState) {
         const isGod = playerState.rankIndex === 106; // 106 is 0-based index for God (107th rank)
-        return isGod;
+        if (!isGod) return false;
+        const cost = this.getAscensionCost(playerState);
+        return (playerState.cash || 0) >= cost;
     }
 
     /**
@@ -77,10 +87,15 @@ class RankPrestigeEngine {
      */
     static ascend(playerState) {
         if (!this.canAscend(playerState)) {
-            return { error: 'Cannot ascend. Must reach rank God (Rank 107).' };
+            if (playerState.rankIndex !== 106) {
+                return { error: 'Cannot ascend. Must reach rank God (Rank 107).' };
+            }
+            const cost = this.getAscensionCost(playerState);
+            return { error: `Cannot ascend. Requires $${cost.toLocaleString()} cash.` };
         }
 
-        // Cash is preserved upon prestige ascension
+        const cost = this.getAscensionCost(playerState);
+        playerState.cash -= cost;
         playerState.rankIndex = 0; // Peasant
         playerState.prestigeCount = (playerState.prestigeCount || 0) + 1;
         playerState.prestigePoints = (playerState.prestigePoints || 0) + 5;
@@ -88,7 +103,8 @@ class RankPrestigeEngine {
         return {
             success: true,
             newPrestigeCount: playerState.prestigeCount,
-            pointsAwarded: 5
+            pointsAwarded: 5,
+            cost
         };
     }
 

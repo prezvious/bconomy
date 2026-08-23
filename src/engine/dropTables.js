@@ -126,7 +126,7 @@ const RANKS = [
 ];
 
 const PERK_DEFINITIONS = {
-  investiture: { name: 'Final Rank Discount', maxLevel: 25, description: 'Reduces the price of Rank 107 (God) before prestige', formula: 'Level × 2.5% discount (max 62.5%)' },
+  investiture: { name: 'Final Rank Discount', maxLevel: 25, description: 'Reduces the price of prestige ascension (Tiers 1+)', formula: 'Level × 2.5% discount (max 62.5%)' },
   cronyism: { name: 'Rank Subsidy', maxLevel: 25, description: 'Lowers the price of ranking up', formula: 'Level × 2.5% discount (max 62.5%)' },
   backchannel: { name: 'Market Fee Reduction', maxLevel: 25, description: 'Reduces the percentage fee taken on market trades (Coming Soon)', formula: 'Level × 1.12% fee reduction' },
   partiality: { name: 'Overtime Bonus', maxLevel: 15, description: 'Improves odds and stacks of work bonus payouts', formula: 'Base 30% + Level × 15% bonus chance' },
