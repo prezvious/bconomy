@@ -208,42 +208,49 @@ export const RELEASES = [
 let activeVersionFilter = 'all';
 let searchQuery = '';
 
+const escapeHtml = value => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
 const renderReleaseCard = (release) => {
     const isLatest = release.isLatest;
     const badgeHtml = isLatest
         ? `<span class="badge release-card-badge latest">Latest v2.0</span>`
-        : `<span class="badge release-card-badge">${release.version}</span>`;
+        : `<span class="badge release-card-badge">${escapeHtml(release.version)}</span>`;
 
     const sectionsHtml = (release.sections || []).map(section => {
         const itemsHtml = (section.items || []).map(item => `
             <div class="release-item">
                 <div class="release-item-header">
-                    <strong class="release-item-title">${item.title}</strong>
+                    <strong class="release-item-title">${escapeHtml(item.title)}</strong>
                 </div>
                 <ul class="release-bullet-list">
-                    ${(item.bullets || []).map(bullet => `<li>${bullet}</li>`).join('')}
+                    ${(item.bullets || []).map(bullet => `<li>${escapeHtml(bullet)}</li>`).join('')}
                 </ul>
             </div>
         `).join('');
 
         return `
             <div class="release-section">
-                <h4 class="release-section-heading">${section.type}</h4>
+                <h4 class="release-section-heading">${escapeHtml(section.type)}</h4>
                 ${itemsHtml}
             </div>
         `;
     }).join('');
 
     return `
-        <article class="release-card ${isLatest ? 'release-card-latest' : ''}" data-version="${release.version}">
+        <article class="release-card ${isLatest ? 'release-card-latest' : ''}" data-version="${escapeHtml(release.version)}">
             <div class="release-card-header">
                 <div class="release-title-row">
                     ${badgeHtml}
-                    <h3 class="release-card-title">${release.title}</h3>
+                    <h3 class="release-card-title">${escapeHtml(release.title)}</h3>
                 </div>
                 <div class="release-meta-row">
                     <span class="release-date">
-                        ${iconHtml('lucide:calendar')} ${release.date}
+                        ${iconHtml('lucide:calendar')} ${escapeHtml(release.date)}
                     </span>
                 </div>
             </div>
@@ -279,7 +286,7 @@ export const renderReleaseNotesList = () => {
             <div class="release-empty-state">
                 <iconify-icon icon="lucide:search-x" class="empty-icon" aria-hidden="true"></iconify-icon>
                 <h4>No updates found</h4>
-                <p>No release notes matched "${searchQuery}". Try a different search term or filter.</p>
+                <p>No release notes matched "${escapeHtml(searchQuery)}". Try a different search term or filter.</p>
             </div>
         `;
     } else {
@@ -292,6 +299,18 @@ export const renderReleaseNotesList = () => {
 };
 
 export const openReleaseNotesModal = () => {
+    const searchInput = document.getElementById('release-notes-search');
+    if (searchInput) {
+        searchInput.value = searchQuery;
+    }
+
+    const filterGroup = document.getElementById('release-version-filters');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('.release-filter-chip').forEach(el => {
+            el.classList.toggle('active', (el.dataset.version || 'all') === activeVersionFilter);
+        });
+    }
+
     renderReleaseNotesList();
     openDialog('release-notes-modal', {
         initialFocus: '#release-notes-search',
@@ -299,26 +318,37 @@ export const openReleaseNotesModal = () => {
     });
 };
 
+let listenersBound = false;
+
 export const setupReleaseNotesModal = () => {
     const triggerBtn = document.getElementById('btn-release-notes');
-    triggerBtn?.addEventListener('click', () => {
-        openReleaseNotesModal();
-    });
+    if (triggerBtn && !triggerBtn.dataset.bound) {
+        triggerBtn.dataset.bound = 'true';
+        triggerBtn.addEventListener('click', () => {
+            openReleaseNotesModal();
+        });
+    }
 
     const searchInput = document.getElementById('release-notes-search');
-    searchInput?.addEventListener('input', (e) => {
-        searchQuery = e.target.value;
-        renderReleaseNotesList();
-    });
+    if (searchInput && !searchInput.dataset.bound) {
+        searchInput.dataset.bound = 'true';
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderReleaseNotesList();
+        });
+    }
 
     const filterGroup = document.getElementById('release-version-filters');
-    filterGroup?.addEventListener('click', (e) => {
-        const chip = e.target.closest('.release-filter-chip');
-        if (!chip) return;
+    if (filterGroup && !filterGroup.dataset.bound) {
+        filterGroup.dataset.bound = 'true';
+        filterGroup.addEventListener('click', (e) => {
+            const chip = e.target.closest('.release-filter-chip');
+            if (!chip) return;
 
-        filterGroup.querySelectorAll('.release-filter-chip').forEach(el => el.classList.remove('active'));
-        chip.classList.add('active');
-        activeVersionFilter = chip.dataset.version || 'all';
-        renderReleaseNotesList();
-    });
+            filterGroup.querySelectorAll('.release-filter-chip').forEach(el => el.classList.remove('active'));
+            chip.classList.add('active');
+            activeVersionFilter = chip.dataset.version || 'all';
+            renderReleaseNotesList();
+        });
+    }
 };
