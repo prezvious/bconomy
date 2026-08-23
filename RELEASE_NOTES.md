@@ -20,6 +20,44 @@
 
 ## Recent Release Highlights (2026)
 
+### [v2.0](https://blog.bconomy.net/category/updates/)
+**Date:** 2026-08-23
+
+A major update for Bconomy has been released introducing smart multi-unit duration formatting, customizable timer hover date conversions, and integrated release notes.
+
+## New Features
+
+- **Smart Adaptive Multi-Unit Duration Conversion.** (Bconomy Team)
+
+Long booster and action timers now automatically convert into readable breakdowns across **years (`y`)**, **months (`mo`)**, **weeks (`w`)**, **days (`d`)**, **hours (`h`)**, **minutes (`m`)**, and **seconds (`s`)**.
+- Supports 5 configurable breakdown styles: **Smart Adaptive** (top 3 units, e.g. `371y 7mo 1w`), **Compact Adaptive** (top 2 units), **Full Breakdown** (all units), **Days & Hours**, and **Raw Hours Only**.
+- Multi-million hour timers are cleanly formatted without cluttering the interface.
+
+- **In-Place Hover Date & Time Conversion.** (Bconomy Team)
+
+Hovering over active booster or faction timers swaps the countdown in-place to display its calculated calendar expiration timestamp (`dd/mm/yyyy HH:mm:ss`).
+- Configurable date formats: `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY`, `YYYY-MM-DD` (ISO), `YYYY/MM/DD`, `MM/DD/YYYY`, `D MMM YYYY`, `MMM D, YYYY`, and `Day, D Month YYYY`.
+- Configurable time formats: `24-Hour (HH:mm:ss)`, `24-Hour Short (HH:mm)`, `12-Hour (hh:mm:ss AM/PM)`, `12-Hour Short (hh:mm AM/PM)`, and `Date Only`.
+- Supports Local device timezone and UTC.
+
+- **Release Notes & Updates Modal.** (Bconomy Team)
+
+Clicking the **Bconomy v2.0** button in the sidebar footer opens the official release notes and changelog archive with instant keyword search and yearly filters.
+
+## Improvements
+
+- **Display & Timers Settings Panel.** (Bconomy Team)
+
+Added customizable controls for all duration styles, date formats, time displays, timezones, and hover actions along with an interactive live timer preview.
+
+## Bug Fixes
+
+- **Booster Bulk Delta Formatting.** (Bconomy Team)
+
+Prevented potential `+Expired` text when adding 0-quantity boosters, accurately displaying `+0s`.
+
+---
+
 ### [v2026.08.22](https://blog.bconomy.net/2026/08/22/release-v2026-08-22-09a1716ac/)
 **Date:** 2026-08-22
 

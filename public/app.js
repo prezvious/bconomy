@@ -9,6 +9,7 @@ import { updateAllToolRecipes } from './js/ui/tools.js';
 import { setupNavigation } from './js/navigation.js';
 import { setupModals } from './js/ui/modal.js';
 import { setupItemModalListeners } from './js/ui/itemModal.js';
+import { setupReleaseNotesModal } from './js/ui/releaseNotesModal.js';
 import { cooldownLoop } from './js/ui/cooldowns.js';
 import { addLogEntry, setupConsoleHandlers } from './js/ui/log.js';
 import { applyInterfaceSettings, SETTINGS_CHANGE_EVENT } from './js/preferences.js';
@@ -53,6 +54,7 @@ const init = async () => {
         setupNavigation();
         setupModals();
         setupItemModalListeners();
+        setupReleaseNotesModal();
         renderAll();
 
         requestAnimationFrame(cooldownLoop);

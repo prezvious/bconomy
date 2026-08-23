@@ -9,6 +9,21 @@ const VALID_NUMBER_DISPLAYS = new Set(['full', 'named']);
 const VALID_INTERFACE_DENSITIES = new Set(['balanced', 'dense', 'comfortable']);
 const VALID_INVENTORY_VIEWS = new Set(['grid', 'compact']);
 const VALID_INVENTORY_SORTS = new Set(['name-asc', 'quantity-desc', 'quantity-asc', 'category']);
+const VALID_TIMER_DATE_FORMATS = new Set([
+    'dd/mm/yyyy',
+    'dd-mm-yyyy',
+    'dd.mm.yyyy',
+    'yyyy-mm-dd',
+    'yyyy/mm/dd',
+    'mm/dd/yyyy',
+    'd-mmm-yyyy',
+    'mmm-d-yyyy',
+    'full-date'
+]);
+const VALID_TIMER_TIME_FORMATS = new Set(['24h', '24h-short', '12h', '12h-short', 'none']);
+const VALID_TIMER_TIMEZONES = new Set(['local', 'utc']);
+const VALID_DURATION_FORMATS = new Set(['adaptive', 'adaptive-2', 'full', 'days-hours', 'hours']);
+const VALID_TIMER_HOVER_MODES = new Set(['swap', 'tooltip', 'both']);
 
 const DEFAULT_SETTINGS = Object.freeze({
     density: 'verbose',
@@ -26,6 +41,11 @@ const DEFAULT_SETTINGS = Object.freeze({
     numberDisplay: 'full',
     interfaceDensity: 'balanced',
     collapseSearchOnBlur: false,
+    timerDateFormat: 'dd/mm/yyyy',
+    timerTimeFormat: '24h',
+    timerTimezone: 'local',
+    durationFormat: 'adaptive',
+    timerHoverMode: 'swap',
     bulkActions: Object.freeze({
         skipAllPreviews: false
     }),
@@ -70,6 +90,11 @@ export const normalizeSettings = (candidate = {}) => {
         numberDisplay: VALID_NUMBER_DISPLAYS.has(value.numberDisplay) ? value.numberDisplay : defaults.numberDisplay,
         interfaceDensity: VALID_INTERFACE_DENSITIES.has(value.interfaceDensity) ? value.interfaceDensity : defaults.interfaceDensity,
         collapseSearchOnBlur: normalizeBoolean(value.collapseSearchOnBlur, defaults.collapseSearchOnBlur),
+        timerDateFormat: VALID_TIMER_DATE_FORMATS.has(value.timerDateFormat) ? value.timerDateFormat : defaults.timerDateFormat,
+        timerTimeFormat: VALID_TIMER_TIME_FORMATS.has(value.timerTimeFormat) ? value.timerTimeFormat : defaults.timerTimeFormat,
+        timerTimezone: VALID_TIMER_TIMEZONES.has(value.timerTimezone) ? value.timerTimezone : defaults.timerTimezone,
+        durationFormat: VALID_DURATION_FORMATS.has(value.durationFormat) ? value.durationFormat : defaults.durationFormat,
+        timerHoverMode: VALID_TIMER_HOVER_MODES.has(value.timerHoverMode) ? value.timerHoverMode : defaults.timerHoverMode,
         bulkActions: {
             skipAllPreviews: normalizeBoolean(bulkActions.skipAllPreviews, defaults.bulkActions.skipAllPreviews)
         },
@@ -148,6 +173,11 @@ export const resetDisplaySettings = () => {
         numberDisplay: defaults.numberDisplay,
         interfaceDensity: defaults.interfaceDensity,
         collapseSearchOnBlur: defaults.collapseSearchOnBlur,
+        timerDateFormat: defaults.timerDateFormat,
+        timerTimeFormat: defaults.timerTimeFormat,
+        timerTimezone: defaults.timerTimezone,
+        durationFormat: defaults.durationFormat,
+        timerHoverMode: defaults.timerHoverMode,
         inventory: { ...defaults.inventory }
     });
 };

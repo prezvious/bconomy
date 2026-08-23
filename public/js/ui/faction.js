@@ -1,6 +1,6 @@
 // Faction System UI Renderer & Event Handlers
 import { getState, setState, saveState } from '../state.js';
-import { iconHtml, formatNumberCommas, formatDisplayNumber, formatMoney, formatDurationMs } from '../utils.js';
+import { iconHtml, formatNumberCommas, formatDisplayNumber, formatMoney, formatDurationMs, formatTimestampDate } from '../utils.js';
 import { doFactionCreate, doFactionDeposit, doFactionActivateBoost, doFactionStopBoost, doFactionCustomize } from '../api.js';
 import { renderHeader } from './header.js';
 import { showToast } from './toast.js';
@@ -343,7 +343,7 @@ export const renderFaction = ({ resetTab = false } = {}) => {
                             <span class="active-pulse-dot"></span>
                             <span class="active-level-tag">Lv.${boost.level} (${getFPMultiplier(boost.level).toFixed(2)}×)</span>
                             <span class="active-mode-tag">${boost.mode === 'continuous' ? 'Continuous Drain' : 'Fixed Duration'}</span>
-                            <span class="active-timer-val" id="faction-timer-${act.id}">${formatDurationMs(remainMs)}</span>
+                            <span class="active-timer-val timer-hoverable" id="faction-timer-${act.id}" data-expire="${boost.mode === 'continuous' ? now + remainMs : (boost.activeUntil || (now + remainMs))}" title="Expires: ${formatTimestampDate(boost.mode === 'continuous' ? now + remainMs : (boost.activeUntil || (now + remainMs)))}">${formatDurationMs(remainMs)}</span>
                         </div>
                         <div class="active-rate-sub">
                             Rate: -${formatDisplayNumber(boost.costPerHour)} FP/hr

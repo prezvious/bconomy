@@ -2,7 +2,7 @@
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { clearIgnoredConfirmations } from './modal.js';
-import { iconHtml, formatDisplayNumber, formatMoney } from '../utils.js';
+import { iconHtml, formatDisplayNumber, formatMoney, formatDurationMs, formatTimestampDate } from '../utils.js';
 import {
     SETTINGS_STORAGE_KEY,
     getDefaultSettings,
@@ -122,7 +122,7 @@ export const renderSettings = () => {
                 <div class="card-header-styled">
                     <div class="flex items-center gap-2">
                         <iconify-icon icon="lucide:monitor-cog" class="text-accent" aria-hidden="true"></iconify-icon>
-                        <h3 class="card-title-sm">Display</h3>
+                        <h3 class="card-title-sm">Display & Timers</h3>
                     </div>
                     <span class="charter-badge">Local Preference</span>
                 </div>
@@ -146,6 +146,65 @@ export const renderSettings = () => {
                         <span class="field-help">Changes shared controls, cards, navigation, and dialogs immediately.</span>
                     </div>
 
+                    <div class="form-group">
+                        <label for="setting-duration-format" class="form-label">Duration Breakdown Style</label>
+                        <select id="setting-duration-format" name="duration-format" class="form-select" autocomplete="off">
+                            <option value="adaptive" ${settings.durationFormat === 'adaptive' ? 'selected' : ''}>Smart Adaptive (Top 3 units · 371y 7mo 1w)</option>
+                            <option value="adaptive-2" ${settings.durationFormat === 'adaptive-2' ? 'selected' : ''}>Compact Adaptive (Top 2 units · 371y 7mo)</option>
+                            <option value="full" ${settings.durationFormat === 'full' ? 'selected' : ''}>Full Breakdown (All units · 371y 7mo 1w 2d 1h 25m 55s)</option>
+                            <option value="days-hours" ${settings.durationFormat === 'days-hours' ? 'selected' : ''}>Days & Hours (e.g. 135500d 9h 24m 55s)</option>
+                            <option value="hours" ${settings.durationFormat === 'hours' ? 'selected' : ''}>Raw Hours Only (e.g. 3255217h 24m 55s)</option>
+                        </select>
+                        <span class="field-help">Automatically converts long durations into years, months, weeks, days, and hours.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="setting-timer-date-format" class="form-label">Timer Expiration Date Format</label>
+                        <select id="setting-timer-date-format" name="timer-date-format" class="form-select" autocomplete="off">
+                            <option value="dd/mm/yyyy" ${settings.timerDateFormat === 'dd/mm/yyyy' ? 'selected' : ''}>DD/MM/YYYY (e.g. 23/08/2026)</option>
+                            <option value="dd-mm-yyyy" ${settings.timerDateFormat === 'dd-mm-yyyy' ? 'selected' : ''}>DD-MM-YYYY (e.g. 23-08-2026)</option>
+                            <option value="dd.mm.yyyy" ${settings.timerDateFormat === 'dd.mm.yyyy' ? 'selected' : ''}>DD.MM.YYYY (e.g. 23.08.2026)</option>
+                            <option value="yyyy-mm-dd" ${settings.timerDateFormat === 'yyyy-mm-dd' ? 'selected' : ''}>YYYY-MM-DD (ISO: 2026-08-23)</option>
+                            <option value="yyyy/mm/dd" ${settings.timerDateFormat === 'yyyy/mm/dd' ? 'selected' : ''}>YYYY/MM/DD (e.g. 2026/08/23)</option>
+                            <option value="mm/dd/yyyy" ${settings.timerDateFormat === 'mm/dd/yyyy' ? 'selected' : ''}>MM/DD/YYYY (US: 08/23/2026)</option>
+                            <option value="d-mmm-yyyy" ${settings.timerDateFormat === 'd-mmm-yyyy' ? 'selected' : ''}>D MMM YYYY (e.g. 23 Aug 2026)</option>
+                            <option value="mmm-d-yyyy" ${settings.timerDateFormat === 'mmm-d-yyyy' ? 'selected' : ''}>MMM D, YYYY (e.g. Aug 23, 2026)</option>
+                            <option value="full-date" ${settings.timerDateFormat === 'full-date' ? 'selected' : ''}>Day, D Month YYYY (e.g. Sun, 23 August 2026)</option>
+                        </select>
+                        <span class="field-help">Date format shown when hovering over active booster and faction timers.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="setting-timer-time-format" class="form-label">Timer Expiration Time Display</label>
+                        <select id="setting-timer-time-format" name="timer-time-format" class="form-select" autocomplete="off">
+                            <option value="24h" ${settings.timerTimeFormat === '24h' ? 'selected' : ''}>24-Hour with Seconds (15:30:45)</option>
+                            <option value="24h-short" ${settings.timerTimeFormat === '24h-short' ? 'selected' : ''}>24-Hour Short (15:30)</option>
+                            <option value="12h" ${settings.timerTimeFormat === '12h' ? 'selected' : ''}>12-Hour with Seconds (03:30:45 PM)</option>
+                            <option value="12h-short" ${settings.timerTimeFormat === '12h-short' ? 'selected' : ''}>12-Hour Short (03:30 PM)</option>
+                            <option value="none" ${settings.timerTimeFormat === 'none' ? 'selected' : ''}>Date Only (No Time)</option>
+                        </select>
+                        <span class="field-help">Include timestamp time alongside the date upon hover.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="setting-timer-timezone" class="form-label">Timer Timezone</label>
+                        <select id="setting-timer-timezone" name="timer-timezone" class="form-select" autocomplete="off">
+                            <option value="local" ${settings.timerTimezone === 'local' ? 'selected' : ''}>Local Timezone (Device)</option>
+                            <option value="utc" ${settings.timerTimezone === 'utc' ? 'selected' : ''}>UTC (Coordinated Universal Time)</option>
+                        </select>
+                        <span class="field-help">Display timestamps in your local device timezone or standard UTC.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="setting-timer-hover-mode" class="form-label">Timer Hover Action</label>
+                        <select id="setting-timer-hover-mode" name="timer-hover-mode" class="form-select" autocomplete="off">
+                            <option value="swap" ${settings.timerHoverMode === 'swap' ? 'selected' : ''}>Swap Text in-place on Hover</option>
+                            <option value="both" ${settings.timerHoverMode === 'both' ? 'selected' : ''}>Swap Text & Tooltip on Hover</option>
+                            <option value="tooltip" ${settings.timerHoverMode === 'tooltip' ? 'selected' : ''}>Tooltip only</option>
+                        </select>
+                        <span class="field-help">Hover over any active timer to inspect its calculated expiration date.</span>
+                    </div>
+
                     <div class="settings-toggle-row">
                         <div class="settings-toggle-label">
                             <div>
@@ -160,9 +219,17 @@ export const renderSettings = () => {
                     </div>
 
                     <div class="settings-display-preview" aria-live="polite">
-                        <span class="settings-display-preview-label">Preview</span>
-                        <strong title="$1,250,000">${formatMoney(1250000)}</strong>
-                        <span>${formatDisplayNumber(987654321)} units</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span class="settings-display-preview-label">Live Display Preview</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:8px;">
+                            <strong title="$1,250,000">${formatMoney(1250000)}</strong>
+                            <span>${formatDisplayNumber(987654321)} units</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; padding-top:6px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+                            <span class="text-xs text-subtle">Sample Timer (Hover me!):</span>
+                            <span class="boost-timer preview-timer-pill timer-hoverable" data-expire="${Date.now() + 3255217 * 3600 * 1000}" title="Expires: ${formatTimestampDate(Date.now() + 3255217 * 3600 * 1000, settings)}">${formatDurationMs(3255217 * 3600 * 1000, settings)}</span>
+                        </div>
                     </div>
 
                     <div class="settings-display-reset">
@@ -377,6 +444,51 @@ export const setupSettingsEvents = (container) => {
         settings.collapseSearchOnBlur = collapseSearchOnBlur.checked;
         saveStoredSettings(settings);
         showToast(`Active search collapse ${collapseSearchOnBlur.checked ? 'enabled' : 'disabled'}`, 'info');
+    });
+
+    const durationFormat = document.getElementById('setting-duration-format');
+    durationFormat?.addEventListener('change', () => {
+        const settings = getStoredSettings();
+        settings.durationFormat = durationFormat.value;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Duration breakdown set to ${durationFormat.value}`, 'info');
+    });
+
+    const timerDateFormat = document.getElementById('setting-timer-date-format');
+    timerDateFormat?.addEventListener('change', () => {
+        const settings = getStoredSettings();
+        settings.timerDateFormat = timerDateFormat.value;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Timer date format set to ${timerDateFormat.value.toUpperCase()}`, 'info');
+    });
+
+    const timerTimeFormat = document.getElementById('setting-timer-time-format');
+    timerTimeFormat?.addEventListener('change', () => {
+        const settings = getStoredSettings();
+        settings.timerTimeFormat = timerTimeFormat.value;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Timer time display set to ${timerTimeFormat.value}`, 'info');
+    });
+
+    const timerTimezone = document.getElementById('setting-timer-timezone');
+    timerTimezone?.addEventListener('change', () => {
+        const settings = getStoredSettings();
+        settings.timerTimezone = timerTimezone.value;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Timer timezone set to ${timerTimezone.value.toUpperCase()}`, 'info');
+    });
+
+    const timerHoverMode = document.getElementById('setting-timer-hover-mode');
+    timerHoverMode?.addEventListener('change', () => {
+        const settings = getStoredSettings();
+        settings.timerHoverMode = timerHoverMode.value;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Timer hover action set to ${timerHoverMode.value}`, 'info');
     });
 
     document.getElementById('btn-reset-display-settings')?.addEventListener('click', () => {

@@ -33,6 +33,11 @@ const defaults = getDefaultSettings();
 assert.strictEqual(defaults.numberDisplay, 'full');
 assert.strictEqual(defaults.interfaceDensity, 'balanced');
 assert.strictEqual(defaults.collapseSearchOnBlur, false);
+assert.strictEqual(defaults.timerDateFormat, 'dd/mm/yyyy');
+assert.strictEqual(defaults.timerTimeFormat, '24h');
+assert.strictEqual(defaults.timerTimezone, 'local');
+assert.strictEqual(defaults.durationFormat, 'adaptive');
+assert.strictEqual(defaults.timerHoverMode, 'swap');
 assert.deepStrictEqual(defaults.inventory, {
     view: 'grid',
     search: '',
@@ -41,7 +46,7 @@ assert.deepStrictEqual(defaults.inventory, {
     showUnavailableBoosterAction: true
 });
 assert.deepStrictEqual(defaults.bulkActions, { skipAllPreviews: false });
-console.log('✓ Defaults use full values and balanced density');
+console.log('✓ Defaults use full values, balanced density, and smart adaptive timer formatting');
 
 storage.set(SETTINGS_STORAGE_KEY, '{broken json');
 invalidateSettingsCache();

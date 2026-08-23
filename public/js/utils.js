@@ -259,15 +259,159 @@ export const formatMoney = (amount, { numberDisplay } = {}) => {
     }).format(number);
 };
 
-export const formatDurationMs = (ms) => {
-    if (!ms || ms <= 0) return 'Expired';
+const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export const formatDurationMs = (ms, options = {}) => {
+    const zeroText = options.zeroText !== undefined ? options.zeroText : 'Expired';
+    if (ms === undefined || ms === null || isNaN(ms) || ms <= 0) return zeroText;
     const totalSecs = Math.ceil(ms / 1000);
-    const hrs = Math.floor(totalSecs / 3600);
-    const mins = Math.floor((totalSecs % 3600) / 60);
-    const secs = totalSecs % 60;
-    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
-    if (mins > 0) return `${mins}m ${secs}s`;
-    return `${secs}s`;
+    const settings = typeof getStoredSettings === 'function' ? getStoredSettings() : {};
+    const mode = options.durationFormat || (options.settings && options.settings.durationFormat) || settings.durationFormat || 'adaptive';
+
+    if (mode === 'hours') {
+        const hrs = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+        if (mins > 0) return `${mins}m ${secs}s`;
+        return `${secs}s`;
+    }
+
+    if (mode === 'days-hours') {
+        const SECS_PER_DAY = 86400;
+        const days = Math.floor(totalSecs / SECS_PER_DAY);
+        const remSecs = totalSecs % SECS_PER_DAY;
+        const hrs = Math.floor(remSecs / 3600);
+        const mins = Math.floor((remSecs % 3600) / 60);
+        const secs = remSecs % 60;
+        const parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hrs > 0) parts.push(`${hrs}h`);
+        if (mins > 0) parts.push(`${mins}m`);
+        if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+        return parts.join(' ');
+    }
+
+    let rem = totalSecs;
+    const SECS_PER_YEAR = 365 * 86400;
+    const SECS_PER_MONTH = 30 * 86400;
+    const SECS_PER_WEEK = 7 * 86400;
+    const SECS_PER_DAY = 86400;
+    const SECS_PER_HOUR = 3600;
+    const SECS_PER_MIN = 60;
+
+    const years = Math.floor(rem / SECS_PER_YEAR);
+    rem %= SECS_PER_YEAR;
+
+    const months = Math.floor(rem / SECS_PER_MONTH);
+    rem %= SECS_PER_MONTH;
+
+    const weeks = Math.floor(rem / SECS_PER_WEEK);
+    rem %= SECS_PER_WEEK;
+
+    const days = Math.floor(rem / SECS_PER_DAY);
+    rem %= SECS_PER_DAY;
+
+    const hours = Math.floor(rem / SECS_PER_HOUR);
+    rem %= SECS_PER_HOUR;
+
+    const minutes = Math.floor(rem / SECS_PER_MIN);
+    const seconds = rem % SECS_PER_MIN;
+
+    const parts = [];
+    if (years > 0) parts.push(`${years}y`);
+    if (months > 0) parts.push(`${months}mo`);
+    if (weeks > 0) parts.push(`${weeks}w`);
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+    if (mode === 'full') {
+        return parts.join(' ');
+    }
+
+    if (mode === 'adaptive-2') {
+        return parts.slice(0, 2).join(' ');
+    }
+
+    // Adaptive mode: show top 2-3 most significant units (default 3)
+    const maxUnits = options.maxUnits || 3;
+    return parts.slice(0, maxUnits).join(' ');
+};
+
+export const formatTimestampDate = (timestamp, options = {}) => {
+    if (!timestamp || isNaN(timestamp) || timestamp <= 0) return 'Inactive';
+    const settings = typeof getStoredSettings === 'function' ? getStoredSettings() : {};
+    const dateFormat = options.timerDateFormat || options.dateFormat || settings.timerDateFormat || 'dd/mm/yyyy';
+    const timeFormat = options.timerTimeFormat || options.timeFormat || settings.timerTimeFormat || '24h';
+    const timezone = options.timerTimezone || options.timezone || settings.timerTimezone || 'local';
+
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return 'Invalid Date';
+
+    const isUTC = timezone === 'utc';
+    const rawYear = isUTC ? d.getUTCFullYear() : d.getFullYear();
+    const rawMonth = isUTC ? d.getUTCMonth() : d.getMonth();
+    const rawDate = isUTC ? d.getUTCDate() : d.getDate();
+    const rawDay = isUTC ? d.getUTCDay() : d.getDay();
+    let rawHours = isUTC ? d.getUTCHours() : d.getHours();
+    const rawMinutes = isUTC ? d.getUTCMinutes() : d.getMinutes();
+    const rawSeconds = isUTC ? d.getUTCSeconds() : d.getSeconds();
+
+    const day = String(rawDate).padStart(2, '0');
+    const month = String(rawMonth + 1).padStart(2, '0');
+    const year = rawYear;
+    const monthShort = MONTH_NAMES_SHORT[rawMonth] || '';
+    const monthFull = MONTH_NAMES_FULL[rawMonth] || '';
+    const dayShort = DAY_NAMES_SHORT[rawDay] || '';
+
+    let datePart = `${day}/${month}/${year}`;
+    if (dateFormat === 'dd-mm-yyyy') {
+        datePart = `${day}-${month}-${year}`;
+    } else if (dateFormat === 'dd.mm.yyyy') {
+        datePart = `${day}.${month}.${year}`;
+    } else if (dateFormat === 'yyyy-mm-dd') {
+        datePart = `${year}-${month}-${day}`;
+    } else if (dateFormat === 'yyyy/mm/dd') {
+        datePart = `${year}/${month}/${day}`;
+    } else if (dateFormat === 'mm/dd/yyyy') {
+        datePart = `${month}/${day}/${year}`;
+    } else if (dateFormat === 'd-mmm-yyyy') {
+        datePart = `${rawDate} ${monthShort} ${year}`;
+    } else if (dateFormat === 'mmm-d-yyyy') {
+        datePart = `${monthShort} ${rawDate}, ${year}`;
+    } else if (dateFormat === 'full-date') {
+        datePart = `${dayShort}, ${rawDate} ${monthFull} ${year}`;
+    }
+
+    if (timeFormat === 'none') {
+        return isUTC ? `${datePart} (UTC)` : datePart;
+    }
+
+    const minutes = String(rawMinutes).padStart(2, '0');
+    const seconds = String(rawSeconds).padStart(2, '0');
+
+    let timePart = '';
+    if (timeFormat === '12h') {
+        const ampm = rawHours >= 12 ? 'PM' : 'AM';
+        const h12 = rawHours % 12 || 12;
+        timePart = `${String(h12).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+    } else if (timeFormat === '12h-short') {
+        const ampm = rawHours >= 12 ? 'PM' : 'AM';
+        const h12 = rawHours % 12 || 12;
+        timePart = `${String(h12).padStart(2, '0')}:${minutes} ${ampm}`;
+    } else if (timeFormat === '24h-short') {
+        timePart = `${String(rawHours).padStart(2, '0')}:${minutes}`;
+    } else {
+        // default 24h
+        timePart = `${String(rawHours).padStart(2, '0')}:${minutes}:${seconds}`;
+    }
+
+    const result = `${datePart} ${timePart}`;
+    return isUTC ? `${result} UTC` : result;
 };
 
 export const calculateActiveBoosterMultiplier = (activeUntilForAction, now = Date.now()) => {
@@ -286,10 +430,6 @@ export const calculateActiveBoosterMultiplier = (activeUntilForAction, now = Dat
     };
 };
 
-/**
- * Re-inserts spaces into PascalCase item names for human-readable UI display.
- * e.g. 'DiscardedButt' -> 'Discarded Butt'
- */
 export const displayItemName = (name) => {
     if (!name) return '';
     return name

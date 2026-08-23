@@ -1,14 +1,57 @@
 // Cooldown & Real-Time UI Loop
 import { getState } from '../state.js';
-import { ACTIONS, formatDurationMs, formatDisplayNumber, formatMoney } from '../utils.js';
+import { ACTIONS, formatDurationMs, formatTimestampDate, formatDisplayNumber, formatMoney } from '../utils.js';
+import { getStoredSettings } from '../preferences.js';
 import { doFarmState } from '../api.js';
 import { renderFarm } from './farm.js';
 import { renderActiveBoosts } from './actions.js';
 
 let isSyncingFarm = false;
 let lastFarmSyncTime = 0;
+let hoverListenersAttached = false;
+
+export const initTimerHoverListeners = () => {
+    if (hoverListenersAttached || typeof document === 'undefined') return;
+    hoverListenersAttached = true;
+
+    document.addEventListener('mouseover', (e) => {
+        const timerEl = e.target.closest('.boost-timer, .active-timer-val, .timer-hoverable');
+        if (!timerEl) return;
+        const expireAt = parseInt(timerEl.dataset.expire, 10);
+        if (!expireAt || isNaN(expireAt) || expireAt <= 0) return;
+
+        timerEl.dataset.hovered = 'true';
+        timerEl.classList.add('timer-hover-active');
+        const settings = getStoredSettings();
+        const hoverMode = settings.timerHoverMode || 'swap';
+
+        if (hoverMode === 'swap' || hoverMode === 'both') {
+            timerEl.textContent = formatTimestampDate(expireAt, settings);
+        }
+        if (hoverMode === 'tooltip' || hoverMode === 'both') {
+            timerEl.setAttribute('title', `Expires: ${formatTimestampDate(expireAt, settings)}`);
+        }
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const timerEl = e.target.closest('.boost-timer, .active-timer-val, .timer-hoverable');
+        if (!timerEl) return;
+        const related = e.relatedTarget;
+        if (timerEl.contains(related)) return;
+
+        delete timerEl.dataset.hovered;
+        timerEl.classList.remove('timer-hover-active');
+        const expireAt = parseInt(timerEl.dataset.expire, 10);
+        if (!expireAt || isNaN(expireAt) || expireAt <= 0) return;
+
+        const settings = getStoredSettings();
+        const remain = Math.max(0, expireAt - Date.now());
+        timerEl.textContent = formatDurationMs(remain, settings);
+    });
+};
 
 export const cooldownLoop = () => {
+    initTimerHoverListeners();
     const playerState = getState();
     if (!playerState) {
         requestAnimationFrame(cooldownLoop);
@@ -70,7 +113,20 @@ export const cooldownLoop = () => {
 
         const timerEl = row.querySelector('.boost-timer');
         if (timerEl) {
-            timerEl.textContent = formatDurationMs(remain);
+            timerEl.dataset.expire = expireAt;
+            const isHovered = timerEl.dataset.hovered === 'true';
+            const settings = getStoredSettings();
+            const hoverMode = settings.timerHoverMode || 'swap';
+
+            if (hoverMode === 'tooltip' || hoverMode === 'both' || !timerEl.getAttribute('title')) {
+                timerEl.setAttribute('title', `Expires: ${formatTimestampDate(expireAt, settings)}`);
+            }
+
+            if (isHovered && (hoverMode === 'swap' || hoverMode === 'both')) {
+                timerEl.textContent = formatTimestampDate(expireAt, settings);
+            } else {
+                timerEl.textContent = formatDurationMs(remain, settings);
+            }
         }
 
         const barFillEl = row.querySelector('.boost-duration-bar-fill');
@@ -150,14 +206,31 @@ export const cooldownLoop = () => {
             if (!timerEl || !boost || boost.level === 0) return;
 
             let remainMs = 0;
+            let expireAt = 0;
             if (boost.mode === 'continuous') {
                 const totalRemainHours = boost.costPerHour > 0 ? (faction.points / boost.costPerHour) : 0;
                 remainMs = Math.floor(totalRemainHours * 3600 * 1000);
+                expireAt = now + remainMs;
             } else {
                 remainMs = Math.max(0, boost.activeUntil - now);
+                expireAt = boost.activeUntil;
             }
 
-            timerEl.textContent = formatDurationMs(remainMs);
+            timerEl.dataset.expire = expireAt;
+            timerEl.classList.add('timer-hoverable');
+            const isHovered = timerEl.dataset.hovered === 'true';
+            const settings = getStoredSettings();
+            const hoverMode = settings.timerHoverMode || 'swap';
+
+            if (hoverMode === 'tooltip' || hoverMode === 'both' || !timerEl.getAttribute('title')) {
+                timerEl.setAttribute('title', `Expires: ${formatTimestampDate(expireAt, settings)}`);
+            }
+
+            if (isHovered && (hoverMode === 'swap' || hoverMode === 'both')) {
+                timerEl.textContent = formatTimestampDate(expireAt, settings);
+            } else {
+                timerEl.textContent = formatDurationMs(remainMs, settings);
+            }
         });
     }
 

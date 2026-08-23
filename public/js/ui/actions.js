@@ -1,5 +1,5 @@
 import { getState } from '../state.js';
-import { ACTIONS, BOOSTER_TIERS, BOOSTER_NAME_MAP, iconHtml, formatDurationMs } from '../utils.js';
+import { ACTIONS, BOOSTER_TIERS, BOOSTER_NAME_MAP, iconHtml, formatDurationMs, formatTimestampDate } from '../utils.js';
 import { doAction } from '../api.js';
 import { renderHeader } from './header.js';
 import { renderInventory } from './inventory.js';
@@ -205,13 +205,14 @@ export const renderActiveBoosts = () => {
                     <div class="boosts-group-body ${isExpanded ? 'open' : ''}">
                         ${items.map(b => {
                             const pct = Math.min(100, Math.max(0, (b.remain / b.durationMs) * 100));
+                            const expireDate = formatTimestampDate(b.expireTime);
                             return `
                                 <div class="boost-row" data-expire="${b.expireTime}" data-duration="${b.durationMs}">
                                     <div class="boost-row-main">
                                         <span class="boost-mult">2×</span>
                                         <span class="boost-name">${b.boosterName}</span>
                                         <span class="boost-tier">${b.tier}</span>
-                                        <span class="boost-timer">${formatDurationMs(b.remain)}</span>
+                                        <span class="boost-timer timer-hoverable" data-expire="${b.expireTime}" title="Expires: ${expireDate}">${formatDurationMs(b.remain)}</span>
                                     </div>
                                     <div class="boost-duration-bar-bg">
                                         <div class="boost-duration-bar-fill" style="width: ${pct}%"></div>
@@ -235,13 +236,14 @@ export const renderActiveBoosts = () => {
                     <div class="list-group-items">
                         ${items.map(b => {
                             const pct = Math.min(100, Math.max(0, (b.remain / b.durationMs) * 100));
+                            const expireDate = formatTimestampDate(b.expireTime);
                             return `
                                 <div class="boost-row" data-expire="${b.expireTime}" data-duration="${b.durationMs}">
                                     <div class="boost-row-main">
                                         <span class="boost-mult">2×</span>
                                         <span class="boost-name">${b.boosterName}</span>
                                         <span class="boost-tier">${b.tier}</span>
-                                        <span class="boost-timer">${formatDurationMs(b.remain)}</span>
+                                        <span class="boost-timer timer-hoverable" data-expire="${b.expireTime}" title="Expires: ${expireDate}">${formatDurationMs(b.remain)}</span>
                                     </div>
                                     <div class="boost-duration-bar-bg">
                                         <div class="boost-duration-bar-fill" style="width: ${pct}%"></div>

@@ -3,7 +3,9 @@ import {
     displayItemName,
     formatDisplayNumber,
     formatNumberCommas,
-    getBoosterConfig
+    getBoosterConfig,
+    formatDurationMs,
+    formatTimestampDate
 } from '../utils.js';
 import { doPreviewBulkBoosters, doExecuteBulkBoosters } from '../api.js';
 import { showToast } from './toast.js';
@@ -32,20 +34,10 @@ const escapeHtml = value => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const formatDuration = ms => {
-    const totalMinutes = Math.max(0, Math.round(Number(ms || 0) / 60_000));
-    const days = Math.floor(totalMinutes / 1440);
-    const hours = Math.floor((totalMinutes % 1440) / 60);
-    const minutes = totalMinutes % 60;
-    const parts = [];
-    if (days) parts.push(`${days}d`);
-    if (hours) parts.push(`${hours}h`);
-    if (minutes || parts.length === 0) parts.push(`${minutes}m`);
-    return parts.join(' ');
-};
+const formatDuration = ms => formatDurationMs(ms, { zeroText: '0s' });
 
 const formatExpiry = timestamp => timestamp > 0
-    ? new Date(timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    ? formatTimestampDate(timestamp)
     : 'Inactive';
 
 export const getOwnedBoosterEntries = (state = getState()) => {
@@ -151,7 +143,9 @@ const renderConfig = entries => {
                 <tbody>
                     ${entries.map(entry => {
                         const expiry = Number(state?.boosters?.activeUntil?.[entry.action]?.[entry.tier] || 0);
-                        const activeText = expiry > now ? formatDuration(expiry - now) : 'Inactive';
+                        const activeText = expiry > now
+                            ? `<span class="timer-hoverable" data-expire="${expiry}" title="Expires: ${formatTimestampDate(expiry)}">${formatDuration(expiry - now)}</span>`
+                            : 'Inactive';
                         return `
                             <tr class="bulk-item-row">
                                 <td><b>${escapeHtml(displayItemName(entry.itemName))}</b></td>

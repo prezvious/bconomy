@@ -71,7 +71,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <span class="guild-seal-tag">Bconomy v2.0</span>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v2.0" title="Click to view release notes">Bconomy v2.0</button>
             </div>
         </nav>
 
@@ -1157,6 +1157,52 @@
                     <iconify-icon icon="lucide:log-out" aria-hidden="true"></iconify-icon>
                     <span>Sign Out</span>
                 </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Release Notes & Changelog Modal -->
+    <dialog id="release-notes-modal" class="modal hidden release-notes-dialog" data-app-dialog aria-labelledby="release-notes-modal-title">
+        <div class="modal-content card release-notes-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <div class="account-header-badge release-notes-badge">
+                        <iconify-icon icon="lucide:sparkles" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    </div>
+                    <div>
+                        <div class="release-header-top">
+                            <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
+                            <span class="badge release-latest-tag">v2.0 Latest</span>
+                        </div>
+                        <p class="modal-header-subtitle">Official release archives, changelogs, and recent updates</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn release-notes-close" type="button" aria-label="Close release notes modal" data-dialog-close>
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="release-notes-toolbar">
+                <div class="release-search-wrapper">
+                    <iconify-icon icon="lucide:search" class="release-search-icon" aria-hidden="true"></iconify-icon>
+                    <input type="text" id="release-notes-search" class="form-input release-search-input" placeholder="Search updates, features, bugfixes..." autocomplete="off">
+                </div>
+                <div class="release-filter-group" id="release-year-filters" role="group" aria-label="Filter releases by year">
+                    <button type="button" class="release-filter-chip active" data-year="all">All Releases</button>
+                    <button type="button" class="release-filter-chip" data-year="2026">2026</button>
+                    <button type="button" class="release-filter-chip" data-year="2025">2025</button>
+                    <button type="button" class="release-filter-chip" data-year="2024">2024</button>
+                    <button type="button" class="release-filter-chip" data-year="archive">Archive</button>
+                </div>
+            </div>
+
+            <div class="modal-body release-notes-body" id="release-notes-list" role="feed" aria-busy="false">
+                <!-- Dynamically rendered release notes cards -->
+            </div>
+
+            <div class="modal-actions release-notes-actions">
+                <div class="release-meta-count" id="release-notes-count">Showing updates</div>
+                <button class="action-btn secondary-btn" type="button" data-dialog-close>Close</button>
             </div>
         </div>
     </dialog>
