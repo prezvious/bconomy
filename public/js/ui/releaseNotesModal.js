@@ -1,44 +1,40 @@
-// Release Notes & Version Updates Modal Manager
-import { openDialog, closeDialog } from './modal.js';
+// Release Notes & Version Updates Modal Manager (Personal Game)
+import { openDialog } from './modal.js';
 import { iconHtml } from '../utils.js';
 
 export const RELEASES = [
     {
-        id: 'v2.0.0',
+        id: 'v2.0',
         version: 'v2.0',
         isLatest: true,
         date: '2026-08-23',
-        title: 'v2.0 — Timer Precision, Duration Conversion & Display Personalization',
-        link: 'https://blog.bconomy.net/category/updates/',
+        title: 'v2.0 — Timer Precision, Smart Duration Conversion & Display Settings',
         sections: [
             {
                 type: 'New Features',
                 items: [
                     {
                         title: 'Smart Adaptive Multi-Unit Duration Conversion',
-                        author: 'Bconomy Team',
                         bullets: [
-                            'Long booster and cooldown timers automatically convert into readable breakdowns across years (y), months (mo), weeks (w), days (d), hours (h), minutes (m), and seconds (s).',
-                            'Supports 5 configurable breakdown styles: Smart Adaptive (top 3 units), Compact Adaptive (top 2 units), Full Breakdown, Days & Hours, and Raw Hours.',
-                            'Massive durations (e.g. 3,255,217 hours) now cleanly display as "371y 7mo 1w" instead of overwhelming digit strings.'
+                            'Long booster and action timers automatically convert into readable breakdowns across years (y), months (mo), weeks (w), days (d), hours (h), minutes (m), and seconds (s).',
+                            'Supports 5 configurable breakdown styles: Smart Adaptive (top 3 units), Compact Adaptive (top 2 units), Full Breakdown (all units), Days & Hours, and Raw Hours.',
+                            'Massive timers (e.g. 3,255,217 hours) now cleanly display as "371y 7mo 1w" instead of raw overflowing numbers.'
                         ]
                     },
                     {
                         title: 'In-Place Timer Hover Expiration Conversion',
-                        author: 'Bconomy Team',
                         bullets: [
-                            'Hovering over active booster and faction timers swaps the countdown in-place with its calculated calendar expiration timestamp.',
-                            'Configurable date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, YYYY-MM-DD (ISO), YYYY/MM/DD, MM/DD/YYYY, D MMM YYYY, MMM D, YYYY, and Day, D Month YYYY.',
-                            'Configurable time formats: 24-Hour (HH:mm:ss), 24-Hour Short (HH:mm), 12-Hour (hh:mm:ss AM/PM), 12-Hour Short (hh:mm AM/PM), and Date Only.',
-                            'Local device timezone and UTC display options.'
+                            'Hovering over active booster and faction timers dynamically swaps the countdown in-place with its calculated calendar expiration timestamp.',
+                            'Supports 9 date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, YYYY-MM-DD (ISO), YYYY/MM/DD, MM/DD/YYYY, D MMM YYYY, MMM D, YYYY, and Day, D Month YYYY.',
+                            'Supports 5 time styles: 24-Hour (HH:mm:ss), 24-Hour Short (HH:mm), 12-Hour (hh:mm:ss AM/PM), 12-Hour Short (hh:mm AM/PM), and Date Only.',
+                            'Supports Device Local Timezone and UTC.'
                         ]
                     },
                     {
-                        title: 'Release Notes & Changelog Modal',
-                        author: 'Bconomy Team',
+                        title: 'Interactive Release Notes Modal',
                         bullets: [
-                            'Directly accessible by clicking the Bconomy v2.0 button in the sidebar footer.',
-                            'Search across official update archives with instant keyword filtering and yearly breakdown tabs.'
+                            'Accessible anytime directly from the Bconomy v2.0 button in the sidebar footer.',
+                            'Browse all updates with instant search, version filtering, and structured changelogs.'
                         ]
                     }
                 ]
@@ -47,16 +43,14 @@ export const RELEASES = [
                 type: 'Improvements',
                 items: [
                     {
-                        title: 'Display & Timers Settings Card',
-                        author: 'Bconomy Team',
+                        title: 'Display & Timers Preferences Card',
                         bullets: [
-                            'Added dedicated configuration controls with interactive live preview pill inside Settings.',
-                            'Preferences persist reliably in browser storage and support graceful fallback resets.'
+                            'Added dedicated settings with interactive live preview pill inside Settings.',
+                            'Preferences persist reliably in browser storage with graceful fallback resets.'
                         ]
                     },
                     {
                         title: 'Bulk Booster Integration',
-                        author: 'Bconomy Team',
                         bullets: [
                             'Standardized duration deltas and projected expiration dates across the Bulk Booster activation table.'
                         ]
@@ -67,8 +61,7 @@ export const RELEASES = [
                 type: 'Bug Fixes',
                 items: [
                     {
-                        title: 'Timer Zero-Boundary Edge Case',
-                        author: 'Bconomy Team',
+                        title: 'Zero-Quantity Booster Formatting',
                         bullets: [
                             'Prevented phantom "+Expired" text when adding 0-quantity boosters, accurately displaying "+0s".'
                         ]
@@ -78,181 +71,110 @@ export const RELEASES = [
         ]
     },
     {
-        id: '1141',
-        version: 'v2026.08.22',
+        id: 'v1.4',
+        version: 'v1.4',
+        date: '2026-08-23',
+        title: 'v1.4 — Shop Bulk Strategy Optimizations & Rank Ascension Scaling',
+        sections: [
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Shop Engine Calculations',
+                        bullets: [
+                            'Optimized bulk buy equal-distribution strategy across inventory catalog.',
+                            'Clamped large cash balances safely and removed negative signs on projected purchase costs.'
+                        ]
+                    },
+                    {
+                        title: 'Rank & Ascension Scaling',
+                        bullets: [
+                            'Preserved cash balance on ascension leaps and optimized multi-tier calculations for multi-quadrillion balances.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'v1.3',
+        version: 'v1.3',
+        date: '2026-08-23',
+        title: 'v1.3 — Modernized Header Layout & Player Account Profile Dialog',
+        sections: [
+            {
+                type: 'New Features',
+                items: [
+                    {
+                        title: 'Player Account Profile Modal',
+                        bullets: [
+                            'Inspect verified Player ID (#1, #2, ...), Guild Master username, linked email, and account status.',
+                            'Integrated direct sign out and profile management.'
+                        ]
+                    },
+                    {
+                        title: 'Stat Folio Header Redesign',
+                        bullets: [
+                            'Upgraded top bar with clean rectangular cards, tabular numeric typography, and responsive single-bar layout.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'v1.2',
+        version: 'v1.2',
         date: '2026-08-22',
-        title: 'v2026.08.22 — Bulk Item Actions, Pet Feeding & Relay Research Tree Rebuild',
-        link: 'https://blog.bconomy.net/2026/08/22/release-v2026-08-22-09a1716ac/',
+        title: 'v1.2 — Supabase Cloud Auth, Sequential Player IDs & Password Security',
         sections: [
             {
-                type: 'Improvements',
+                type: 'New Features',
                 items: [
                     {
-                        title: 'Bulk item actions',
-                        author: 'TheCarriedOne',
+                        title: 'Cloud Authentication & Sync',
                         bullets: [
-                            'You can use, craft, (un)lock or pin a whole selection of items at once from the Items page instead of doing them one-by-one.',
-                            'The Pin button is now a dropdown showing all your categories so you can put selections into any category.',
-                            'Select multiple items by clicking on their item images.'
+                            'Integrated Supabase authentication with email & password accounts and cloud vault backup.',
+                            'Assigned sequential integer Player IDs (#1, #2, #100) on signup.'
                         ]
                     },
                     {
-                        title: 'Feed selected pets',
-                        author: 'TheCarriedOne',
+                        title: 'Dynamic Name Generator & Password Strength Meter',
                         bullets: [
-                            'In Manage Pets → Feed & Collect you can now check individual pets and feed only those, even if not adventuring.',
-                            'Pet find rate is now displayed on the pet items bar.'
+                            'Comprehensive English dictionary word bank generating single-word and fantasy guild master usernames.',
+                            'Interactive password meter checking length, numbers, symbols, and mixed case with visual segments.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'v1.1',
+        version: 'v1.1',
+        date: '2026-08-21',
+        title: 'v1.1 — Level 500 Tools, Chrono Sockets & Farm Automation',
+        sections: [
+            {
+                type: 'New Features',
+                items: [
+                    {
+                        title: 'Level 500 Tools & Socket Overclocking',
+                        bullets: [
+                            'Procedural gathering recipes scaling up to Level 500 with up to 10 Chrono Module sockets and cooldown reduction.',
+                            'Bulk tool upgrading with atomic transaction safety.'
                         ]
                     },
                     {
-                        title: 'Relay research tree rebuild',
-                        author: 'TheCarriedOne',
+                        title: 'Farm Abundance & Multi-Cycle Yields',
                         bullets: [
-                            'Relay research tree now reads left-to-right in tidy columns, color-coded by title branch.',
-                            'Expand tree to full page with new fullscreen button; includes Graph and List table modes with search.'
-                        ]
-                    }
-                ]
-            },
-            {
-                type: 'Bug Fixes',
-                items: [
-                    {
-                        title: 'Rare Finds leaderboard and totals correction',
-                        author: 'ShadyBliss',
-                        bullets: [
-                            'Finding a Museum collectible no longer increases Rare Finds counter; previous totals corrected.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '1139',
-        version: 'v2026.08.19',
-        date: '2026-08-18',
-        title: 'v2026.08.19 — Relay Network Store & DX Coolant Catalog',
-        link: 'https://blog.bconomy.net/2026/08/19/release-v2026-08-19-11243bfa2/',
-        sections: [
-            {
-                type: 'New Features',
-                items: [
-                    {
-                        title: 'Relay Network Store',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Spend Salvage on relay components and raw recipe materials.',
-                            'DX Coolant is available for 250 Salvage with daily purchase limits scaling with module levels.',
-                            'Five catalog items rotate on sale each day at a discount.'
-                        ]
-                    }
-                ]
-            },
-            {
-                type: 'Improvements',
-                items: [
-                    {
-                        title: 'Bay fuel consumption',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Mint and Recovery bays now burn fuel twice as fast.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '1134',
-        version: 'v2026.08.18',
-        date: '2026-08-18',
-        title: 'v2026.08.18 — Transmutation Queue & Mint Bay Economics Overhaul',
-        link: 'https://blog.bconomy.net/2026/08/18/release-v2026-08-18-e39e945bd/',
-        sections: [
-            {
-                type: 'New Features',
-                items: [
-                    {
-                        title: 'Transmutation Queue',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Refinery transmutations can now be queued up to 10 recipes to run sequentially offline.',
-                            'Chained conversions seamlessly reserve materials and resolve dependencies.'
-                        ]
-                    }
-                ]
-            },
-            {
-                type: 'Improvements',
-                items: [
-                    {
-                        title: 'Mint Bay income and costs',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Mint Bays generate BC proportional to construction costs; deep module costs capped.',
-                            'Tooltips display exact BC/min contributions.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '1132',
-        version: 'v2026.08.17.3',
-        date: '2026-08-17',
-        title: 'v2026.08.17.3 — Prestige Bonus to Work & Miniboss Loot',
-        link: 'https://blog.bconomy.net/2026/08/17/release-v2026-08-17-62560b2a/',
-        sections: [
-            {
-                type: 'New Features',
-                items: [
-                    {
-                        title: 'Prestige bonus to Work',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Every ascension permanently increases Work earnings, stacking on top of rank bonuses (~1.5x at tier 10, ~4x at tier 1000).'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '1122',
-        version: 'v2026.08.16',
-        date: '2026-08-16',
-        title: 'v2026.08.16 — Vault FP Drain Badge, Item Lock & Coinflip Stats',
-        link: 'https://blog.bconomy.net/2026/08/16/release-v2026-08-16-c2487088/',
-        sections: [
-            {
-                type: 'New Features',
-                items: [
-                    {
-                        title: 'Item Lock & Safe Storage',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Lock usable items so they cannot be accidentally consumed or bulk-used.'
+                            'Water Abundance leveling up to Level 10 multiplying yield bonuses and byproducts across accelerated cycles.'
                         ]
                     },
                     {
-                        title: 'Coinflip Streaks & Leaderboards',
-                        author: 'TheCarriedOne',
+                        title: 'Toast Notification Coalescing',
                         bullets: [
-                            'Added win/loss streak trackers, Auspicious Coin flip durability stats, and Whiffed trophy.'
-                        ]
-                    }
-                ]
-            },
-            {
-                type: 'Improvements',
-                items: [
-                    {
-                        title: 'Targeted Rank Up & Cash Preservation',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Rank Up modal supports multi-tier jumps, max affordable calculations, and progress bar synchronization.'
+                            'Grouped repeated alerts into pulse badges, added category filtering, and introduced quiet minimal density mode.'
                         ]
                     }
                 ]
@@ -260,86 +182,21 @@ export const RELEASES = [
         ]
     },
     {
-        id: '1120',
-        version: 'v2026.08.15',
-        date: '2026-08-15',
-        title: 'v2026.08.15 — Supply Depot Rerolls & Pricing Scaling',
-        link: 'https://blog.bconomy.net/2026/08/15/release-v2026-08-15-105dc619/',
+        id: 'v1.0',
+        version: 'v1.0',
+        date: '2026-08-20',
+        title: 'v1.0 — Initial Game Release',
         sections: [
             {
-                type: 'Improvements',
+                type: 'New Features',
                 items: [
                     {
-                        title: 'Supply Depot Rerolls',
-                        author: 'TheCarriedOne',
+                        title: 'Core Economy & Gathering Systems',
                         bullets: [
-                            'First daily reroll always costs base price; subsequent reroll price multiplier reduced to 1.3x.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '2025-summary',
-        version: '2025 Archive',
-        date: '2025-12-31',
-        title: '2025 Releases Summary (32 Updates)',
-        link: 'https://blog.bconomy.net/category/updates/',
-        sections: [
-            {
-                type: 'Changelog',
-                items: [
-                    {
-                        title: 'Annual Milestones & Expansions',
-                        author: 'Bconomy Archive',
-                        bullets: [
-                            'Level 500 Tool Upgrades and Chrono Socket Overclocking system introduced.',
-                            'Supabase Cloud Save integration and sequential Player ID authentication.',
-                            'Toast notification coalescing and quiet minimal density modes.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: '2024-summary',
-        version: '2024 Archive',
-        date: '2024-12-31',
-        title: '2024 Releases Summary (15 Updates)',
-        link: 'https://blog.bconomy.net/category/updates/',
-        sections: [
-            {
-                type: 'Changelog',
-                items: [
-                    {
-                        title: 'Economic Foundations & Guild Factions',
-                        author: 'Bconomy Archive',
-                        bullets: [
-                            'Guild Treasury, Faction Boost activations, and Farm Plot automation expansions.',
-                            'Shop restock intervals and mathematical dynamic pricing models.'
-                        ]
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        id: 'archive-early',
-        version: '2020–2023 Archive',
-        date: '2020-12-19',
-        title: '2020–2023 Historical Changelogs (433 Updates)',
-        link: 'https://blog.bconomy.net/category/updates/',
-        sections: [
-            {
-                type: 'Changelog',
-                items: [
-                    {
-                        title: 'Genesis of Bconomy',
-                        author: 'TheCarriedOne',
-                        bullets: [
-                            'Initial launch of the Discord bot, economy commands, prestige ascension, and original gathering actions.'
+                            'Primary actions: Mine, Explore, Hunt, and Work with stamina/cooldown engines.',
+                            'Farm plot management with crops, watering cycles, and plot level upgrades.',
+                            'Shop buy/sell with restock intervals, markup formulas, and loot booster multipliers.',
+                            'Rank progression, ascension prestige perks, gambling games (Coinflip, Slots), and Guild Factions.'
                         ]
                     }
                 ]
@@ -348,16 +205,8 @@ export const RELEASES = [
     }
 ];
 
-let activeFilter = 'all';
+let activeVersionFilter = 'all';
 let searchQuery = '';
-
-const getYearCategory = (dateStr, versionStr) => {
-    if (!dateStr) return 'archive';
-    if (dateStr.startsWith('2026')) return '2026';
-    if (dateStr.startsWith('2025')) return '2025';
-    if (dateStr.startsWith('2024')) return '2024';
-    return 'archive';
-};
 
 const renderReleaseCard = (release) => {
     const isLatest = release.isLatest;
@@ -370,7 +219,6 @@ const renderReleaseCard = (release) => {
             <div class="release-item">
                 <div class="release-item-header">
                     <strong class="release-item-title">${item.title}</strong>
-                    ${item.author ? `<span class="release-item-author">(${item.author})</span>` : ''}
                 </div>
                 <ul class="release-bullet-list">
                     ${(item.bullets || []).map(bullet => `<li>${bullet}</li>`).join('')}
@@ -397,11 +245,6 @@ const renderReleaseCard = (release) => {
                     <span class="release-date">
                         ${iconHtml('lucide:calendar')} ${release.date}
                     </span>
-                    ${release.link ? `
-                        <a href="${release.link}" target="_blank" rel="noopener noreferrer" class="release-link" title="Open official release post">
-                            <span>Official Post</span> ${iconHtml('lucide:external-link')}
-                        </a>
-                    ` : ''}
                 </div>
             </div>
             <div class="release-card-body">
@@ -419,8 +262,7 @@ export const renderReleaseNotesList = () => {
     const query = searchQuery.trim().toLowerCase();
 
     const filtered = RELEASES.filter(release => {
-        const yearCat = getYearCategory(release.date, release.version);
-        if (activeFilter !== 'all' && yearCat !== activeFilter) {
+        if (activeVersionFilter !== 'all' && release.version !== activeVersionFilter) {
             return false;
         }
 
@@ -436,7 +278,7 @@ export const renderReleaseNotesList = () => {
         container.innerHTML = `
             <div class="release-empty-state">
                 <iconify-icon icon="lucide:search-x" class="empty-icon" aria-hidden="true"></iconify-icon>
-                <h4>No releases found</h4>
+                <h4>No updates found</h4>
                 <p>No release notes matched "${searchQuery}". Try a different search term or filter.</p>
             </div>
         `;
@@ -445,7 +287,7 @@ export const renderReleaseNotesList = () => {
     }
 
     if (countEl) {
-        countEl.textContent = `Showing ${filtered.length} release update${filtered.length === 1 ? '' : 's'}`;
+        countEl.textContent = `Showing ${filtered.length} update version${filtered.length === 1 ? '' : 's'}`;
     }
 };
 
@@ -469,14 +311,14 @@ export const setupReleaseNotesModal = () => {
         renderReleaseNotesList();
     });
 
-    const filterGroup = document.getElementById('release-year-filters');
+    const filterGroup = document.getElementById('release-version-filters');
     filterGroup?.addEventListener('click', (e) => {
         const chip = e.target.closest('.release-filter-chip');
         if (!chip) return;
 
         filterGroup.querySelectorAll('.release-filter-chip').forEach(el => el.classList.remove('active'));
         chip.classList.add('active');
-        activeFilter = chip.dataset.year || 'all';
+        activeVersionFilter = chip.dataset.version || 'all';
         renderReleaseNotesList();
     });
 };
