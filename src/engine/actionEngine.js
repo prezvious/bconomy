@@ -323,13 +323,17 @@ class ActionEngine {
 
             playerState.cash = (playerState.cash || 0) + totalPay;
 
+            // Preserve the natural cooldown end for streak window calculation,
+            // before Amnesia may zero out cooldownEnd
+            const naturalCooldownEnd = now + (effectiveCooldownSec * 1000);
+
             checkAmnesiac();
             playerState.cooldowns[actionType] = cooldownEnd;
 
             // Window allows 45 minutes after cooldown ends to continue streak
             playerState.workShift.currentStreak = newStreak;
             playerState.workShift.lastWorkAt = now;
-            playerState.workShift.streakExpireAt = cooldownEnd + (45 * 60 * 1000);
+            playerState.workShift.streakExpireAt = naturalCooldownEnd + (45 * 60 * 1000);
 
             const textLines = [];
             textLines.push(`+$${formatNumberCommas(totalPay)} Cash!`);

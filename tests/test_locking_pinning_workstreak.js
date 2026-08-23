@@ -68,6 +68,48 @@ console.log('\n[1] Work Shift Streak Tests');
     console.log('✓ Work Shift Streaks mechanics verified successfully!');
 }
 
+// 1b. Amnesia + Work Streak Regression Test
+console.log('\n[1b] Amnesia + Work Streak Regression Test');
+{
+    const workCdMs = (ACTION_COOLDOWNS.work || 1800) * 1000;
+    const windowMs = 45 * 60 * 1000;
+    const startTime = 5000000;
+
+    const state = {
+        cash: 0,
+        rankIndex: 0,
+        prestigeCount: 0,
+        inventory: {},
+        tools: { mine: 1, explore: 1, hunt: 1, fish: 1 },
+        perks: { partiality: 0, amnesiac: 50 },  // 100% Amnesia trigger
+        cooldowns: { work: 0 },
+        workShift: { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0 }
+    };
+
+    // Shift 1 with Amnesia active
+    const res1 = ActionEngine.performAction(state, 'work', startTime, () => 0.5);
+    assert.strictEqual(res1.success, true);
+    assert.strictEqual(res1.amnesiacTriggered, true, 'Amnesia should trigger at level 50');
+    assert.strictEqual(res1.workStreak, 1, 'First shift should set streak to 1');
+    assert.strictEqual(state.cooldowns.work, 0, 'Cooldown should be 0 after Amnesia');
+
+    // streakExpireAt must be in the future, not near epoch
+    const expectedExpire = startTime + workCdMs + windowMs;
+    assert.strictEqual(state.workShift.streakExpireAt, expectedExpire,
+        'streakExpireAt must use natural cooldown end, not Amnesia-zeroed cooldownEnd');
+    assert.ok(state.workShift.streakExpireAt > startTime,
+        'streakExpireAt must be in the future relative to action time');
+
+    // Shift 2 within window — streak must increment, not reset
+    const time2 = startTime + workCdMs + 600000;
+    state.cooldowns.work = 0;
+    const res2 = ActionEngine.performAction(state, 'work', time2, () => 0.5);
+    assert.strictEqual(res2.workStreak, 2, 'Amnesia must not break streak continuation');
+    assert.strictEqual(res2.streakMultiplier, 1.02, '2 streak gives 1.02x pay multiplier');
+
+    console.log('✓ Amnesia does not break Work Shift Streak continuation!');
+}
+
 // 2. Item Locking - Shop Selling Tests
 console.log('\n[2] Item Locking - Shop Selling Tests');
 {
