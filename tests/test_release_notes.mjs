@@ -4,17 +4,17 @@ console.log('--- Running Release Notes Component & Inaccuracy Tests ---');
 
 const { RELEASES } = await import('../public/js/ui/releaseNotesModal.js');
 
-// 1. Verify v2.2.1 exists and is marked latest
+// 1. Verify v2.2.2 exists and is marked latest
 const latestRelease = RELEASES.find(r => r.isLatest);
 assert.ok(latestRelease, 'Latest release must exist');
-assert.strictEqual(latestRelease.version, 'v2.2.1');
+assert.strictEqual(latestRelease.version, 'v2.2.2');
 assert.strictEqual(latestRelease.date, '2026-08-23');
-assert.ok(latestRelease.title.includes('v2.2.1'));
-assert.ok(latestRelease.sections.length >= 2, 'v2.2.1 should have Bug Fixes and Improvements');
-console.log('✓ Latest release v2.2.1 verified with title, date, and sections');
+assert.ok(latestRelease.title.includes('v2.2.2'));
+assert.ok(latestRelease.sections.length >= 1, 'v2.2.2 should have Bug Fixes');
+console.log('✓ Latest release v2.2.2 verified with title, date, and sections');
 
 // 2. Verify all releases have required fields and no external blog URLs
-const expectedVersions = ['v2.2.1', 'v2.2', 'v2.1', 'v2.0', 'v1.4', 'v1.3', 'v1.2', 'v1.1', 'v1.0'];
+const expectedVersions = ['v2.2.2', 'v2.2.1', 'v2.2', 'v2.1', 'v2.0', 'v1.4', 'v1.3', 'v1.2', 'v1.1', 'v1.0'];
 const actualVersions = RELEASES.map(r => r.version);
 assert.deepStrictEqual(actualVersions, expectedVersions, 'Releases must be ordered chronologically descending (v2.2.1 -> v1.0)');
 

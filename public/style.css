@@ -208,6 +208,16 @@ h1, h2, h3, h4, h5, h6,
     background: var(--text-muted);
 }
 
+/* Iconify & SVG Icons */
+iconify-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
 /* ── Layout Grid ── */
 .app-container {
     display: grid;
@@ -649,6 +659,7 @@ h1, h2, h3, h4, h5, h6,
     overflow-y: auto;
     background: var(--bg-base);
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
 }
 
 .panels-container {
@@ -660,7 +671,6 @@ h1, h2, h3, h4, h5, h6,
 .panel {
     display: none;
     animation: fadeIn 0.18s ease forwards;
-    contain: content;
 }
 
 .panel.active {
@@ -3256,11 +3266,14 @@ dialog.modal.hidden {
 
     .banner-actions {
         width: 100%;
-        justify-content: stretch;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .banner-actions .action-btn {
-        flex: 1;
+        flex: 1 1 140px;
+        min-width: 0;
     }
 }
 
@@ -3275,6 +3288,11 @@ dialog.modal.hidden {
     border-radius: var(--radius-md);
     margin-bottom: 22px;
     gap: 16px;
+}
+
+.farm-banner-info {
+    flex: 1;
+    min-width: 0;
 }
 
 .banner-title-row {
@@ -3305,7 +3323,7 @@ dialog.modal.hidden {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .farm-storage-card {

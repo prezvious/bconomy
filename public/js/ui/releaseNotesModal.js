@@ -3,9 +3,37 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v2.2.2',
+        version: 'v2.2.2',
+        isLatest: true,
+        date: '2026-08-23',
+        title: 'v2.2.2 — Scroll Stability & SVG Icon Rendering Reliability',
+        sections: [
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'SVG Icon Visibility & Persistent Rendering',
+                        bullets: [
+                            'Added global baseline dimensions and display properties for iconify-icon to prevent SVG elements from collapsing to 0x0 during initial rendering or off-screen scroll cycles.',
+                            'Removed strict paint containment from active panels so the browser preserves rendered shadow DOM trees in memory instead of discarding and re-fetching icons when scrolled into view.',
+                            'Swapped overlapping droplets icon with clean, single-contour droplet icon on farm hydration controls for crisp visual presentation.'
+                        ]
+                    },
+                    {
+                        title: 'Scroll Layout Shift & Button Resizing Stabilization',
+                        bullets: [
+                            'Enabled stable scrollbar gutters on the main viewport to eliminate layout reflow and container width shifts when scrollbars appear.',
+                            'Stabilized responsive flex wrapping rules and action button sizing in farm action banners to prevent erratic button expansion and layout jumping during scrolling.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v2.2.1',
         version: 'v2.2.1',
-        isLatest: true,
         date: '2026-08-23',
         title: 'v2.2.1 — Work Shift Streak Amnesia Fixes & Inventory Action Polish',
         sections: [
@@ -357,7 +385,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v2.2.1']); // v2.2.1 expanded by default
+const expandedVersions = new Set(['v2.2.2']); // v2.2.2 expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')
