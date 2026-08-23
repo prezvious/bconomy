@@ -302,17 +302,24 @@ class ActionEngine {
             playerState.workShift = playerState.workShift || {
                 currentStreak: 0,
                 lastWorkAt: 0,
-                streakExpireAt: 0
+                streakExpireAt: 0,
+                streakEligibleAt: 0
             };
 
+            const eligibleAt = playerState.workShift.streakEligibleAt || 0;
             let newStreak = 1;
             if (playerState.workShift.lastWorkAt === 0) {
                 newStreak = 1;
-            } else if (now <= playerState.workShift.streakExpireAt) {
-                newStreak = Math.min(20, (playerState.workShift.currentStreak || 0) + 1);
-            } else {
+            } else if (now > playerState.workShift.streakExpireAt) {
                 // Window expired: resets to 1 on fresh shift
                 newStreak = 1;
+            } else if (now < eligibleAt) {
+                // Early shift during active cooldown period (e.g. Amnesia proc)
+                // Maintain current streak without incrementing
+                newStreak = Math.max(1, playerState.workShift.currentStreak || 1);
+            } else {
+                // Eligible shift within window: increment streak up to 20
+                newStreak = Math.min(20, (playerState.workShift.currentStreak || 0) + 1);
             }
 
             const streakMultiplier = 1 + (newStreak * 0.01);
@@ -333,6 +340,7 @@ class ActionEngine {
             // Window allows 45 minutes after cooldown ends to continue streak
             playerState.workShift.currentStreak = newStreak;
             playerState.workShift.lastWorkAt = now;
+            playerState.workShift.streakEligibleAt = naturalCooldownEnd;
             playerState.workShift.streakExpireAt = naturalCooldownEnd + (45 * 60 * 1000);
 
             const textLines = [];
@@ -371,6 +379,7 @@ class ActionEngine {
                 streakMultiplier,
                 workStreak: newStreak,
                 streakExpireAt: playerState.workShift.streakExpireAt,
+                streakEligibleAt: playerState.workShift.streakEligibleAt,
                 totalMultiplier,
                 totalPay,
                 amnesiacTriggered,

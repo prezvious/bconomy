@@ -3,9 +3,47 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v2.2.1',
+        version: 'v2.2.1',
+        isLatest: true,
+        date: '2026-08-23',
+        title: 'v2.2.1 — Work Shift Streak Amnesia Fixes & Inventory Action Polish',
+        sections: [
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'Work Shift Streak Amnesia Window Preservation',
+                        bullets: [
+                            'Fixed an issue where the Amnesiac perk triggering during a work action set the cooldown to 0, which caused streak expiration timestamps to resolve to a 1970 epoch date and instantly break the active streak.',
+                            'Anchored streak window calculations to natural cooldown durations so active streak timers remain open for the full 45-minute window regardless of cooldown resets.'
+                        ]
+                    },
+                    {
+                        title: 'Work Shift Streak Cooldown-Elapsed Gating',
+                        bullets: [
+                            'Added eligibility gating (streakEligibleAt) to prevent premature streak progression during immediate Amnesia-triggered shifts.',
+                            'Shifts clocked during the active cooldown period grant full cash payouts and benefit from the current streak multiplier while preserving the streak stack without unearned increments.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Activate Boosters Button Label Polish',
+                        bullets: [
+                            'Removed the extraneous "(0)" counter suffix from the inventory toolbar Activate Boosters action button for clean, consistent UI styling.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v2.2',
         version: 'v2.2',
-        isLatest: true,
         date: '2026-08-23',
         title: 'v2.2 — Item Locking, Pinned Inventory & Work Shift Streaks',
         sections: [
@@ -319,7 +357,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v2.2']); // v2.2 expanded by default
+const expandedVersions = new Set(['v2.2.1']); // v2.2.1 expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

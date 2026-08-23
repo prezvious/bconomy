@@ -78,7 +78,8 @@ const DEFAULT_STATE = {
     workShift: {
         currentStreak: 0,
         lastWorkAt: 0,
-        streakExpireAt: 0
+        streakExpireAt: 0,
+        streakEligibleAt: 0
     }
 };
 

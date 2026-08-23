@@ -45,7 +45,7 @@ export const renderActions = () => {
         strip.dataset.action = act.id;
 
         if (isWork) {
-            const shift = playerState.workShift || { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0 };
+            const shift = playerState.workShift || { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0, streakEligibleAt: 0 };
             const streak = shift.currentStreak || 0;
             const bonusPercent = streak * 1;
             strip.innerHTML = `

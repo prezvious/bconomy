@@ -83,7 +83,7 @@ console.log('\n[1b] Amnesia + Work Streak Regression Test');
         tools: { mine: 1, explore: 1, hunt: 1, fish: 1 },
         perks: { partiality: 0, amnesiac: 50 },  // 100% Amnesia trigger
         cooldowns: { work: 0 },
-        workShift: { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0 }
+        workShift: { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0, streakEligibleAt: 0 }
     };
 
     // Shift 1 with Amnesia active
@@ -93,21 +93,32 @@ console.log('\n[1b] Amnesia + Work Streak Regression Test');
     assert.strictEqual(res1.workStreak, 1, 'First shift should set streak to 1');
     assert.strictEqual(state.cooldowns.work, 0, 'Cooldown should be 0 after Amnesia');
 
-    // streakExpireAt must be in the future, not near epoch
+    // streakExpireAt and streakEligibleAt must be in the future
     const expectedExpire = startTime + workCdMs + windowMs;
     assert.strictEqual(state.workShift.streakExpireAt, expectedExpire,
         'streakExpireAt must use natural cooldown end, not Amnesia-zeroed cooldownEnd');
+    assert.strictEqual(state.workShift.streakEligibleAt, startTime + workCdMs,
+        'streakEligibleAt must mark the end of the natural cooldown');
     assert.ok(state.workShift.streakExpireAt > startTime,
         'streakExpireAt must be in the future relative to action time');
 
-    // Shift 2 within window — streak must increment, not reset
-    const time2 = startTime + workCdMs + 600000;
+    // Early Shift via Amnesia (e.g. 5 seconds later, before natural cooldown elapsed)
+    // Streak should NOT increment, but should maintain streak 1 and grant pay
+    const earlyTime = startTime + 5000;
+    const resEarly = ActionEngine.performAction(state, 'work', earlyTime, () => 0.5);
+    assert.strictEqual(resEarly.success, true);
+    assert.strictEqual(resEarly.workStreak, 1, 'Early Amnesia shift must NOT increase streak count');
+    assert.strictEqual(resEarly.streakMultiplier, 1.01, 'Early Amnesia shift still uses current streak multiplier');
+    assert.strictEqual(state.workShift.currentStreak, 1);
+
+    // Shift 2 after natural cooldown completes — streak must now increment to 2
+    const time2 = earlyTime + workCdMs + 600000;
     state.cooldowns.work = 0;
     const res2 = ActionEngine.performAction(state, 'work', time2, () => 0.5);
-    assert.strictEqual(res2.workStreak, 2, 'Amnesia must not break streak continuation');
+    assert.strictEqual(res2.workStreak, 2, 'Shift after natural cooldown completes must increment streak');
     assert.strictEqual(res2.streakMultiplier, 1.02, '2 streak gives 1.02x pay multiplier');
 
-    console.log('✓ Amnesia does not break Work Shift Streak continuation!');
+    console.log('✓ Amnesia does not break Work Shift Streak and does not prematurely increase streak!');
 }
 
 // 2. Item Locking - Shop Selling Tests
