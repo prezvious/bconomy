@@ -145,12 +145,12 @@ export const getItemCategory = (itemName) => {
     if (FARM_UPGRADE_ITEM_ICONS[normalized]) return 'Farm Upgrade Material';
     const spaced = displayItemName(itemName).toLowerCase();
 
-    if (/\b(fish|fishes|salmon|tuna|bass|trout|shrimp|shrimps|crab|crabs|lobster|lobsters|eel|eels|sardine|sardines|prawn|prawns|octopus|octopuses|squid|squids|blowfish|ray|rays|coelacanth|oyster|oysters|clamshell|clamshells|bottle|coral)\b/.test(spaced)) return 'fish';
-    if (/\b(meat|meats|steak|steaks)\b/.test(spaced)) return 'meat';
-    if (/\b(ore|ores|coal|iron|gold|silver|copper|gem|gems|diamond|diamonds|ruby|rubies|emerald|emeralds|stone|stones|rock|rocks|crystal|crystals|quartz|titanium|uranium|platinum|cobalt|lithium|aluminum|tin|flint|obsidian|neodymium|iridium)\b/.test(spaced)) return 'ore';
-    if (/\b(wood|woods|log|logs|plank|planks|leaf|leaves|herb|herbs|flower|flowers|mushroom|mushrooms|berry|berries|fruit|fruits|seed|seeds|wheat|dandelion|weeds|pinecone|pinecones|chestnut|chestnuts|sunflower|sunflowers|blueberry|strawberry|melon|kiwi|mango|pumpkin|coconut|coffee)\b/.test(spaced)) return 'wood';
-    if (/\b(coin|coins|cash|gold bar|bar|bars|money|treasure|crown)\b/.test(spaced)) return 'coin';
-    if (/\b(feather|feathers|pelt|pelts|hide|hides|bone|bones|fur|furs|horn|horns|tusk|tusks|leather|rawhide|suede|tether|rope|chain|hull|beam|thermite|charm|nail|wire|can|metal|disk|card|drive|knife|boot|urn|fossil|junk)\b/.test(spaced)) return 'material';
+    if (/\b(fish|fishes|salmon|tuna|bass|trout|shrimp|shrimps|crab|crabs|lobster|lobsters|eel|eels|sardine|sardines|prawn|prawns|octopus|octopuses|squid|squids|blowfish|ray|rays|coelacanth|oyster|oysters|clamshell|clamshells|bottle|coral|seaweed|algae|jellyfish|greatwhite|great white|pearl)\b/.test(spaced)) return 'fish';
+    if (/\b(meat|meats|steak|steaks|beef)\b/.test(spaced)) return 'meat';
+    if (/\b(ore|ores|coal|iron|gold|silver|copper|gem|gems|diamond|diamonds|ruby|rubies|emerald|emeralds|sapphire|sapphires|alexandrite|stone|stones|rock|rocks|crystal|crystals|quartz|titanium|uranium|platinum|cobalt|lithium|aluminum|tin|flint|obsidian|neodymium|iridium|tungsten|petroleum|clay|meteorite|scale)\b/.test(spaced)) return 'ore';
+    if (/\b(wood|woods|log|logs|plank|planks|leaf|leaves|herb|herbs|flower|flowers|mushroom|mushrooms|berry|berries|fruit|fruits|seed|seeds|wheat|dandelion|weeds|pinecone|pinecones|chestnut|chestnuts|sunflower|sunflowers|blueberry|strawberry|melon|kiwi|mango|pumpkin|coconut|coffee|truffle|heartwood)\b/.test(spaced)) return 'wood';
+    if (/\b(coin|coins|cash|gold bar|bar|bars|money|treasure|crown|necklace|cache)\b/.test(spaced)) return 'coin';
+    if (/\b(feather|feathers|pelt|pelts|hide|hides|bone|bones|fur|furs|horn|horns|antler|antlers|fang|fangs|tusk|tusks|leather|rawhide|suede|tether|rope|chain|hull|beam|thermite|charm|nail|wire|can|metal|disk|card|drive|knife|boot|urn|fossil|junk|wool|resin|bulb|lightbulb|tire|circuit|shard|manuscript|butt|pack|firesac|frostsac|honeycomb|milk|nest|foot)\b/.test(spaced)) return 'material';
 
     return 'default';
 };
@@ -162,24 +162,30 @@ export const getItemIcon = (itemName) => {
     if (FARM_UPGRADE_ITEM_ICONS[norm]) return FARM_UPGRADE_ITEM_ICONS[norm];
 
     // Specific item overrides for crisp visual representation
+    if (norm.includes('alexandrite') || norm.includes('ruby') || norm.includes('sapphire') || norm.includes('emerald') || norm.includes('diamond') || norm.includes('crystal') || norm.includes('quartz') || norm.includes('gem')) return 'lucide:gem';
     if (norm.includes('feather')) return 'lucide:feather';
-    if (norm.includes('bone')) return 'lucide:bone';
-    if (norm.includes('pelt') || norm.includes('hide') || norm.includes('fur') || norm.includes('rawhide') || norm.includes('suede')) return 'lucide:layers';
-    if (norm.includes('horn') || norm.includes('antler') || norm.includes('tusk')) return 'lucide:crown';
+    if (norm.includes('bone') || norm.includes('fossil')) return 'lucide:bone';
+    if (norm.includes('pelt') || norm.includes('hide') || norm.includes('fur') || norm.includes('rawhide') || norm.includes('suede') || norm.includes('wool')) return 'lucide:layers';
+    if (norm.includes('horn') || norm.includes('antler') || norm.includes('tusk') || norm.includes('crown') || norm.includes('necklace')) return 'lucide:crown';
     if (norm.includes('steak') || norm.includes('meat')) return 'lucide:beef';
     if (norm.includes('milk')) return 'lucide:milk';
     if (norm.includes('honeycomb')) return 'lucide:hexagon';
     if (norm.includes('firesac')) return 'lucide:flame';
     if (norm.includes('frostsac')) return 'lucide:snowflake';
-    if (norm.includes('mushroom')) return 'lucide:sprout';
+    if (norm.includes('mushroom') || norm.includes('truffle')) return 'lucide:sprout';
     if (norm.includes('apple') || norm.includes('berry') || norm.includes('berries') || norm.includes('fruit')) return 'lucide:apple';
     if (norm.includes('seed')) return 'lucide:seedling';
-    if (norm.includes('wheat')) return 'lucide:wheat';
+    if (norm.includes('wheat') || norm.includes('dandelion') || norm.includes('weed')) return 'lucide:wheat';
     if (norm.includes('bottle')) return 'lucide:flask-conical';
-    if (norm.includes('can') || norm.includes('nail') || norm.includes('wire') || norm.includes('scrap')) return 'lucide:wrench';
-    if (norm.includes('disk') || norm.includes('card') || norm.includes('drive')) return 'lucide:hard-drive';
+    if (norm.includes('can') || norm.includes('nail') || norm.includes('wire') || norm.includes('scrap') || norm.includes('bulb')) return 'lucide:wrench';
+    if (norm.includes('disk') || norm.includes('card') || norm.includes('drive') || norm.includes('circuit')) return 'lucide:cpu';
     if (norm.includes('knife')) return 'lucide:scissors';
     if (norm.includes('boot')) return 'lucide:footprints';
+    if (norm.includes('seaweed') || norm.includes('algae')) return 'lucide:sprout';
+    if (norm.includes('squid') || norm.includes('jellyfish') || norm.includes('shark') || norm.includes('greatwhite') || norm.includes('octopus') || norm.includes('fish') || norm.includes('eel') || norm.includes('crab') || norm.includes('lobster') || norm.includes('prawn') || norm.includes('oyster') || norm.includes('clam')) return 'lucide:fish';
+    if (norm.includes('coin') || norm.includes('treasure') || norm.includes('cache') || norm.includes('pearl')) return 'lucide:coins';
+    if (norm.includes('manuscript') || norm.includes('scroll')) return 'lucide:scroll';
+    if (norm.includes('foot') || norm.includes('fang') || norm.includes('nest')) return 'lucide:paw-print';
 
     const cat = getItemCategory(itemName);
     switch (cat) {

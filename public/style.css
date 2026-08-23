@@ -6989,11 +6989,10 @@ details[open] .details-arrow {
 
 /* Inventory */
 .inventory-summary-rail {
-    grid-template-columns: repeat(2, minmax(150px, 0.55fr)) minmax(180px, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.inventory-summary-rail .summary-context {
-    align-items: flex-end;
+.inventory-summary-rail .summary-metric:last-of-type {
     border-right: 0;
 }
 
@@ -7550,11 +7549,11 @@ details[open] .details-arrow {
     }
 
     .summary-rail,
+    .inventory-summary-rail,
     .shop-summary-rail {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .inventory-summary-rail,
     .faction-summary-rail,
     .faction-founding-summary {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7570,14 +7569,9 @@ details[open] .details-arrow {
         border-top: 1px solid var(--border);
     }
 
-    .inventory-summary-rail .summary-metric:nth-child(2),
     .faction-summary-rail .summary-metric:nth-child(2),
     .faction-founding-summary .summary-metric:nth-child(2) {
         border-right: 1px solid var(--border);
-    }
-
-    .inventory-summary-rail .summary-context {
-        border-top: 0;
     }
 
     .shop-summary-rail .summary-metric:nth-child(3) {
