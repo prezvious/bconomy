@@ -1,6 +1,5 @@
 // Release Notes & Version Updates Modal Manager (Personal Game)
 import { openDialog } from './modal.js';
-import { iconHtml } from '../utils.js';
 
 export const RELEASES = [
     {
@@ -267,7 +266,7 @@ const renderReleaseAccordion = (release) => {
         return `
             <div class="release-section">
                 <h4 class="release-section-heading">
-                    ${iconHtml(sectionIcon)}
+                    <iconify-icon icon="${sectionIcon}" class="section-icon" aria-hidden="true"></iconify-icon>
                     <span>${escapeHtml(section.type)}</span>
                 </h4>
                 ${itemsHtml}
@@ -286,11 +285,12 @@ const renderReleaseAccordion = (release) => {
                 <div class="release-header-right">
                     <span class="release-change-count">${totalBullets} change${totalBullets === 1 ? '' : 's'}</span>
                     <span class="release-date">
-                        ${iconHtml('lucide:calendar')} ${escapeHtml(release.date)}
+                        <iconify-icon icon="lucide:calendar" aria-hidden="true"></iconify-icon>
+                        <span>${escapeHtml(release.date)}</span>
                     </span>
                 </div>
             </button>
-            <div class="release-accordion-body" id="release-body-${escapeHtml(release.version)}" ${isExpanded ? '' : 'hidden'}>
+            <div class="release-accordion-body" id="release-body-${escapeHtml(release.version)}">
                 ${sectionsHtml}
             </div>
         </article>
