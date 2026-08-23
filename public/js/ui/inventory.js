@@ -199,7 +199,7 @@ export const renderInventory = () => {
             ? `Configure activation for ${formatNumberCommas(boosterUnits)} owned booster units`
             : 'No boosters owned';
     }
-    if (boosterActionLabel) boosterActionLabel.textContent = `Activate Boosters (${formatDisplayNumber(boosterUnits)})`;
+    if (boosterActionLabel) boosterActionLabel.textContent = 'Activate Boosters';
 
     const lockedList = Array.isArray(playerState.lockedItems) ? playerState.lockedItems : [];
     const pinnedList = Array.isArray(playerState.pinnedItems) ? playerState.pinnedItems : [];

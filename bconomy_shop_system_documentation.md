@@ -1303,7 +1303,7 @@ For owned boosters show:
 
 T5 and T6 may appear in the player's booster inventory if obtained elsewhere, but must never appear in the system shop.
 
-The Inventory toolbar includes **Activate Boosters (N)**, where `N` is the total number of usable owned booster units. The action is disabled at zero by default and may instead be hidden through `inventory.showUnavailableBoosterAction`.
+The Inventory toolbar includes **Activate Boosters**, which allows bulk activating usable owned booster units. The action is disabled at zero by default and may instead be hidden through `inventory.showUnavailableBoosterAction`.
 
 The bulk dialog defaults to **All Owned**, with **One Each** and bounded **Custom** quantities available. Its preview summarizes types, units, consumed inventory, before/after expiries, and resulting multipliers. A successful execution produces one toast and one Activity Ledger entry, then refreshes inventory and active booster timers.
 
