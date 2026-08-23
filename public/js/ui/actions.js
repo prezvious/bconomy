@@ -44,19 +44,47 @@ export const renderActions = () => {
         strip.className = `action-strip card ${isWork ? 'action-strip--work' : ''}`;
         strip.dataset.action = act.id;
 
-        strip.innerHTML = `
-            <div class="strip-identity">
-                <div class="strip-icon-well">${iconHtml(act.icon, 'strip-icon')}</div>
-                <span class="strip-name">${act.name}</span>
-            </div>
-            <div class="strip-cooldown">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" id="cd-bar-${act.id}" style="width: 0%; background-color: var(--action-${act.id})"></div>
+        if (isWork) {
+            const shift = playerState.workShift || { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0 };
+            const streak = shift.currentStreak || 0;
+            const bonusPercent = streak * 1;
+            strip.innerHTML = `
+                <div class="strip-identity">
+                    <div class="strip-icon-well">${iconHtml(act.icon, 'strip-icon')}</div>
+                    <div class="strip-name-wrap">
+                        <span class="strip-name">${act.name}</span>
+                        <div class="work-streak-badge ${streak > 0 ? 'streak-active' : ''}" id="work-streak-badge" title="Work Shift Streak: Maintain shifts within 45m after cooldown for +1% pay per shift (up to +20%)">
+                            ${iconHtml('lucide:flame', 'streak-flame-icon')}
+                            <span class="streak-count-text">${streak}/20 (+${bonusPercent}% Pay)</span>
+                        </div>
+                    </div>
                 </div>
-                <span class="cooldown-text" id="cd-text-${act.id}" role="status">Ready!</span>
-            </div>
-            <button class="action-btn strip-dispatch-btn" id="btn-act-${act.id}" style="background-color: var(--action-${act.id})">${act.name}</button>
-        `;
+                <div class="strip-cooldown">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="cd-bar-${act.id}" style="width: 0%; background-color: var(--action-${act.id})"></div>
+                    </div>
+                    <div class="cooldown-meta">
+                        <span class="cooldown-text" id="cd-text-${act.id}" role="status">Ready!</span>
+                        <span class="work-streak-timer ${streak > 0 ? '' : 'hidden'}" id="work-streak-timer"></span>
+                    </div>
+                </div>
+                <button class="action-btn strip-dispatch-btn" id="btn-act-${act.id}" style="background-color: var(--action-${act.id})">${act.name}</button>
+            `;
+        } else {
+            strip.innerHTML = `
+                <div class="strip-identity">
+                    <div class="strip-icon-well">${iconHtml(act.icon, 'strip-icon')}</div>
+                    <span class="strip-name">${act.name}</span>
+                </div>
+                <div class="strip-cooldown">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="cd-bar-${act.id}" style="width: 0%; background-color: var(--action-${act.id})"></div>
+                    </div>
+                    <span class="cooldown-text" id="cd-text-${act.id}" role="status">Ready!</span>
+                </div>
+                <button class="action-btn strip-dispatch-btn" id="btn-act-${act.id}" style="background-color: var(--action-${act.id})">${act.name}</button>
+            `;
+        }
 
         grid.appendChild(strip);
 

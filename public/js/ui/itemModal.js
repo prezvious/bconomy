@@ -126,6 +126,100 @@ export const openItemModal = async (rawName) => {
     if (btnUse) btnUse.onclick = null;
     if (btnConfirmSell) btnConfirmSell.onclick = null;
 
+    // Lock & Pin elements
+    const btnLock = document.getElementById('btn-item-modal-lock');
+    const lockIconEl = document.getElementById('item-modal-lock-icon');
+    const lockLabelEl = document.getElementById('item-modal-lock-label');
+    const btnPin = document.getElementById('btn-item-modal-pin');
+    const pinIconEl = document.getElementById('item-modal-pin-icon');
+    const pinLabelEl = document.getElementById('item-modal-pin-label');
+
+    const updateLockPinUi = (locked, pinned) => {
+        if (btnLock) {
+            btnLock.classList.toggle('btn-locked-active', locked);
+            btnLock.setAttribute('aria-pressed', locked ? 'true' : 'false');
+        }
+        if (lockIconEl) {
+            lockIconEl.innerHTML = iconHtml(locked ? 'lucide:lock' : 'lucide:unlock');
+        }
+        if (lockLabelEl) {
+            lockLabelEl.textContent = locked ? 'Unlock Item' : 'Lock Item';
+        }
+
+        if (btnPin) {
+            btnPin.classList.toggle('btn-pinned-active', pinned);
+            btnPin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+        }
+        if (pinIconEl) {
+            pinIconEl.innerHTML = iconHtml(pinned ? 'lucide:pin-off' : 'lucide:pin');
+        }
+        if (pinLabelEl) {
+            pinLabelEl.textContent = pinned ? 'Unpin Item' : 'Pin to Top';
+        }
+
+        // Disable use and sell buttons if item is locked
+        if (btnUse) {
+            btnUse.disabled = locked;
+            btnUse.title = locked ? 'Item is locked. Unlock it to use.' : '';
+        }
+        if (btnConfirmSell) {
+            btnConfirmSell.disabled = locked;
+            btnConfirmSell.title = locked ? 'Item is locked. Unlock it to sell.' : '';
+        }
+    };
+
+    const initialLocked = Array.isArray(playerState.lockedItems) && (playerState.lockedItems.includes(rawName) || playerState.lockedItems.includes(displayName));
+    const initialPinned = Array.isArray(playerState.pinnedItems) && (playerState.pinnedItems.includes(rawName) || playerState.pinnedItems.includes(displayName));
+    updateLockPinUi(initialLocked, initialPinned);
+
+    if (btnLock) {
+        btnLock.onclick = async () => {
+            const curState = getState();
+            const currentlyLocked = Array.isArray(curState.lockedItems) && (curState.lockedItems.includes(rawName) || curState.lockedItems.includes(displayName));
+            const nextLock = !currentlyLocked;
+            try {
+                btnLock.disabled = true;
+                const res = await apiCall('/api/inventory/lock', 'POST', {
+                    itemName: rawName,
+                    locked: nextLock
+                }, btnLock);
+                const isNowLocked = res && res.locked !== undefined ? res.locked : nextLock;
+                showToast(isNowLocked ? `Locked ${displayName}` : `Unlocked ${displayName}`, 'info');
+                const curPinned = Array.isArray(getState().pinnedItems) && (getState().pinnedItems.includes(rawName) || getState().pinnedItems.includes(displayName));
+                updateLockPinUi(isNowLocked, curPinned);
+                renderInventory();
+            } catch (err) {
+                showToast(err.message || 'Failed to update lock status', 'error');
+            } finally {
+                btnLock.disabled = false;
+            }
+        };
+    }
+
+    if (btnPin) {
+        btnPin.onclick = async () => {
+            const curState = getState();
+            const currentlyPinned = Array.isArray(curState.pinnedItems) && (curState.pinnedItems.includes(rawName) || curState.pinnedItems.includes(displayName));
+            const nextPin = !currentlyPinned;
+            try {
+                btnPin.disabled = true;
+                const res = await apiCall('/api/inventory/pin', 'POST', {
+                    itemName: rawName,
+                    pinned: nextPin
+                }, btnPin);
+                const isNowPinned = res && res.pinned !== undefined ? res.pinned : nextPin;
+                showToast(isNowPinned ? `Pinned ${displayName} to top` : `Unpinned ${displayName}`, 'info');
+                const curLocked = Array.isArray(getState().lockedItems) && (getState().lockedItems.includes(rawName) || getState().lockedItems.includes(displayName));
+                updateLockPinUi(curLocked, isNowPinned);
+                renderInventory();
+            } catch (err) {
+                showToast(err.message || 'Failed to update pin status', 'error');
+            } finally {
+                btnPin.disabled = false;
+            }
+        };
+    }
+
     openDialog(modal, {
         initialFocus: '#btn-close-item-modal',
         closeOnBackdrop: true

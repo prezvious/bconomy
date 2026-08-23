@@ -46,6 +46,20 @@ class ToolEngine {
     }
 
     /**
+     * Returns a copy of the player inventory excluding locked items.
+     * @param {Object} playerState
+     * @returns {Object}
+     */
+    static getUnlockedInventory(playerState) {
+        const inv = { ...(playerState && playerState.inventory || {}) };
+        const locked = Array.isArray(playerState && playerState.lockedItems) ? playerState.lockedItems : [];
+        for (const item of locked) {
+            delete inv[item];
+        }
+        return inv;
+    }
+
+    /**
      * Gets the upgrade requirements for a tool to reach the target level (Levels 1-500).
      * @param {string} toolType - 'mine', 'explore', 'hunt', or 'fish'
      * @param {number} targetLevel - The level to upgrade to (1-500)
@@ -144,7 +158,7 @@ class ToolEngine {
         const currentLevel = (playerState.tools && playerState.tools[toolType]) || 1;
         const cap = Math.min(MAX_TOOL_LEVEL, Math.max(currentLevel, parseInt(maxCap, 10) || MAX_TOOL_LEVEL));
 
-        const virtualInv = { ...(playerState.inventory || {}) };
+        const virtualInv = this.getUnlockedInventory(playerState);
         let reachedLevel = currentLevel;
         const cumulativeCost = {};
 
@@ -192,7 +206,7 @@ class ToolEngine {
         const requirements = this.getUpgradeRequirements(toolType, nextLevel);
         if (!requirements) return false;
 
-        const inv = playerState.inventory || {};
+        const inv = this.getUnlockedInventory(playerState);
         for (const req of requirements) {
             if ((inv[req.item] || 0) < req.quantity) {
                 return false;
@@ -249,7 +263,8 @@ class ToolEngine {
             return { error: 'Target level must be greater than current level' };
         }
 
-        const breakdown = this.getRecipeBreakdown(toolType, currentLevel, targetLevel, playerState.inventory);
+        const unlockedInv = this.getUnlockedInventory(playerState);
+        const breakdown = this.getRecipeBreakdown(toolType, currentLevel, targetLevel, unlockedInv);
         if (!breakdown.valid) {
             return { error: breakdown.error || 'Invalid upgrade parameters' };
         }
@@ -359,7 +374,7 @@ class ToolEngine {
         if (isNaN(qty) || qty <= 0 || !isFinite(qty)) {
             return { error: 'Invalid quantity requested' };
         }
-        const inv = playerState.inventory || {};
+        const inv = this.getUnlockedInventory(playerState);
         const missing = {};
         let canCraft = true;
 
@@ -378,7 +393,7 @@ class ToolEngine {
 
         // Deduct materials
         for (const req of moduleDef.recipe) {
-            inv[req.item] -= req.quantity * qty;
+            playerState.inventory[req.item] -= req.quantity * qty;
         }
 
         playerState.toolModules[moduleId] = (playerState.toolModules[moduleId] || 0) + qty;

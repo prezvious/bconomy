@@ -298,15 +298,38 @@ class ActionEngine {
             const partialityLevel = (playerState.perks && playerState.perks.partiality) || 0;
             const { totalChance, bonusCount } = calculateWorkBonuses(partialityLevel);
 
+            // Work Shift Streak Evaluation
+            playerState.workShift = playerState.workShift || {
+                currentStreak: 0,
+                lastWorkAt: 0,
+                streakExpireAt: 0
+            };
+
+            let newStreak = 1;
+            if (playerState.workShift.lastWorkAt === 0) {
+                newStreak = 1;
+            } else if (now <= playerState.workShift.streakExpireAt) {
+                newStreak = Math.min(20, (playerState.workShift.currentStreak || 0) + 1);
+            } else {
+                // Window expired: resets to 1 on fresh shift
+                newStreak = 1;
+            }
+
+            const streakMultiplier = 1 + (newStreak * 0.01);
             const payMultiplier = Math.pow(3, bonusCount);
-            const totalMultiplier = payMultiplier * factionMultiplier;
-            const totalPay = Math.floor(basePay * payMultiplier * factionMultiplier);
+            const totalMultiplier = payMultiplier * factionMultiplier * streakMultiplier;
+            const totalPay = Math.floor(basePay * payMultiplier * factionMultiplier * streakMultiplier);
             const bonusTriggered = bonusCount > 0;
 
             playerState.cash = (playerState.cash || 0) + totalPay;
 
             checkAmnesiac();
             playerState.cooldowns[actionType] = cooldownEnd;
+
+            // Window allows 45 minutes after cooldown ends to continue streak
+            playerState.workShift.currentStreak = newStreak;
+            playerState.workShift.lastWorkAt = now;
+            playerState.workShift.streakExpireAt = cooldownEnd + (45 * 60 * 1000);
 
             const textLines = [];
             textLines.push(`+$${formatNumberCommas(totalPay)} Cash!`);
@@ -319,6 +342,9 @@ class ActionEngine {
             }
             if (factionMultiplier > 1) {
                 textLines.push(`${factionMultiplier.toFixed(2)}× from Faction Boost (${factionName} - Lv. ${factionBoost.level})`);
+            }
+            if (newStreak > 0) {
+                textLines.push(`${streakMultiplier.toFixed(2)}× from Work Shift Streak (${newStreak}/20 Stacks)`);
             }
             textLines.push(`${totalMultiplier.toFixed(2)}× total multiplier!`);
 
@@ -338,6 +364,9 @@ class ActionEngine {
                 bonusCount,
                 payMultiplier,
                 factionMultiplier,
+                streakMultiplier,
+                workStreak: newStreak,
+                streakExpireAt: playerState.workShift.streakExpireAt,
                 totalMultiplier,
                 totalPay,
                 amnesiacTriggered,

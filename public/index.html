@@ -71,7 +71,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v2.1" title="Click to view release notes">Bconomy v2.1</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v2.2" title="Click to view release notes">Bconomy v2.2</button>
             </div>
         </nav>
 
@@ -259,6 +259,14 @@
                                     <span id="inventory-booster-action-label">Activate Boosters (0)</span>
                                 </button>
                             </div>
+                        <div id="inventory-pinned-container" class="inventory-pinned-section mb-4 hidden">
+                            <div class="inventory-section-header mb-2">
+                                <span class="inventory-section-title">
+                                    <span id="pinned-section-icon-wrap"></span> Pinned
+                                </span>
+                                <span id="inventory-pinned-count" class="charter-badge">0</span>
+                            </div>
+                            <div class="inventory-grid inventory-pinned-grid" id="inventory-pinned-grid"></div>
                         </div>
                         <div class="inventory-grid" id="inventory-grid"></div>
                         <div id="inventory-empty" class="empty-state-card hidden" role="status">
@@ -828,6 +836,17 @@
             <div class="modal-body item-modal-body">
                 <p id="item-modal-description" class="item-desc-text mb-4"></p>
 
+                <div class="item-modal-toggles-row mb-4">
+                    <button id="btn-item-modal-lock" type="button" class="btn btn-secondary item-modal-toggle-btn">
+                        <span class="btn-icon-wrap" id="item-modal-lock-icon"></span>
+                        <span id="item-modal-lock-label">Lock Item</span>
+                    </button>
+                    <button id="btn-item-modal-pin" type="button" class="btn btn-secondary item-modal-toggle-btn">
+                        <span class="btn-icon-wrap" id="item-modal-pin-icon"></span>
+                        <span id="item-modal-pin-label">Pin to Top</span>
+                    </button>
+                </div>
+
                 <section id="item-modal-details" class="item-modal-details mb-4" aria-labelledby="item-specifications-title">
                     <h4 id="item-specifications-title" class="card-title-sm item-specifications-title">
                         <iconify-icon icon="lucide:info" aria-hidden="true"></iconify-icon>
@@ -1172,7 +1191,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v2.1 Latest</span>
+                            <span class="badge release-latest-tag">v2.2 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>

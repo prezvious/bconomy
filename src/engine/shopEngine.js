@@ -260,6 +260,10 @@ class ShopEngine {
             return { error: `Item '${itemName}' cannot be sold` };
         }
 
+        if (Array.isArray(playerState.lockedItems) && playerState.lockedItems.includes(itemName)) {
+            return { error: `Item '${itemName}' is locked and cannot be sold. Unlock it first.` };
+        }
+
         const owned = playerState.inventory[itemName] || 0;
         if (owned < qty) {
             return { error: `Insufficient inventory. Owned: ${owned}, Requested: ${qty}` };
@@ -451,6 +455,9 @@ class ShopEngine {
 
             // Skip boosters and non-sellable items
             if (BOOSTER_REGISTRY[itemName] || !SELLABLE_ITEMS[itemName]) continue;
+
+            // Skip locked items
+            if (Array.isArray(playerState.lockedItems) && playerState.lockedItems.includes(itemName)) continue;
 
             // Check selection filter if provided
             if (selectedItems) {

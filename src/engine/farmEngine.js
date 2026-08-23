@@ -557,9 +557,13 @@ class FarmEngine {
         const farm = playerState.farm;
         if (farm.waterAvailableAt <= currentTime) return { error: 'The watering cooldown is already available' };
 
-        const inventoryMelons = playerState.inventory.Melon || 0;
+        const isLocked = Array.isArray(playerState.lockedItems) && playerState.lockedItems.includes('Melon');
+        const inventoryMelons = isLocked ? 0 : (playerState.inventory.Melon || 0);
         const storageMelons = farm.storage.Melon || 0;
         if (inventoryMelons < 1 && storageMelons < 1) {
+            if (isLocked && (playerState.inventory.Melon || 0) >= 1) {
+                return { error: 'Melon is locked and cannot be used. Unlock it first.' };
+            }
             return { error: 'You do not have any Melons in your inventory or farm storage' };
         }
 

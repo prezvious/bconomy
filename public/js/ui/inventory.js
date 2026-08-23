@@ -77,15 +77,23 @@ const setupInventoryControls = () => {
         }
     }));
 
+    const handleCardClick = event => {
+        const card = event.target.closest?.('.inventory-item');
+        const rawName = card?.dataset.rawName;
+        if (rawName) {
+            openItemModal(rawName);
+        }
+    };
+
     if (grid && grid.dataset.inventoryDelegated !== 'true') {
         grid.dataset.inventoryDelegated = 'true';
-        grid.addEventListener('click', event => {
-            const card = event.target.closest?.('.inventory-item');
-            const index = Number.parseInt(card?.dataset.index, 10);
-            if (Number.isInteger(index) && renderedItems[index]) {
-                openItemModal(renderedItems[index].rawName);
-            }
-        });
+        grid.addEventListener('click', handleCardClick);
+    }
+
+    const pinnedGrid = document.getElementById('inventory-pinned-grid');
+    if (pinnedGrid && pinnedGrid.dataset.inventoryDelegated !== 'true') {
+        pinnedGrid.dataset.inventoryDelegated = 'true';
+        pinnedGrid.addEventListener('click', handleCardClick);
     }
 };
 
@@ -96,11 +104,37 @@ const sortItems = (items, sort) => items.sort((a, b) => {
     return a.displayName.localeCompare(b.displayName);
 });
 
+const renderCardHtml = (item, isLocked) => {
+    const displayName = escapeHtml(item.displayName);
+    const category = escapeHtml(item.category);
+    const displayQuantity = formatDisplayNumber(item.quantity);
+    const exactQuantity = formatNumberCommas(item.quantity);
+    const rawName = escapeHtml(item.rawName);
+
+    return `
+        <button class="inventory-item card ${isLocked ? 'item-is-locked' : ''}" type="button" data-raw-name="${rawName}"
+            aria-label="View details for ${displayName}, ${exactQuantity} owned" title="${displayName} · ${exactQuantity} owned${isLocked ? ' (Locked)' : ''}">
+            <span class="item-card-top">
+                <span class="item-cat-badge" data-cat="${category}">${escapeHtml(titleCase(item.category))}</span>
+                <span class="item-card-badges">
+                    ${isLocked ? `<span class="item-lock-badge" title="Locked (Cannot be sold or used)">${iconHtml('lucide:lock', 'item-lock-badge-icon')}</span>` : ''}
+                    <span class="item-qty" title="${exactQuantity}">${displayQuantity}</span>
+                </span>
+            </span>
+            <span class="item-icon-wrap" data-cat="${category}">${iconHtml(getItemIcon(item.rawName), 'item-icon')}</span>
+            <span class="item-name">${displayName}</span>
+        </button>`;
+};
+
 export const renderInventory = () => {
     const playerState = getState();
     const grid = document.getElementById('inventory-grid');
     const emptyState = document.getElementById('inventory-empty');
     const search = document.getElementById('inventory-search');
+    const pinnedContainer = document.getElementById('inventory-pinned-container');
+    const pinnedGrid = document.getElementById('inventory-pinned-grid');
+    const pinnedCountEl = document.getElementById('inventory-pinned-count');
+    const pinnedIconWrap = document.getElementById('pinned-section-icon-wrap');
     if (!playerState || !grid || !emptyState || !search) return;
 
     setupInventoryControls();
@@ -134,6 +168,8 @@ export const renderInventory = () => {
 
     const isCompact = inventoryPrefs.view === 'compact';
     grid.classList.toggle('compact', isCompact);
+    if (pinnedGrid) pinnedGrid.classList.toggle('compact', isCompact);
+
     const gridView = document.getElementById('inventory-view-grid');
     const compactView = document.getElementById('inventory-view-compact');
     gridView?.setAttribute('aria-pressed', String(!isCompact));
@@ -165,17 +201,30 @@ export const renderInventory = () => {
     }
     if (boosterActionLabel) boosterActionLabel.textContent = `Activate Boosters (${formatDisplayNumber(boosterUnits)})`;
 
+    const lockedList = Array.isArray(playerState.lockedItems) ? playerState.lockedItems : [];
+    const pinnedList = Array.isArray(playerState.pinnedItems) ? playerState.pinnedItems : [];
+
     const searchTerm = inventoryPrefs.search.trim().toLowerCase();
     const filtered = items.filter(item => {
         const matchesSearch = !searchTerm || item.displayName.toLowerCase().includes(searchTerm) || item.rawName.toLowerCase().includes(searchTerm);
         const matchesCategory = inventoryPrefs.category === 'all' || item.category === inventoryPrefs.category;
         return matchesSearch && matchesCategory;
     });
-    renderedItems = sortItems(filtered, inventoryPrefs.sort);
+
+    const isItemPinned = item => pinnedList.includes(item.rawName) || pinnedList.includes(item.displayName);
+    const isItemLocked = item => lockedList.includes(item.rawName) || lockedList.includes(item.displayName);
+
+    const pinnedItems = sortItems(filtered.filter(isItemPinned), inventoryPrefs.sort);
+    const unpinnedItems = sortItems(filtered.filter(item => !isItemPinned(item)), inventoryPrefs.sort);
+    renderedItems = [...pinnedItems, ...unpinnedItems];
 
     if (renderedItems.length === 0) {
         grid.innerHTML = '';
         grid.classList.add('hidden');
+        if (pinnedContainer) {
+            pinnedContainer.classList.add('hidden');
+            if (pinnedGrid) pinnedGrid.innerHTML = '';
+        }
         emptyState.classList.remove('hidden');
         const title = emptyState.querySelector('.empty-title') || emptyState.querySelector('h3');
         const message = emptyState.querySelector('.empty-desc') || emptyState.querySelector('p');
@@ -190,21 +239,26 @@ export const renderInventory = () => {
     }
 
     emptyState.classList.add('hidden');
-    grid.classList.remove('hidden');
-    grid.innerHTML = renderedItems.map((item, index) => {
-        const displayName = escapeHtml(item.displayName);
-        const category = escapeHtml(item.category);
-        const displayQuantity = formatDisplayNumber(item.quantity);
-        const exactQuantity = formatNumberCommas(item.quantity);
-        return `
-            <button class="inventory-item card" type="button" data-index="${index}"
-                aria-label="View details for ${displayName}, ${exactQuantity} owned" title="${displayName} · ${exactQuantity} owned">
-                <span class="item-card-top">
-                    <span class="item-cat-badge" data-cat="${category}">${escapeHtml(titleCase(item.category))}</span>
-                    <span class="item-qty" title="${exactQuantity}">${displayQuantity}</span>
-                </span>
-                <span class="item-icon-wrap" data-cat="${category}">${iconHtml(getItemIcon(item.rawName), 'item-icon')}</span>
-                <span class="item-name">${displayName}</span>
-            </button>`;
-    }).join('');
+
+    // Render Pinned Section
+    if (pinnedContainer && pinnedGrid) {
+        if (pinnedItems.length > 0) {
+            pinnedContainer.classList.remove('hidden');
+            if (pinnedCountEl) pinnedCountEl.textContent = formatDisplayNumber(pinnedItems.length);
+            if (pinnedIconWrap) pinnedIconWrap.innerHTML = iconHtml('lucide:pin', 'pinned-section-svg');
+            pinnedGrid.innerHTML = pinnedItems.map(item => renderCardHtml(item, isItemLocked(item))).join('');
+        } else {
+            pinnedContainer.classList.add('hidden');
+            pinnedGrid.innerHTML = '';
+        }
+    }
+
+    // Render Standard Unpinned Section
+    if (unpinnedItems.length > 0) {
+        grid.classList.remove('hidden');
+        grid.innerHTML = unpinnedItems.map(item => renderCardHtml(item, isItemLocked(item))).join('');
+    } else {
+        grid.innerHTML = '';
+        grid.classList.add('hidden');
+    }
 };

@@ -3,9 +3,64 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v2.2',
+        version: 'v2.2',
+        isLatest: true,
+        date: '2026-08-23',
+        title: 'v2.2 — Item Locking, Pinned Inventory & Work Shift Streaks',
+        sections: [
+            {
+                type: 'New Features',
+                items: [
+                    {
+                        title: 'Item Locking (🔒)',
+                        bullets: [
+                            'Lock any item from within the Item Details Modal to protect it against accidental consumption, sales, or crafting.',
+                            'Locked items are automatically skipped during Bulk Sell and cannot be sold individually in the shop.',
+                            'Locked boosters cannot be consumed or batch activated.',
+                            'Locked farm items (e.g. Melon) and gathering materials are protected from accidental crafting or tool upgrades.',
+                            'Visual lock badge (🔒) is prominently displayed on locked inventory cards.'
+                        ]
+                    },
+                    {
+                        title: 'Item Pinning (📌)',
+                        bullets: [
+                            'Pin high-priority items directly to the top of the Inventory tab using the Pin toggle in the Item Details Modal.',
+                            'Dedicated Pinned section with theme-matching SVG icon isolates pinned items, excluding them from lower standard category lists.'
+                        ]
+                    },
+                    {
+                        title: 'Work Shift Streaks (🔥)',
+                        bullets: [
+                            'Earn a compounding +1% cash pay bonus per consecutive work shift (capping at 20 stacks for +20% bonus pay).',
+                            'Maintain your streak by clocking into work within 45 minutes after the work cooldown completes.',
+                            'Work action card features a live streak badge and real-time countdown timer tracking the active streak window.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Crisp SVG Icon Theme Integration',
+                        bullets: [
+                            'Integrated matching inline SVG icon definitions for pin, pin-off, lock, unlock, and flame into the core icon pipeline.'
+                        ]
+                    },
+                    {
+                        title: 'Item Modal Action Safeguards',
+                        bullets: [
+                            'Item Details Modal dynamically disables the Use and Sell action controls when an item is locked.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v2.1',
         version: 'v2.1',
-        isLatest: true,
         date: '2026-08-23',
         title: 'v2.1 — Prestige Ascension Costs, Dynamic Tier Scaling & Targeted Rank-Up Optimization',
         sections: [
@@ -264,7 +319,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v2.1']); // v2.1 expanded by default
+const expandedVersions = new Set(['v2.2']); // v2.2 expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

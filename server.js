@@ -72,6 +72,13 @@ const DEFAULT_STATE = {
             fish: { T1: 0, T2: 0, T3: 0, T4: 0, T5: 0, T6: 0 },
             hunt: { T1: 0, T2: 0, T3: 0, T4: 0, T5: 0, T6: 0 }
         }
+    },
+    lockedItems: [],
+    pinnedItems: [],
+    workShift: {
+        currentStreak: 0,
+        lastWorkAt: 0,
+        streakExpireAt: 0
     }
 };
 
@@ -85,6 +92,37 @@ app.get('/api/state/default', (req, res) => {
 });
 
 const isObjectState = (state) => state && typeof state === 'object' && !Array.isArray(state);
+
+// Inventory Lock & Pin endpoints
+app.post('/api/inventory/lock', (req, res) => {
+    const { playerState, itemName, locked } = req.body;
+    if (!isObjectState(playerState) || !itemName) {
+        return res.status(400).json({ error: 'Missing or invalid playerState or itemName' });
+    }
+    playerState.lockedItems = Array.isArray(playerState.lockedItems) ? playerState.lockedItems : [];
+    const index = playerState.lockedItems.indexOf(itemName);
+    if (locked && index === -1) {
+        playerState.lockedItems.push(itemName);
+    } else if (!locked && index !== -1) {
+        playerState.lockedItems.splice(index, 1);
+    }
+    res.json({ state: playerState, itemName, locked: !!locked, lockedItems: playerState.lockedItems });
+});
+
+app.post('/api/inventory/pin', (req, res) => {
+    const { playerState, itemName, pinned } = req.body;
+    if (!isObjectState(playerState) || !itemName) {
+        return res.status(400).json({ error: 'Missing or invalid playerState or itemName' });
+    }
+    playerState.pinnedItems = Array.isArray(playerState.pinnedItems) ? playerState.pinnedItems : [];
+    const index = playerState.pinnedItems.indexOf(itemName);
+    if (pinned && index === -1) {
+        playerState.pinnedItems.push(itemName);
+    } else if (!pinned && index !== -1) {
+        playerState.pinnedItems.splice(index, 1);
+    }
+    res.json({ state: playerState, itemName, pinned: !!pinned, pinnedItems: playerState.pinnedItems });
+});
 
 // Action endpoints
 app.post('/api/action', (req, res) => {

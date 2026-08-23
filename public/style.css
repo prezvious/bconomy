@@ -8657,3 +8657,154 @@ details[open] .details-arrow {
     color: var(--text-muted);
 }
 
+/* ── Item Modal Lock & Pin Toggles ── */
+.item-modal-toggles-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.item-modal-toggle-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--border);
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.item-modal-toggle-btn:hover:not(:disabled) {
+    background: var(--bg-surface-hover, rgba(255, 255, 255, 0.08));
+    border-color: var(--border-hover, #64748b);
+}
+
+.item-modal-toggle-btn.btn-locked-active {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+}
+
+.item-modal-toggle-btn.btn-pinned-active {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #3b82f6;
+}
+
+/* ── Item Lock Badge on Inventory Card ── */
+.item-card-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.item-lock-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    font-size: 11px;
+}
+
+.item-lock-badge-icon {
+    width: 12px;
+    height: 12px;
+}
+
+.inventory-item.item-is-locked {
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* ── Pinned Inventory Section ── */
+.inventory-pinned-section {
+    background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 8px);
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+
+.inventory-pinned-section .inventory-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.inventory-pinned-section .inventory-section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #3b82f6;
+}
+
+.inventory-pinned-section .pinned-section-svg {
+    font-size: 16px;
+}
+
+/* ── Work Shift Streak Badge & Timer ── */
+.strip-name-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.work-streak-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    width: fit-content;
+    letter-spacing: 0.02em;
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.work-streak-badge.streak-active {
+    color: #f97316;
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+}
+
+.streak-flame-icon {
+    font-size: 12px;
+}
+
+.cooldown-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.work-streak-timer {
+    font-size: 11px;
+    font-weight: 600;
+    color: #f97316;
+}
+
+.work-streak-timer.streak-expired {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+

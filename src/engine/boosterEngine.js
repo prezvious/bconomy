@@ -168,6 +168,7 @@ class BoosterEngine {
         const ownedEntries = [];
 
         for (const [itemName, rawOwned] of Object.entries(inventory)) {
+            if (Array.isArray(playerState.lockedItems) && playerState.lockedItems.includes(itemName)) continue;
             const parsed = this.parseBoosterInventoryItem(itemName);
             if (!parsed) continue;
 
@@ -436,6 +437,10 @@ class BoosterEngine {
 
         if (!foundKey || playerState.inventory[foundKey] <= 0) {
             return { success: false, error: `You do not have any '${itemName}' in your inventory.` };
+        }
+
+        if (Array.isArray(playerState.lockedItems) && (playerState.lockedItems.includes(foundKey) || playerState.lockedItems.includes(itemName) || playerState.lockedItems.includes(boosterName))) {
+            return { success: false, error: `Booster '${itemName}' is locked and cannot be used. Unlock it first.` };
         }
 
         // Deduct 1 item

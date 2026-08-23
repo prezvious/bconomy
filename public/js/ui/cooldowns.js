@@ -100,6 +100,33 @@ export const cooldownLoop = () => {
             }
         }
 
+        if (act.id === 'work') {
+            const shift = playerState.workShift || { currentStreak: 0, lastWorkAt: 0, streakExpireAt: 0 };
+            const streak = shift.currentStreak || 0;
+            const expireAt = shift.streakExpireAt || 0;
+            const streakTimerEl = document.getElementById('work-streak-timer');
+
+            if (streakTimerEl) {
+                if (streak > 0 && expireAt > 0) {
+                    const streakRemain = expireAt - now;
+                    if (streakRemain > 0) {
+                        streakTimerEl.classList.remove('hidden', 'streak-expired');
+                        const sSecs = Math.ceil(streakRemain / 1000);
+                        const sMins = Math.floor(sSecs / 60);
+                        const sRemSec = sSecs % 60;
+                        streakTimerEl.textContent = `Streak expires in ${sMins}m ${sRemSec}s`;
+                        streakTimerEl.title = `Streak window open until ${formatTimestampDate(expireAt, getStoredSettings())}`;
+                    } else {
+                        streakTimerEl.classList.remove('hidden');
+                        streakTimerEl.classList.add('streak-expired');
+                        streakTimerEl.textContent = 'Streak Expired';
+                        streakTimerEl.title = 'Window expired; next shift will start at 1';
+                    }
+                } else {
+                    streakTimerEl.classList.add('hidden');
+                }
+            }
+        }
     });
 
     // Real-time Active Boosts Updates
