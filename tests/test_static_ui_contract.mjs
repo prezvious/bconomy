@@ -46,7 +46,9 @@ for (const requiredId of [
     'auth-modal',
     'account-profile-modal',
     'release-notes-modal',
-    'btn-release-notes'
+    'btn-release-notes',
+    'btn-release-expand-all',
+    'btn-release-collapse-all'
 ]) {
     assert(ids.includes(requiredId), `Required redesigned control #${requiredId} is present`);
 }

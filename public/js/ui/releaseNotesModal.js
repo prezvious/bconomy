@@ -34,7 +34,7 @@ export const RELEASES = [
                         title: 'Interactive Release Notes Modal',
                         bullets: [
                             'Accessible anytime directly from the Bconomy v2.0 button in the sidebar footer.',
-                            'Browse all updates with instant search, version filtering, and structured changelogs.'
+                            'Browse all updates with instant search, category filtering, and compact collapsible version accordions.'
                         ]
                     }
                 ]
@@ -205,8 +205,9 @@ export const RELEASES = [
     }
 ];
 
-let activeVersionFilter = 'all';
+let activeCategoryFilter = 'all';
 let searchQuery = '';
+const expandedVersions = new Set(['v2.0']); // v2.0 expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -215,13 +216,43 @@ const escapeHtml = value => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const renderReleaseCard = (release) => {
+const matchesCategory = (sectionType, filter) => {
+    if (filter === 'all') return true;
+    const lower = sectionType.toLowerCase();
+    if (filter === 'features') return lower.includes('feature');
+    if (filter === 'improvements') return lower.includes('improvement');
+    if (filter === 'fixes') return lower.includes('fix') || lower.includes('bug');
+    return true;
+};
+
+const renderReleaseAccordion = (release) => {
     const isLatest = release.isLatest;
+    const query = searchQuery.trim().toLowerCase();
+
+    // Filter sections based on category filter
+    const matchingSections = (release.sections || []).filter(section => 
+        matchesCategory(section.type, activeCategoryFilter)
+    );
+
+    if (matchingSections.length === 0) return '';
+
+    // Auto-expand if active search query matches
+    const isExpanded = expandedVersions.has(release.version) || (query.length > 0);
+
+    const totalBullets = matchingSections.reduce((sum, sec) => 
+        sum + (sec.items || []).reduce((itemSum, item) => itemSum + (item.bullets || []).length, 0), 0
+    );
+
     const badgeHtml = isLatest
         ? `<span class="badge release-card-badge latest">Latest v2.0</span>`
         : `<span class="badge release-card-badge">${escapeHtml(release.version)}</span>`;
 
-    const sectionsHtml = (release.sections || []).map(section => {
+    const sectionsHtml = matchingSections.map(section => {
+        const lowerType = section.type.toLowerCase();
+        let sectionIcon = 'lucide:sparkles';
+        if (lowerType.includes('improvement')) sectionIcon = 'lucide:wrench';
+        if (lowerType.includes('fix') || lowerType.includes('bug')) sectionIcon = 'lucide:bug';
+
         const itemsHtml = (section.items || []).map(item => `
             <div class="release-item">
                 <div class="release-item-header">
@@ -235,26 +266,31 @@ const renderReleaseCard = (release) => {
 
         return `
             <div class="release-section">
-                <h4 class="release-section-heading">${escapeHtml(section.type)}</h4>
+                <h4 class="release-section-heading">
+                    ${iconHtml(sectionIcon)}
+                    <span>${escapeHtml(section.type)}</span>
+                </h4>
                 ${itemsHtml}
             </div>
         `;
     }).join('');
 
     return `
-        <article class="release-card ${isLatest ? 'release-card-latest' : ''}" data-version="${escapeHtml(release.version)}">
-            <div class="release-card-header">
-                <div class="release-title-row">
+        <article class="release-accordion ${isExpanded ? 'is-expanded' : 'is-collapsed'} ${isLatest ? 'release-card-latest' : ''}" data-version="${escapeHtml(release.version)}">
+            <button type="button" class="release-accordion-header" aria-expanded="${isExpanded ? 'true' : 'false'}" aria-controls="release-body-${escapeHtml(release.version)}">
+                <div class="release-header-left">
+                    <iconify-icon icon="lucide:chevron-right" class="accordion-chevron" aria-hidden="true"></iconify-icon>
                     ${badgeHtml}
                     <h3 class="release-card-title">${escapeHtml(release.title)}</h3>
                 </div>
-                <div class="release-meta-row">
+                <div class="release-header-right">
+                    <span class="release-change-count">${totalBullets} change${totalBullets === 1 ? '' : 's'}</span>
                     <span class="release-date">
                         ${iconHtml('lucide:calendar')} ${escapeHtml(release.date)}
                     </span>
                 </div>
-            </div>
-            <div class="release-card-body">
+            </button>
+            <div class="release-accordion-body" id="release-body-${escapeHtml(release.version)}" ${isExpanded ? '' : 'hidden'}>
                 ${sectionsHtml}
             </div>
         </article>
@@ -269,9 +305,10 @@ export const renderReleaseNotesList = () => {
     const query = searchQuery.trim().toLowerCase();
 
     const filtered = RELEASES.filter(release => {
-        if (activeVersionFilter !== 'all' && release.version !== activeVersionFilter) {
-            return false;
-        }
+        const hasMatchingSection = (release.sections || []).some(section => 
+            matchesCategory(section.type, activeCategoryFilter)
+        );
+        if (!hasMatchingSection) return false;
 
         if (!query) return true;
 
@@ -286,11 +323,11 @@ export const renderReleaseNotesList = () => {
             <div class="release-empty-state">
                 <iconify-icon icon="lucide:search-x" class="empty-icon" aria-hidden="true"></iconify-icon>
                 <h4>No updates found</h4>
-                <p>No release notes matched "${escapeHtml(searchQuery)}". Try a different search term or filter.</p>
+                <p>No release notes matched "${escapeHtml(searchQuery)}". Try a different search term or category.</p>
             </div>
         `;
     } else {
-        container.innerHTML = filtered.map(renderReleaseCard).join('');
+        container.innerHTML = filtered.map(renderReleaseAccordion).join('');
     }
 
     if (countEl) {
@@ -304,10 +341,10 @@ export const openReleaseNotesModal = () => {
         searchInput.value = searchQuery;
     }
 
-    const filterGroup = document.getElementById('release-version-filters');
+    const filterGroup = document.getElementById('release-category-filters');
     if (filterGroup) {
         filterGroup.querySelectorAll('.release-filter-chip').forEach(el => {
-            el.classList.toggle('active', (el.dataset.version || 'all') === activeVersionFilter);
+            el.classList.toggle('active', (el.dataset.category || 'all') === activeCategoryFilter);
         });
     }
 
@@ -317,8 +354,6 @@ export const openReleaseNotesModal = () => {
         closeOnBackdrop: true
     });
 };
-
-let listenersBound = false;
 
 export const setupReleaseNotesModal = () => {
     const triggerBtn = document.getElementById('btn-release-notes');
@@ -338,16 +373,60 @@ export const setupReleaseNotesModal = () => {
         });
     }
 
-    const filterGroup = document.getElementById('release-version-filters');
-    if (filterGroup && !filterGroup.dataset.bound) {
-        filterGroup.dataset.bound = 'true';
-        filterGroup.addEventListener('click', (e) => {
+    // Category filter chips
+    const categoryGroup = document.getElementById('release-category-filters');
+    if (categoryGroup && !categoryGroup.dataset.bound) {
+        categoryGroup.dataset.bound = 'true';
+        categoryGroup.addEventListener('click', (e) => {
             const chip = e.target.closest('.release-filter-chip');
             if (!chip) return;
 
-            filterGroup.querySelectorAll('.release-filter-chip').forEach(el => el.classList.remove('active'));
+            categoryGroup.querySelectorAll('.release-filter-chip').forEach(el => el.classList.remove('active'));
             chip.classList.add('active');
-            activeVersionFilter = chip.dataset.version || 'all';
+            activeCategoryFilter = chip.dataset.category || 'all';
+            renderReleaseNotesList();
+        });
+    }
+
+    // Expand All / Collapse All buttons
+    const expandBtn = document.getElementById('btn-release-expand-all');
+    if (expandBtn && !expandBtn.dataset.bound) {
+        expandBtn.dataset.bound = 'true';
+        expandBtn.addEventListener('click', () => {
+            RELEASES.forEach(r => expandedVersions.add(r.version));
+            renderReleaseNotesList();
+        });
+    }
+
+    const collapseBtn = document.getElementById('btn-release-collapse-all');
+    if (collapseBtn && !collapseBtn.dataset.bound) {
+        collapseBtn.dataset.bound = 'true';
+        collapseBtn.addEventListener('click', () => {
+            expandedVersions.clear();
+            renderReleaseNotesList();
+        });
+    }
+
+    // Accordion item header click delegation
+    const listContainer = document.getElementById('release-notes-list');
+    if (listContainer && !listContainer.dataset.bound) {
+        listContainer.dataset.bound = 'true';
+        listContainer.addEventListener('click', (e) => {
+            const headerBtn = e.target.closest('.release-accordion-header');
+            if (!headerBtn) return;
+
+            const card = headerBtn.closest('.release-accordion');
+            if (!card) return;
+
+            const version = card.dataset.version;
+            if (!version) return;
+
+            if (expandedVersions.has(version)) {
+                expandedVersions.delete(version);
+            } else {
+                expandedVersions.add(version);
+            }
+
             renderReleaseNotesList();
         });
     }

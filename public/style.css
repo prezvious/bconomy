@@ -8288,8 +8288,8 @@ details[open] .details-arrow {
 
 .release-search-wrapper {
     position: relative;
-    flex: 1 1 240px;
-    min-width: 200px;
+    flex: 1 1 220px;
+    min-width: 180px;
 }
 
 .release-search-icon {
@@ -8318,7 +8318,16 @@ details[open] .details-arrow {
     outline: none;
 }
 
-.release-filter-group {
+.release-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex: 2 1 360px;
+}
+
+.release-category-filters {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -8328,13 +8337,20 @@ details[open] .details-arrow {
 .release-filter-chip {
     font-size: 12px;
     font-weight: 600;
-    padding: 5px 12px;
+    padding: 5px 10px;
     border-radius: 14px;
     border: 1px solid var(--border);
     background: var(--bg-muted);
     color: var(--text-muted);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.release-filter-chip .chip-icon {
+    font-size: 13px;
 }
 
 .release-filter-chip:hover {
@@ -8350,46 +8366,107 @@ details[open] .details-arrow {
     font-weight: 700;
 }
 
+.release-accordion-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.release-ctrl-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--border);
+    background: var(--bg-muted);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.release-ctrl-btn .ctrl-icon {
+    font-size: 13px;
+}
+
+.release-ctrl-btn:hover {
+    color: var(--text-main);
+    border-color: var(--accent-brass, #c5a059);
+    background: var(--bg-surface-hover, rgba(255, 255, 255, 0.05));
+}
+
 .release-notes-body {
-    padding: 20px 24px;
+    padding: 16px 24px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     flex: 1 1 auto;
 }
 
-.release-card {
+/* ── Collapsible Version Accordions ── */
+.release-accordion {
     background: var(--bg-card, rgba(255, 255, 255, 0.02));
     border: 1px solid var(--border);
     border-radius: var(--radius, 8px);
-    padding: 16px 18px;
+    overflow: hidden;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.release-card:hover {
+.release-accordion:hover {
     border-color: var(--border-hover, #555);
 }
 
-.release-card-latest {
+.release-accordion.release-card-latest {
     border-color: var(--accent-brass, #c5a059);
-    background: linear-gradient(180deg, rgba(197, 160, 89, 0.05) 0%, var(--bg-card, rgba(255, 255, 255, 0.02)) 100%);
-    box-shadow: 0 0 16px rgba(197, 160, 89, 0.08);
+    background: linear-gradient(180deg, rgba(197, 160, 89, 0.04) 0%, var(--bg-card, rgba(255, 255, 255, 0.02)) 100%);
+    box-shadow: 0 0 14px rgba(197, 160, 89, 0.06);
 }
 
-.release-card-header {
+.release-accordion-header {
+    width: 100%;
+    padding: 14px 18px;
+    background: none;
+    border: none;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-main);
+    font-family: inherit;
+    transition: background-color 0.15s ease;
 }
 
-.release-title-row {
+.release-accordion-header:hover {
+    background: var(--bg-surface-hover, rgba(255, 255, 255, 0.03));
+}
+
+.release-accordion-header:focus-visible {
+    outline: 2px solid var(--accent-brass);
+    outline-offset: -2px;
+}
+
+.release-header-left {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.accordion-chevron {
+    font-size: 16px;
+    color: var(--accent-brass, #c5a059);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.release-accordion.is-expanded .accordion-chevron {
+    transform: rotate(90deg);
 }
 
 .release-card-badge {
@@ -8400,6 +8477,7 @@ details[open] .details-arrow {
     background: var(--bg-muted);
     color: var(--text-muted);
     border: 1px solid var(--border);
+    flex-shrink: 0;
 }
 
 .release-card-badge.latest {
@@ -8409,18 +8487,32 @@ details[open] .details-arrow {
 }
 
 .release-card-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--text-main);
     margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.release-meta-row {
+.release-header-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    flex-shrink: 0;
     font-size: 12px;
     color: var(--text-muted);
+}
+
+.release-change-count {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--bg-inset, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    color: var(--text-subtle);
 }
 
 .release-date {
@@ -8429,20 +8521,9 @@ details[open] .details-arrow {
     gap: 4px;
 }
 
-.release-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--accent-brass, #c5a059);
-    text-decoration: none;
-}
-
-.release-link:hover {
-    text-decoration: underline;
-}
-
-.release-card-body {
-    padding-top: 12px;
+.release-accordion-body {
+    padding: 14px 18px 16px 42px;
+    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -8461,8 +8542,11 @@ details[open] .details-arrow {
     letter-spacing: 0.08em;
     color: var(--accent-brass, #c5a059);
     margin: 0 0 4px 0;
-    padding-bottom: 2px;
+    padding-bottom: 3px;
     border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .release-item {
@@ -8481,11 +8565,6 @@ details[open] .details-arrow {
 .release-item-title {
     color: var(--text-main);
     font-weight: 600;
-}
-
-.release-item-author {
-    font-size: 11px;
-    color: var(--text-muted);
 }
 
 .release-bullet-list {

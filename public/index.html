@@ -1187,14 +1187,35 @@
                     <iconify-icon icon="lucide:search" class="release-search-icon" aria-hidden="true"></iconify-icon>
                     <input type="text" id="release-notes-search" class="form-input release-search-input" placeholder="Search updates, features, bugfixes..." autocomplete="off">
                 </div>
-                <div class="release-filter-group" id="release-version-filters" role="group" aria-label="Filter releases by version">
-                    <button type="button" class="release-filter-chip active" data-version="all">All Updates</button>
-                    <button type="button" class="release-filter-chip" data-version="v2.0">v2.0 (Latest)</button>
-                    <button type="button" class="release-filter-chip" data-version="v1.4">v1.4</button>
-                    <button type="button" class="release-filter-chip" data-version="v1.3">v1.3</button>
-                    <button type="button" class="release-filter-chip" data-version="v1.2">v1.2</button>
-                    <button type="button" class="release-filter-chip" data-version="v1.1">v1.1</button>
-                    <button type="button" class="release-filter-chip" data-version="v1.0">v1.0</button>
+                <div class="release-toolbar-actions">
+                    <div class="release-category-filters" id="release-category-filters" role="group" aria-label="Filter by change type">
+                        <button type="button" class="release-filter-chip active" data-category="all">
+                            <iconify-icon icon="lucide:layers" class="chip-icon" aria-hidden="true"></iconify-icon>
+                            <span>All Changes</span>
+                        </button>
+                        <button type="button" class="release-filter-chip" data-category="features">
+                            <iconify-icon icon="lucide:sparkles" class="chip-icon" aria-hidden="true"></iconify-icon>
+                            <span>Features</span>
+                        </button>
+                        <button type="button" class="release-filter-chip" data-category="improvements">
+                            <iconify-icon icon="lucide:wrench" class="chip-icon" aria-hidden="true"></iconify-icon>
+                            <span>Improvements</span>
+                        </button>
+                        <button type="button" class="release-filter-chip" data-category="fixes">
+                            <iconify-icon icon="lucide:bug" class="chip-icon" aria-hidden="true"></iconify-icon>
+                            <span>Bug Fixes</span>
+                        </button>
+                    </div>
+                    <div class="release-accordion-controls">
+                        <button type="button" class="release-ctrl-btn" id="btn-release-expand-all" title="Expand all version accordions" aria-label="Expand all versions">
+                            <iconify-icon icon="lucide:chevrons-down-up" class="ctrl-icon" aria-hidden="true"></iconify-icon>
+                            <span>Expand All</span>
+                        </button>
+                        <button type="button" class="release-ctrl-btn" id="btn-release-collapse-all" title="Collapse all version accordions" aria-label="Collapse all versions">
+                            <iconify-icon icon="lucide:chevrons-up-down" class="ctrl-icon" aria-hidden="true"></iconify-icon>
+                            <span>Collapse All</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
