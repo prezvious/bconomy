@@ -42,6 +42,11 @@ assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.crafting-detail-pane/);
 assert.match(css, /\.crafting-list-row\.super-compact/);
 assert.match(css, /\.crafting-selection-narrow\s*\{\s*display:\s*none/);
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.crafting-selection-narrow\s*\{[^}]*display:\s*block/s);
+assert.match(css, /\.crafting-detail-pane\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s, 'Desktop crafting details scroll vertically without horizontal overflow');
+assert.match(css, /\.crafting-dialog-body\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s, 'Responsive crafting dialog scrolls vertically without horizontal overflow');
+assert.match(css, /\.crafting-details-card\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s, 'Crafting details card is constrained to its responsive container');
+assert.match(css, /\.crafting-operation-controls\s*\{[^}]*repeat\(auto-fit,\s*minmax\(min\(240px,\s*100%\),\s*1fr\)\)/s, 'Crafting controls reflow when their pane narrows');
+assert.match(css, /\.crafting-cost-line,[\s\S]*?\.crafting-result-group li\s*\{[^}]*flex-wrap:\s*wrap;/s, 'Long bill-of-material and result rows wrap instead of widening the card');
 
 assert.ok(preferences.includes("'crafting', 'shop-buy', 'shop-sell', 'booster-activation'"));
 for (const scope of ['global', 'system', 'subject']) assert.ok(settings.includes(`data-save-quantity-scope="${scope}"`));
@@ -52,4 +57,4 @@ assert.ok(tools.includes("systemId: 'tool-upgrades'"));
 assert.ok(perks.includes("systemId: 'perk-upgrades'"));
 assert.ok(boosters.includes("systemId: 'booster-activation'"));
 
-console.log('✓ Three crafting views, responsive details, authoritative actions, and shared preset integrations verified');
+console.log('✓ Three crafting views, vertical-only responsive details, authoritative actions, and shared preset integrations verified');
