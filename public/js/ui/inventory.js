@@ -11,8 +11,13 @@ import { getStoredSettings, saveStoredSettings } from '../preferences.js';
 import { openItemModal } from './itemModal.js';
 import { getOwnedBoosterUnitCount, openBulkBoosterDialog } from './boosterBulk.js';
 import { setupCollapsibleSearch } from './collapsibleSearch.js';
+import { doSetInventoryFlags } from '../api.js';
+import { showToast } from './toast.js';
 
 let renderedItems = [];
+let selectionMode = false;
+let lastSelectionIndex = -1;
+const selectedItems = new Set();
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -63,6 +68,7 @@ const setupInventoryControls = () => {
     const compactView = document.getElementById('inventory-view-compact');
     const bulkBoosters = document.getElementById('btn-open-bulk-boosters');
     const grid = document.getElementById('inventory-grid');
+    const selectModeButton = document.getElementById('btn-inventory-select-mode');
 
     bindControl(search, 'input', () => updateInventoryPreference({ search: search.value }));
     bindControl(category, 'change', () => updateInventoryPreference({ category: category.value }));
@@ -76,13 +82,41 @@ const setupInventoryControls = () => {
             void import('./actions.js').then(({ renderActiveBoosts }) => renderActiveBoosts());
         }
     }));
+    bindControl(selectModeButton, 'click', () => {
+        selectionMode = !selectionMode;
+        if (!selectionMode) selectedItems.clear();
+        lastSelectionIndex = -1;
+        renderInventory();
+    });
 
     const handleCardClick = event => {
         const card = event.target.closest?.('.inventory-item');
         const rawName = card?.dataset.rawName;
-        if (rawName) {
-            openItemModal(rawName);
+        if (!rawName) return;
+        const action = event.target.closest?.('[data-item-action]')?.dataset.itemAction;
+        if (action === 'lock' || action === 'favorite') {
+            event.stopPropagation();
+            const state = getState();
+            const list = action === 'lock' ? state.lockedItems : state.favoriteItems;
+            const enabled = !(Array.isArray(list) && list.includes(rawName));
+            void doSetInventoryFlags([rawName], { [action === 'lock' ? 'locked' : 'favorite']: enabled }, event.target.closest('button'))
+                .then(() => renderInventory())
+                .catch(error => showToast(error.message || 'Could not update item', 'error'));
+            return;
         }
+        if (selectionMode || event.target.matches?.('[data-item-select]')) {
+            const index = renderedItems.findIndex(item => item.rawName === rawName);
+            const settings = getStoredSettings().inventory;
+            if (event.shiftKey && settings.shiftRangeEnabled && lastSelectionIndex >= 0 && index >= 0) {
+                const [start, end] = [lastSelectionIndex, index].sort((a, b) => a - b);
+                for (let cursor = start; cursor <= end; cursor += 1) selectedItems.add(renderedItems[cursor].rawName);
+            } else if (selectedItems.has(rawName)) selectedItems.delete(rawName);
+            else selectedItems.add(rawName);
+            lastSelectionIndex = index;
+            renderInventory();
+            return;
+        }
+        openItemModal(rawName);
     };
 
     if (grid && grid.dataset.inventoryDelegated !== 'true') {
@@ -95,6 +129,52 @@ const setupInventoryControls = () => {
         pinnedGrid.dataset.inventoryDelegated = 'true';
         pinnedGrid.addEventListener('click', handleCardClick);
     }
+
+    [grid, pinnedGrid].filter(Boolean).forEach(itemGrid => {
+        if (itemGrid.dataset.inventoryLassoBound === 'true') return;
+        itemGrid.dataset.inventoryLassoBound = 'true';
+        itemGrid.addEventListener('pointerenter', event => {
+            if (!selectionMode || event.buttons !== 1 || !getStoredSettings().inventory.lassoEnabled) return;
+            const card = event.target.closest?.('.inventory-item');
+            if (card?.dataset.rawName) {
+                selectedItems.add(card.dataset.rawName);
+                card.classList.add('is-selected');
+                card.querySelector('[data-item-select]')?.setAttribute('checked', '');
+                updateBatchToolbar();
+            }
+        }, true);
+    });
+
+    document.querySelectorAll('[data-inventory-batch]').forEach(button => bindControl(button, 'click', async () => {
+        const itemIds = [...selectedItems];
+        const action = button.dataset.inventoryBatch;
+        if (action === 'clear') {
+            selectedItems.clear();
+            renderInventory();
+            return;
+        }
+        if (action === 'sell') {
+            if (!itemIds.length) return;
+            sessionStorage.setItem('bconomy_bulk_sell_selection', JSON.stringify(itemIds));
+            const { activateSection } = await import('../navigation.js');
+            activateSection('shop');
+            const { openBulkActionsModal } = await import('./shop.js');
+            window.setTimeout(() => openBulkActionsModal('sell', { selectedItems: itemIds }), 0);
+            return;
+        }
+        if (!itemIds.length) return;
+        const changes = action === 'lock' ? { locked: true }
+            : action === 'unlock' ? { locked: false }
+                : action === 'favorite' ? { favorite: true }
+                    : { favorite: false };
+        try {
+            await doSetInventoryFlags(itemIds, changes, button);
+            showToast(`Updated ${itemIds.length} item type${itemIds.length === 1 ? '' : 's'}.`, 'success');
+            renderInventory();
+        } catch (error) {
+            showToast(error.message || 'Batch update failed', 'error');
+        }
+    }));
 };
 
 const sortItems = (items, sort) => items.sort((a, b) => {
@@ -104,26 +184,48 @@ const sortItems = (items, sort) => items.sort((a, b) => {
     return a.displayName.localeCompare(b.displayName);
 });
 
-const renderCardHtml = (item, isLocked) => {
+const renderCardHtml = (item, isLocked, isFavorite) => {
     const displayName = escapeHtml(item.displayName);
     const category = escapeHtml(item.category);
     const displayQuantity = formatDisplayNumber(item.quantity);
     const exactQuantity = formatNumberCommas(item.quantity);
     const rawName = escapeHtml(item.rawName);
 
+    const isSelected = selectedItems.has(item.rawName);
     return `
-        <button class="inventory-item card ${isLocked ? 'item-is-locked' : ''}" type="button" data-raw-name="${rawName}"
-            aria-label="View details for ${displayName}, ${exactQuantity} owned" title="${displayName} · ${exactQuantity} owned${isLocked ? ' (Locked)' : ''}">
+        <article class="inventory-item card ${isLocked ? 'item-is-locked' : ''} ${isFavorite ? 'item-is-favorite' : ''} ${isSelected ? 'is-selected' : ''}" data-raw-name="${rawName}"
+            title="${displayName} · ${exactQuantity} owned${isLocked ? ' (Locked)' : ''}">
+            ${selectionMode ? `<input class="inventory-select-check" type="checkbox" data-item-select aria-label="Select ${displayName}" ${isSelected ? 'checked' : ''}>` : ''}
+            <button class="inventory-card-main" type="button" aria-label="View details for ${displayName}, ${exactQuantity} owned">
             <span class="item-card-top">
                 <span class="item-cat-badge" data-cat="${category}">${escapeHtml(titleCase(item.category))}</span>
                 <span class="item-card-badges">
                     ${isLocked ? `<span class="item-lock-badge" title="Locked (Cannot be sold or used)">${iconHtml('lucide:lock', 'item-lock-badge-icon')}</span>` : ''}
+                    ${isFavorite ? `<span class="item-favorite-badge" title="Favorite">${iconHtml('lucide:star', 'item-lock-badge-icon')}</span>` : ''}
                     <span class="item-qty" title="${exactQuantity}">${displayQuantity}</span>
                 </span>
             </span>
             <span class="item-icon-wrap" data-cat="${category}">${iconHtml(getItemIcon(item.rawName), 'item-icon')}</span>
             <span class="item-name">${displayName}</span>
-        </button>`;
+            </button>
+            <span class="inventory-inline-actions">
+                <button type="button" data-item-action="favorite" aria-pressed="${isFavorite}" title="${isFavorite ? 'Remove favorite' : 'Add favorite'}">${iconHtml(isFavorite ? 'lucide:star-off' : 'lucide:star')}</button>
+                <button type="button" data-item-action="lock" aria-pressed="${isLocked}" title="${isLocked ? 'Unlock item' : 'Lock item'}">${iconHtml(isLocked ? 'lucide:unlock' : 'lucide:lock')}</button>
+            </span>
+        </article>`;
+};
+
+const updateBatchToolbar = () => {
+    const toolbar = document.getElementById('inventory-batch-toolbar');
+    const count = document.getElementById('inventory-selected-count');
+    const modeButton = document.getElementById('btn-inventory-select-mode');
+    toolbar?.classList.toggle('hidden', !selectionMode);
+    if (count) count.textContent = `${selectedItems.size} selected`;
+    if (modeButton) {
+        modeButton.setAttribute('aria-pressed', String(selectionMode));
+        modeButton.classList.toggle('active', selectionMode);
+        modeButton.lastChild.textContent = selectionMode ? ' Done' : ' Select Items';
+    }
 };
 
 export const renderInventory = () => {
@@ -138,6 +240,7 @@ export const renderInventory = () => {
     if (!playerState || !grid || !emptyState || !search) return;
 
     setupInventoryControls();
+    updateBatchToolbar();
     const settings = getStoredSettings();
     const inventoryPrefs = settings.inventory;
     const items = getConsolidatedItems(playerState.inventory);
@@ -202,7 +305,7 @@ export const renderInventory = () => {
     if (boosterActionLabel) boosterActionLabel.textContent = 'Activate Boosters';
 
     const lockedList = Array.isArray(playerState.lockedItems) ? playerState.lockedItems : [];
-    const pinnedList = Array.isArray(playerState.pinnedItems) ? playerState.pinnedItems : [];
+    const pinnedList = Array.isArray(playerState.favoriteItems) ? playerState.favoriteItems : [];
 
     const searchTerm = inventoryPrefs.search.trim().toLowerCase();
     const filtered = items.filter(item => {
@@ -245,8 +348,8 @@ export const renderInventory = () => {
         if (pinnedItems.length > 0) {
             pinnedContainer.classList.remove('hidden');
             if (pinnedCountEl) pinnedCountEl.textContent = formatDisplayNumber(pinnedItems.length);
-            if (pinnedIconWrap) pinnedIconWrap.innerHTML = iconHtml('lucide:pin', 'pinned-section-svg');
-            pinnedGrid.innerHTML = pinnedItems.map(item => renderCardHtml(item, isItemLocked(item))).join('');
+            if (pinnedIconWrap) pinnedIconWrap.innerHTML = iconHtml('lucide:star', 'pinned-section-svg');
+            pinnedGrid.innerHTML = pinnedItems.map(item => renderCardHtml(item, isItemLocked(item), true)).join('');
         } else {
             pinnedContainer.classList.add('hidden');
             pinnedGrid.innerHTML = '';
@@ -256,7 +359,7 @@ export const renderInventory = () => {
     // Render Standard Unpinned Section
     if (unpinnedItems.length > 0) {
         grid.classList.remove('hidden');
-        grid.innerHTML = unpinnedItems.map(item => renderCardHtml(item, isItemLocked(item))).join('');
+        grid.innerHTML = unpinnedItems.map(item => renderCardHtml(item, isItemLocked(item), false)).join('');
     } else {
         grid.innerHTML = '';
         grid.classList.add('hidden');

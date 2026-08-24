@@ -79,7 +79,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.1.1" title="Click to view release notes">Bconomy v3.1.1</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.2.0" title="Click to view release notes">Bconomy v3.2.0</button>
             </div>
         </nav>
 
@@ -95,13 +95,14 @@
                         </div>
                     </div>
 
-                    <div class="header-stat stat-rank" title="Current Standing Rank">
+                    <button id="header-rank-tracker" class="header-stat stat-rank header-rank-tracker" type="button" title="Open rank advancement options" aria-label="Open rank advancement options">
                         <iconify-icon icon="lucide:medal" class="stat-icon" aria-hidden="true"></iconify-icon>
                         <div class="stat-info">
                             <span class="stat-label">Rank</span>
                             <span class="stat-value" id="header-rank">Rank 1 - Peasant</span>
+                            <span class="rank-deficit-value" id="header-rank-deficit" aria-live="polite">Checking next rank…</span>
                         </div>
-                    </div>
+                    </button>
                 </div>
 
                 <div class="header-controls">
@@ -260,11 +261,25 @@
                                     <span id="inventory-booster-action-label">Activate Boosters</span>
                                 </button>
                             </div>
+                            <button id="btn-inventory-select-mode" class="action-btn secondary-btn" type="button" aria-pressed="false">
+                                <iconify-icon icon="lucide:list-checks" aria-hidden="true"></iconify-icon> Select Items
+                            </button>
+                        </div>
+                        <div id="inventory-batch-toolbar" class="inventory-batch-toolbar hidden" role="toolbar" aria-label="Selected inventory item actions">
+                            <strong id="inventory-selected-count" aria-live="polite">0 selected</strong>
+                            <div class="inventory-batch-actions">
+                                <button class="action-btn secondary-btn" type="button" data-inventory-batch="lock"><iconify-icon icon="lucide:lock" aria-hidden="true"></iconify-icon> Lock</button>
+                                <button class="action-btn secondary-btn" type="button" data-inventory-batch="unlock"><iconify-icon icon="lucide:unlock" aria-hidden="true"></iconify-icon> Unlock</button>
+                                <button class="action-btn secondary-btn" type="button" data-inventory-batch="favorite"><iconify-icon icon="lucide:star" aria-hidden="true"></iconify-icon> Favorite</button>
+                                <button class="action-btn secondary-btn" type="button" data-inventory-batch="unfavorite"><iconify-icon icon="lucide:star-off" aria-hidden="true"></iconify-icon> Unfavorite</button>
+                                <button class="action-btn primary-btn" type="button" data-inventory-batch="sell"><iconify-icon icon="lucide:coins" aria-hidden="true"></iconify-icon> Sell Selected</button>
+                                <button class="action-btn secondary-btn" type="button" data-inventory-batch="clear">Clear</button>
+                            </div>
                         </div>
                         <div id="inventory-pinned-container" class="inventory-pinned-section mb-4 hidden">
                             <div class="inventory-section-header mb-2">
                                 <span class="inventory-section-title">
-                                    <span id="pinned-section-icon-wrap"></span> Pinned
+                                    <span id="pinned-section-icon-wrap"></span> Favorites
                                 </span>
                                 <span id="inventory-pinned-count" class="charter-badge">0</span>
                             </div>
@@ -396,6 +411,7 @@
                                                     <span class="cost-label">Promotion Cost:</span>
                                                     <span class="cost-value font-mono" id="rp-next-rank-cost">$0</span>
                                                 </div>
+                                                <div id="rp-next-rank-deficit" class="rank-deficit-inline" aria-live="polite"></div>
                                             </div>
                                             <button id="btn-rp-promote" class="action-btn primary-btn btn-large" type="button">Promote Rank</button>
                                         </div>
@@ -440,6 +456,19 @@
                                 </button>
                                 <div class="accordion-body" id="acc-body-perks">
                                     <div class="perks-grid" id="rp-perks-grid"></div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item" id="acc-item-perk-simulator">
+                                <button class="accordion-header" type="button" aria-expanded="false" aria-controls="acc-body-perk-simulator">
+                                    <div class="accordion-title">
+                                        <iconify-icon icon="lucide:calculator" class="accordion-icon" aria-hidden="true"></iconify-icon>
+                                        <span>Prestige &amp; Perk Simulator</span>
+                                    </div>
+                                    <iconify-icon icon="lucide:chevron-down" class="accordion-arrow" aria-hidden="true"></iconify-icon>
+                                </button>
+                                <div class="accordion-body" id="acc-body-perk-simulator">
+                                    <div id="prestige-simulator" class="prestige-simulator" aria-live="polite"></div>
                                 </div>
                             </div>
                         </div>
@@ -931,31 +960,28 @@
                     <p class="checkbox-subtitle">Calculate and advance across career standing tiers in a single promotion.</p>
                 </div>
 
-                <div class="form-group mb-4">
-                    <div class="label-with-checkbox">
-                        <label class="form-label font-bold" for="targeted-max-checkbox">Options:</label>
-                    </div>
-                    <label class="modal-checkbox-label mt-1">
-                        <input type="checkbox" id="targeted-max-checkbox">
-                        <span>Calculate Max Affordable Ranks</span>
-                    </label>
-                </div>
+                <fieldset class="targeted-mode-selector mb-4">
+                    <legend class="form-label font-bold">Advancement mode</legend>
+                    <label><input type="radio" name="targeted-rank-mode" value="next" checked> Next rank</label>
+                    <label><input type="radio" name="targeted-rank-mode" value="max"> Max affordable</label>
+                    <label><input type="radio" name="targeted-rank-mode" value="custom"> Custom target</label>
+                </fieldset>
 
                 <div id="targeted-custom-controls" class="targeted-custom-group mb-4">
                     <div class="form-group mb-3">
                         <label for="targeted-tier-input" class="form-label">Target Tier:</label>
-                        <input type="number" id="targeted-tier-input" class="form-input" min="0" value="0">
+                        <input type="number" id="targeted-tier-input" name="targeted-tier" class="form-input" inputmode="numeric" autocomplete="off" min="0" value="0">
                     </div>
                     <div class="form-group mb-3">
                         <label for="targeted-rank-select" class="form-label">Target Rank:</label>
-                        <select id="targeted-rank-select" class="form-input"></select>
+                        <select id="targeted-rank-select" name="targeted-rank" class="form-input" autocomplete="off"></select>
                     </div>
                 </div>
 
                 <div class="targeted-dynamic-card card mb-4">
                     <div class="flavor-text-row">
                         <iconify-icon icon="lucide:file-text" class="flavor-icon" aria-hidden="true"></iconify-icon>
-                        <p class="flavor-text" id="targeted-flavor-text">Reviewing your economic standing and accumulated capital for career advancement...</p>
+                        <p class="flavor-text" id="targeted-flavor-text">Reviewing your economic standing and accumulated capital for career advancement…</p>
                     </div>
                     <div class="prompt-text-row mt-2">
                         <p class="prompt-text" id="targeted-prompt-text">Would you like to advance to Tier 0 at Rank God?</p>
@@ -999,9 +1025,20 @@
                     </button>
                     <button id="btn-item-modal-pin" type="button" class="btn btn-secondary item-modal-toggle-btn">
                         <span class="btn-icon-wrap" id="item-modal-pin-icon"></span>
-                        <span id="item-modal-pin-label">Pin to Top</span>
+                        <span id="item-modal-pin-label">Favorite</span>
+                    </button>
+                    <button id="btn-item-modal-wishlist" type="button" class="btn btn-secondary item-modal-toggle-btn">
+                        <span class="btn-icon-wrap" id="item-modal-wishlist-icon"></span>
+                        <span id="item-modal-wishlist-label">Add to Wishlist</span>
                     </button>
                 </div>
+
+                <section class="item-modal-details mb-4" aria-labelledby="item-where-used-title">
+                    <h4 id="item-where-used-title" class="card-title-sm item-specifications-title">
+                        <iconify-icon icon="lucide:git-fork" aria-hidden="true"></iconify-icon> Where Is This Used?
+                    </h4>
+                    <div id="item-modal-where-used" class="where-used-list" aria-live="polite">Loading recipe uses…</div>
+                </section>
 
                 <section id="item-modal-details" class="item-modal-details mb-4" aria-labelledby="item-specifications-title">
                     <h4 id="item-specifications-title" class="card-title-sm item-specifications-title">
@@ -1342,7 +1379,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v3.1.1 Latest</span>
+                            <span class="badge release-latest-tag">v3.2.0 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>

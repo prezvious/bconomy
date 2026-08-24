@@ -13,19 +13,19 @@ A persistent text-based economy and incremental game engine built with Node.js, 
 ## Features
 
 - **Resource Gathering** — Mine, explore, hunt, and fish to collect items and materials.
-- **Tool Progression** — Upgrade gathering tools to improve efficiency and unlock better results.
-- **Career Ranks** — Advance through economic ranks with scaling requirements.
-- **Prestige System** — Reset progression to earn prestige points and unlock permanent perks.
+- **Tool Progression** — Upgrade gathering tools to improve efficiency, inspect exact recipe blockers, and jump to the maximum affordable level.
+- **Career Ranks** — Track the live next-rank deficit and preview next, maximum affordable, or custom advancement targets.
+- **Prestige System** — Simulate and optimize staged perk allocations before spending current points or atomically ascending and applying a plan.
 - **Farming** — Plant crops on expandable plots, mark reusable plot selections, bulk-upgrade all, typed, or marked plots through Level 16, accelerate every active plot with global watering, and manage harvests through Crop Storage & Logistics.
-- **Inventory & Item Details** — Search, filter, sort, switch between regular and compact item-card grids, and activate owned boosters in one atomic bulk action.
-- **Realistic Crafting** — Gather 450 general-purpose raw materials and build 216 new products across 18 production domains using direct or recursive atomic recipes.
-- **System Shop** — Buy rotating stock, sell inventory, activate boosters, and preview atomic bulk trades.
+- **Inventory & Item Details** — Lock or favorite any owned type, batch-select with checkboxes, Shift ranges, or lasso movement, and hand selected items to bulk selling.
+- **Realistic Crafting** — Gather 450 general-purpose raw materials, build 216 products through direct or recursive atomic recipes, inspect reverse dependencies, craft exact maximums, and fill direct intermediates in place.
+- **System Shop** — Wishlist restock targets, read configurable sell-roll indicators, preview atomic bulk trades, and extend every active booster from one review.
 - **Factions** — Create a faction, fund its treasury, and configure duration or continuous action multipliers.
 - **Gambling** — Play coinflip and slots modes with server-validated wagers.
 - **Display Preferences** — Choose number formatting and interface density, then configure shared quantity presets globally, per system, or for an individual item.
 - **Keyboard Controls** — Use or remap 18 shortcuts for navigation, core actions, contextual Help, Console entry, and theme switching.
 - **Contextual Help & Commands** — Follow section-aware Help, search the full 49-topic handbook, and personalize every existing Console slash command with aliases and autocomplete.
-- **REST API** — Modular API layer enabling front-end interactions and state synchronization.
+- **Versioned Game API** — Typed, server-authoritative queries and idempotent commands with normalized state, authenticated revisions, and conflict-safe persistence.
 
 ---
 
@@ -76,6 +76,8 @@ Display, notification, control, command, utility-rail, and bulk-action preferenc
 
 Quantity-enabled systems resolve four editable values plus an immutable **Max** action through global → system → item inheritance. The default values are 1, 10, 100, and 1000. Preview policy can be set to every operation, recursive only, large quantities only, or never; the global `bulkActions.skipAllPreviews` option remains the final override. `inventory.showUnavailableBoosterAction` controls whether the disabled Inventory booster action remains visible when no usable boosters are owned.
 
+Quality-of-life preferences also control inventory lasso and Shift-range selection, restock-wishlist alert frequency, sell-roll thresholds/colors/display, and prestige-simulator defaults. These interface preferences remain local; lock, favorite, and wishlist membership live in the normalized player save.
+
 All application pop-ups use the shared native `<dialog>` controller. Transactional dialogs require an explicit action or cancellation, while passive item details may close from the backdrop. Escape and focus restoration are handled consistently.
 
 ### Controls, commands, and Help
@@ -96,6 +98,10 @@ Successful Mine, Explore, Hunt, and Fish actions award 8–15 distinct material 
 
 Direct mode consumes only owned recipe inputs. Recursive mode plans and produces missing craftable prerequisites from atomic raw stock, consumes owned intermediates before newly produced ones, and commits the entire plan only when every dependency is available. Locked item types are never consumed. See `docs/crafting-system.md` for the operational guide and `docs/crafting-catalog.md` for the complete generated catalog.
 
+### Player state and API
+
+Guest saves and authenticated cloud saves are isolated. Signed-in commands carry a verified bearer token, expected state revision, and unique command ID; Supabase commits them atomically and replays duplicate receipts without applying effects twice. Device/cloud divergence requires an explicit reconciliation choice. See [docs/GAME_API_V1.md](docs/GAME_API_V1.md) for the contract and [DEPLOYMENT.md](DEPLOYMENT.md) for schema and credential requirements.
+
 ---
 
 ## Project Structure
@@ -105,6 +111,9 @@ bconomy/
 ├── server.js            # Express application entry point
 ├── src/
 │   ├── engine/          # Core game logic modules
+│   ├── api/             # Typed game command/query gateway
+│   ├── data/            # Canonical item registry
+│   ├── state/           # Player-state schema normalization
 │   └── utils/           # Shared utility functions
 ├── public/              # Static web client
 │   ├── index.html

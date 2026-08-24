@@ -1,8 +1,8 @@
 // Bconomy Main Entry Point (ES Module)
 import { apiCall } from './js/api.js';
-import { loadState, setState, saveState, setRankData, setPerkData } from './js/state.js';
+import { loadState, getState, setState, saveState, setRankData, setPerkData, setRevision } from './js/state.js';
 import { initAuth, getAuthProfile } from './js/auth.js';
-import { setupAuthModal } from './js/ui/authModal.js';
+import { setupAuthModal, reconcileSignedState } from './js/ui/authModal.js';
 import { setupThemeToggle } from './js/theme.js';
 import { renderAll } from './js/ui/header.js';
 import { updateAllToolRecipes } from './js/ui/tools.js';
@@ -23,6 +23,7 @@ const init = async () => {
     setupConsoleHandlers();
 
     try {
+        const deviceState = loadState();
         // Initialize Supabase Auth & Profile
         await initAuth();
         setupAuthModal();
@@ -40,10 +41,12 @@ const init = async () => {
         let state = null;
 
         if (profile && profile.state && Object.keys(profile.state).length > 0) {
-            state = profile.state;
+            await reconcileSignedState(profile, deviceState);
+            state = getState() || profile.state;
+            setRevision((getAuthProfile() || profile).state_revision || 0);
             addLogEntry(`Loaded cloud vault for Player ${profile.formatted_player_id || '#' + profile.player_id} (${profile.username}).`, 'system');
         } else {
-            state = loadState();
+            state = deviceState;
             if (!state) {
                 state = await apiCall('/api/state/default', 'GET');
             }
@@ -72,7 +75,7 @@ const init = async () => {
 
 document.addEventListener(SETTINGS_CHANGE_EVENT, (event) => {
     const changedKeys = event.detail?.changedKeys || [];
-    if (changedKeys.some(key => ['numberDisplay', 'inventory', 'crafting', 'quantityPresets'].includes(key))) {
+    if (changedKeys.some(key => ['numberDisplay', 'inventory', 'crafting', 'quantityPresets', 'shopQol', 'prestigeSimulator'].includes(key))) {
         renderAll();
     }
 });

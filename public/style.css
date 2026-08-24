@@ -289,6 +289,438 @@ iconify-icon {
     box-sizing: border-box;
 }
 
+/* 2026 Quality-of-life program */
+.header-rank-tracker {
+    appearance: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.header-rank-tracker:focus-visible,
+.inventory-card-main:focus-visible,
+.inventory-inline-actions button:focus-visible,
+.wishlist-manager-item:focus-visible,
+.where-used-chip:focus-visible,
+.crafting-inline-intermediate:focus-visible,
+.crafting-back-btn:focus-visible {
+    outline: 2px solid var(--accent-brass);
+    outline-offset: 2px;
+}
+
+.rank-deficit-value {
+    color: var(--danger);
+    font: 600 10px var(--font-mono);
+    line-height: 1.2;
+}
+
+.rank-deficit-value.is-ready,
+.rank-deficit-inline.is-ready {
+    color: var(--success);
+}
+
+.rank-deficit-inline {
+    color: var(--danger);
+    font: 650 12px var(--font-mono);
+    margin-top: 6px;
+}
+
+.inventory-batch-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--bg-surface) 94%, var(--accent-brass));
+    border: 1px solid var(--accent-brass);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+.inventory-batch-actions,
+.inventory-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.inventory-item {
+    overflow: hidden;
+}
+
+.inventory-item.is-selected {
+    border-color: var(--accent-brass);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-brass) 24%, transparent), var(--shadow-md);
+}
+
+.inventory-item.item-is-favorite {
+    border-top: 3px solid var(--accent-brass);
+}
+
+.inventory-card-main {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.inventory-select-check {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent-brass);
+    z-index: 2;
+}
+
+.inventory-inline-actions {
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+}
+
+.inventory-inline-actions button,
+.crafting-back-btn {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    color: var(--text-muted);
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.inventory-inline-actions button[aria-pressed="true"],
+.item-favorite-badge {
+    color: var(--accent-brass);
+}
+
+.item-card-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.shop-summary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.hud-header #btn-extend-active-boosters {
+    margin-left: auto;
+}
+
+.market-card.wishlist-highlight {
+    border-color: var(--accent-brass);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-brass) 18%, transparent), var(--shadow-md);
+}
+
+.wishlist-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent-brass);
+    background: color-mix(in srgb, var(--accent-brass) 14%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--accent-brass) 45%, var(--border));
+}
+
+.wishlist-search {
+    max-width: 520px;
+    margin-bottom: 12px;
+}
+
+.wishlist-manager-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    max-height: min(58vh, 620px);
+    overflow: auto;
+    margin-top: 14px;
+}
+
+.wishlist-manager-item {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: left;
+    cursor: pointer;
+    content-visibility: auto;
+    contain-intrinsic-size: 44px;
+}
+
+.wishlist-manager-item.is-wished {
+    color: var(--accent-brass);
+    border-color: var(--accent-brass);
+}
+
+.sell-roll-indicator {
+    display: grid;
+    gap: 6px;
+}
+
+.sell-roll-badge,
+.sell-roll-fixed {
+    width: max-content;
+    padding: 3px 7px;
+    color: var(--sell-roll-color, var(--text-muted));
+    background: color-mix(in srgb, var(--sell-roll-color, var(--text-muted)) 12%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--sell-roll-color, var(--text-muted)) 36%, var(--border));
+    border-radius: 999px;
+    font: 700 10px var(--font-mono);
+    text-transform: capitalize;
+}
+
+.sell-roll-track {
+    display: block;
+    height: 7px;
+    overflow: hidden;
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+.sell-roll-track > span {
+    display: block;
+    height: 100%;
+    background: var(--sell-roll-color);
+    border-radius: inherit;
+}
+
+.where-used-list,
+.crafting-where-used {
+    display: grid;
+    gap: 10px;
+}
+
+.where-used-direct {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.where-used-chip,
+.crafting-inline-intermediate {
+    appearance: none;
+    min-height: 44px;
+    padding: 5px 9px;
+    color: var(--accent-teal);
+    background: color-mix(in srgb, var(--accent-teal) 9%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--accent-teal) 38%, var(--border));
+    border-radius: var(--radius-sm);
+    font: 650 11px var(--font-sans);
+    cursor: pointer;
+}
+
+.crafting-inline-intermediate {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.crafting-details-header .crafting-back-btn {
+    flex: 0 0 auto;
+}
+
+.crafting-max-blockers {
+    margin-top: 10px;
+    padding: 9px 11px;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+}
+
+.crafting-where-used {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.prestige-simulator {
+    display: grid;
+    gap: 14px;
+}
+
+.sim-controls,
+.sim-goals,
+.sim-summary {
+    padding: var(--card-padding);
+}
+
+.sim-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.sim-goals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
+    border: 1px solid var(--border);
+}
+
+.sim-goals legend,
+.qol-settings-grid legend {
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.sim-goals label {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr) 30px;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.sim-perk-grid,
+.sim-effects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 8px;
+}
+
+.sim-perk-card,
+.sim-effects-grid > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.sim-perk-card span,
+.sim-effects-grid > div {
+    min-width: 0;
+}
+
+.sim-perk-card small,
+.sim-effects-grid span {
+    display: block;
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.sim-perk-card input {
+    width: 72px;
+    min-height: 36px;
+    padding: 6px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+}
+
+.sim-budget-strip,
+.sim-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.sim-budget-strip {
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font: 650 12px var(--font-mono);
+}
+
+.sim-actions {
+    justify-content: flex-end;
+}
+
+.qol-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.qol-settings-grid fieldset {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.sell-roll-settings,
+.sell-roll-colors,
+.sim-weight-settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.sell-roll-settings label,
+.sell-roll-colors label,
+.sim-weight-settings label {
+    display: grid;
+    gap: 4px;
+    font-size: 11px;
+}
+
+@media (max-width: 760px) {
+    .inventory-batch-toolbar,
+    .hud-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .inventory-batch-actions > *,
+    .hud-header #btn-extend-active-boosters {
+        flex: 1 1 auto;
+        margin-left: 0;
+    }
+
+    .sim-controls,
+    .sim-goals,
+    .qol-settings-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sim-actions .action-btn {
+        flex: 1 1 100%;
+    }
+}
+
 .logo-container {
     padding: 24px 20px;
     display: flex;

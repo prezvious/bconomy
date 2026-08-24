@@ -416,6 +416,28 @@ export const renderSettings = () => {
                 </div>
             </div>
 
+            <div class="card settings-card settings-card-qol">
+                <div class="card-header-styled"><div class="flex items-center gap-2"><iconify-icon icon="lucide:sparkles" class="text-accent" aria-hidden="true"></iconify-icon><h3 class="card-title-sm">Quality-of-Life Controls</h3></div><span class="charter-badge">Inventory · Shop · Prestige</span></div>
+                <div class="settings-card-body qol-settings-grid">
+                    <fieldset><legend>Inventory selection</legend>
+                        <div class="settings-toggle-row"><div><strong>Lasso selection</strong><p class="text-xs text-subtle">Drag across cards while Select Items is active.</p></div><label class="toggle-switch"><span class="sr-only">Enable lasso selection</span><input id="setting-inventory-lasso" name="inventory-lasso" type="checkbox" ${settings.inventory.lassoEnabled ? 'checked' : ''}><span class="toggle-slider"></span></label></div>
+                        <div class="settings-toggle-row"><div><strong>Shift range selection</strong><p class="text-xs text-subtle">Shift-click selects the contiguous visible range.</p></div><label class="toggle-switch"><span class="sr-only">Enable Shift range selection</span><input id="setting-inventory-shift-range" name="inventory-shift-range" type="checkbox" ${settings.inventory.shiftRangeEnabled ? 'checked' : ''}><span class="toggle-slider"></span></label></div>
+                    </fieldset>
+                    <fieldset><legend>Restock wishlist</legend><label class="form-group"><span class="form-label">Alert frequency</span><select id="setting-wishlist-alert-mode" name="wishlist-alert-mode" class="form-select" autocomplete="off"><option value="newlyAvailable" ${settings.shopQol.wishlistAlertMode === 'newlyAvailable' ? 'selected' : ''}>Only when newly available</option><option value="everyRestock" ${settings.shopQol.wishlistAlertMode === 'everyRestock' ? 'selected' : ''}>Every matching restock</option><option value="oncePerMembership" ${settings.shopQol.wishlistAlertMode === 'oncePerMembership' ? 'selected' : ''}>Once per wishlist membership</option></select></label></fieldset>
+                    <fieldset><legend>Sell price roll</legend>
+                        <label class="form-group"><span class="form-label">Indicator</span><select id="setting-sell-roll-display" name="sell-roll-display" class="form-select" autocomplete="off"><option value="off" ${settings.shopQol.sellRoll.display === 'off' ? 'selected' : ''}>Off</option><option value="badge" ${settings.shopQol.sellRoll.display === 'badge' ? 'selected' : ''}>Badge</option><option value="bar" ${settings.shopQol.sellRoll.display === 'bar' ? 'selected' : ''}>Progress bar</option><option value="both" ${settings.shopQol.sellRoll.display === 'both' ? 'selected' : ''}>Badge and bar</option></select></label>
+                        <div class="sell-roll-settings"><label>Medium ≥ <input id="setting-sell-roll-medium" name="sell-roll-medium" class="form-input" type="number" inputmode="numeric" autocomplete="off" min="0" max="99" value="${settings.shopQol.sellRoll.mediumThreshold}">%</label><label>Great ≥ <input id="setting-sell-roll-great" name="sell-roll-great" class="form-input" type="number" inputmode="numeric" autocomplete="off" min="1" max="100" value="${settings.shopQol.sellRoll.greatThreshold}">%</label></div>
+                        <div class="sell-roll-colors"><label>Low <input id="setting-sell-roll-terrible-color" name="sell-roll-low-color" type="color" value="${settings.shopQol.sellRoll.colors.terrible}"></label><label>Medium <input id="setting-sell-roll-medium-color" name="sell-roll-medium-color" type="color" value="${settings.shopQol.sellRoll.colors.medium}"></label><label>Great <input id="setting-sell-roll-great-color" name="sell-roll-great-color" type="color" value="${settings.shopQol.sellRoll.colors.great}"></label></div>
+                    </fieldset>
+                    <fieldset><legend>Prestige simulator defaults</legend>
+                        <label class="form-group"><span class="form-label">Default horizon</span><select id="setting-sim-horizon" name="sim-default-horizon" class="form-select" autocomplete="off"><option value="current" ${settings.prestigeSimulator.defaultHorizon === 'current' ? 'selected' : ''}>Current points</option><option value="next" ${settings.prestigeSimulator.defaultHorizon === 'next' ? 'selected' : ''}>Next ascension</option><option value="future" ${settings.prestigeSimulator.defaultHorizon === 'future' ? 'selected' : ''}>Future hypothetical</option></select></label>
+                        <label class="form-group"><span class="form-label">Future budget mode</span><select id="setting-sim-future-mode" name="sim-future-budget-mode" class="form-select" autocomplete="off"><option value="ascensions" ${settings.prestigeSimulator.futureBudgetMode === 'ascensions' ? 'selected' : ''}>Ascensions</option><option value="targetTier" ${settings.prestigeSimulator.futureBudgetMode === 'targetTier' ? 'selected' : ''}>Target tier</option><option value="custom" ${settings.prestigeSimulator.futureBudgetMode === 'custom' ? 'selected' : ''}>Custom points</option></select></label>
+                        <label class="form-group"><span class="form-label">Future ascensions</span><input id="setting-sim-future-ascensions" name="sim-future-ascensions" class="form-input" type="number" inputmode="numeric" autocomplete="off" min="0" max="1000" value="${settings.prestigeSimulator.futureAscensions}"></label>
+                        <div class="sim-weight-settings">${['career', 'actions', 'farming', 'gambling'].map(goal => `<label>${goal.charAt(0).toUpperCase() + goal.slice(1)} <input class="form-input" name="sim-weight-${goal}" type="number" inputmode="numeric" autocomplete="off" min="0" max="100" value="${settings.prestigeSimulator.goalWeights[goal]}" data-setting-sim-weight="${goal}"></label>`).join('')}</div>
+                    </fieldset>
+                </div>
+            </div>
+
             <!-- Card 1: Notification Density -->
             <div class="card settings-card">
                 <div class="card-header-styled">
@@ -957,6 +979,34 @@ export const setupSettingsEvents = (container) => {
         saveStoredSettings(settings);
         showToast(`Unavailable booster action ${showUnavailableBoosterAction.checked ? 'shown' : 'hidden'}`, 'info');
     });
+
+    const saveQolSettings = () => {
+        const settings = getStoredSettings();
+        settings.inventory.lassoEnabled = document.getElementById('setting-inventory-lasso')?.checked ?? settings.inventory.lassoEnabled;
+        settings.inventory.shiftRangeEnabled = document.getElementById('setting-inventory-shift-range')?.checked ?? settings.inventory.shiftRangeEnabled;
+        settings.shopQol.wishlistAlertMode = document.getElementById('setting-wishlist-alert-mode')?.value || settings.shopQol.wishlistAlertMode;
+        settings.shopQol.sellRoll.display = document.getElementById('setting-sell-roll-display')?.value || settings.shopQol.sellRoll.display;
+        const medium = Number(document.getElementById('setting-sell-roll-medium')?.value);
+        const great = Number(document.getElementById('setting-sell-roll-great')?.value);
+        if (Number.isFinite(medium) && Number.isFinite(great) && medium >= 0 && great <= 100 && medium < great) {
+            settings.shopQol.sellRoll.mediumThreshold = medium;
+            settings.shopQol.sellRoll.greatThreshold = great;
+        } else {
+            showToast('Sell-roll thresholds must be ordered from 0 to 100.', 'error');
+            return;
+        }
+        for (const band of ['terrible', 'medium', 'great']) {
+            settings.shopQol.sellRoll.colors[band] = document.getElementById(`setting-sell-roll-${band}-color`)?.value || settings.shopQol.sellRoll.colors[band];
+        }
+        settings.prestigeSimulator.defaultHorizon = document.getElementById('setting-sim-horizon')?.value || settings.prestigeSimulator.defaultHorizon;
+        settings.prestigeSimulator.futureBudgetMode = document.getElementById('setting-sim-future-mode')?.value || settings.prestigeSimulator.futureBudgetMode;
+        settings.prestigeSimulator.futureAscensions = Math.max(0, Math.min(1000, Math.floor(Number(document.getElementById('setting-sim-future-ascensions')?.value) || 0)));
+        container.querySelectorAll('[data-setting-sim-weight]').forEach(input => {
+            settings.prestigeSimulator.goalWeights[input.dataset.settingSimWeight] = Math.max(0, Math.min(100, Number(input.value) || 0));
+        });
+        saveStoredSettings(settings);
+    };
+    container.querySelectorAll('#setting-inventory-lasso, #setting-inventory-shift-range, #setting-wishlist-alert-mode, #setting-sell-roll-display, #setting-sell-roll-medium, #setting-sell-roll-great, #setting-sell-roll-terrible-color, #setting-sell-roll-medium-color, #setting-sell-roll-great-color, #setting-sim-horizon, #setting-sim-future-mode, #setting-sim-future-ascensions, [data-setting-sim-weight]').forEach(input => input.addEventListener('change', saveQolSettings));
 
     // Density selector
     const densityRadios = container.querySelectorAll('input[name="notif-density"]');

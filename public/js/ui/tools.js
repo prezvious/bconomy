@@ -9,7 +9,8 @@ import {
     doInstallSocketModule,
     doUninstallSocketModule,
     doCraftSocketModule,
-    doGetToolDefinitions
+    doGetToolDefinitions,
+    doGetToolMaxSummary
 } from '../api.js';
 import { getToolMultiplier, getToolCooldownReduction, getUnlockedSockets, renderActions } from './actions.js';
 import { renderHeader } from './header.js';
@@ -357,11 +358,32 @@ export const renderTools = () => {
                 label = 'Max Affordable Levels';
             }
 
+            let maxSummary = null;
+            if (action === 'bulk-max') {
+                try {
+                    maxSummary = await doGetToolMaxSummary(type);
+                } catch (error) {
+                    showToast(error.message || 'Could not calculate the affordable tool level.', 'error');
+                    return;
+                }
+                if (!maxSummary.levelsGained) {
+                    const blockers = (maxSummary.blockers || []).map(item => `${displayItemName(item.item)} ${formatDisplayNumber(item.unlockedOwned)}/${formatDisplayNumber(item.required)}${item.lockedOwned ? ' (locked)' : ''}`).join(', ');
+                    showToast(blockers ? `No upgrade is affordable: ${blockers}` : 'No further tool upgrade is affordable.', 'error');
+                    return;
+                }
+                label = `${maxSummary.levelsGained} level${maxSummary.levelsGained === 1 ? '' : 's'} to Lv. ${maxSummary.maxAffordableLevel}`;
+            }
+
             const requestedQuantity = action === 'bulk-max' ? 'max' : count;
+            const cumulativeMaterials = maxSummary
+                ? Object.entries(maxSummary.cumulativeCost || {})
+                    .map(([item, quantity]) => `${displayItemName(item)} ×${formatDisplayNumber(quantity)}`)
+                    .join(', ')
+                : '';
             const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'tool-upgrades', subjectId: type, quantity: requestedQuantity });
             const confirmAction = !needsConfirmation || await showConfirmation(
                 'bulkToolUpgrade', 'Upgrade Tool?',
-                `Are you sure you want to upgrade your ${actionInfo.name} tool by ${label}? Required materials will be consumed.`,
+                `${action === 'bulk-max' ? `Exact result: ${label}.` : `Upgrade by ${label}.`}${cumulativeMaterials ? ` Total materials: ${cumulativeMaterials}.` : ' Required materials will be consumed.'}${maxSummary?.blockers?.length ? ` The next blocked level needs ${maxSummary.blockers.map(item => `${displayItemName(item.item)} ${formatDisplayNumber(item.unlockedOwned)}/${formatDisplayNumber(item.required)}${item.lockedOwned ? ' (locked)' : ''}`).join(', ')}.` : ''}`,
                 { bulkAction: true, ignoreLabel: "Don't show this preview again" }
             );
             if (!confirmAction) return;

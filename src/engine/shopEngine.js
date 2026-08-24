@@ -11,6 +11,24 @@ const {
 } = require('./shopTables');
 
 class ShopEngine {
+    static getSellRoll(itemName, offerPrice) {
+        const definition = SELLABLE_ITEMS[itemName];
+        if (!definition || !Array.isArray(definition.sellRange)) return null;
+        const [min, max] = definition.sellRange;
+        const offer = Math.max(min, Math.min(max, Math.floor(Number(offerPrice) || min)));
+        if (max === min) return { itemName, min, max, offer, fixed: true, percentage: null };
+        const percentage = Math.max(0, Math.min(100, ((offer - min) / (max - min)) * 100));
+        return { itemName, min, max, offer, fixed: false, percentage };
+    }
+
+    static getSellRolls(playerState) {
+        const sellPrices = playerState?.shop?.sellPrices || {};
+        return Object.fromEntries(Object.keys(SELLABLE_ITEMS).map(itemName => [
+            itemName,
+            this.getSellRoll(itemName, sellPrices[itemName])
+        ]));
+    }
+
     /**
      * Normalizes and ensures the shop and booster states exist on playerState.
      * Restocks the shop if the restock deadline has passed.

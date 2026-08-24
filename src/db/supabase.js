@@ -4,17 +4,13 @@
  */
 const { createClient } = require('@supabase/supabase-js');
 
-const DEFAULT_SUPABASE_URL = 'https://mlaivuzdwevmzuhxjraw.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MTQ5NDUsImV4cCI6MjEwMjk5MDk0NX0.2FvGex8DNjpzUY7Yeh4DFd7RCBeV3PFlUQ0I8r71nfc';
-const DEFAULT_SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzQxNDk0NSwiZXhwIjoyMTAyOTkwOTQ1fQ.9RZQyeIbOVoj0gTCn8o7OF0UV3iEZtCEn8YUdCg1uA4';
-
 let supabaseClient = null;
 let supabaseAdminClient = null;
 
 function getSupabaseConfig() {
-    const url = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-    const anonKey = process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || DEFAULT_SUPABASE_SERVICE_KEY;
+    const url = process.env.SUPABASE_URL || '';
+    const anonKey = process.env.SUPABASE_ANON_KEY || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
     return { url, anonKey, serviceKey };
 }
 
@@ -26,6 +22,7 @@ function isSupabaseConfigured() {
 function getSupabaseClient() {
     if (!supabaseClient) {
         const { url, anonKey } = getSupabaseConfig();
+        if (!url || !anonKey) return null;
         supabaseClient = createClient(url, anonKey, {
             auth: {
                 persistSession: false,
@@ -39,6 +36,7 @@ function getSupabaseClient() {
 function getSupabaseAdmin() {
     if (!supabaseAdminClient) {
         const { url, serviceKey } = getSupabaseConfig();
+        if (!url || !serviceKey) return null;
         supabaseAdminClient = createClient(url, serviceKey, {
             auth: {
                 persistSession: false,
@@ -139,7 +137,7 @@ async function getProfileByUserId(userId) {
     try {
         const { data, error } = await client
             .from('player_state')
-            .select('id, player_id, username, email, cash, rank_index, prestige_count, state, created_at, updated_at')
+            .select('id, player_id, username, email, cash, rank_index, prestige_count, state, state_revision, created_at, updated_at')
             .eq('id', userId)
             .maybeSingle();
 
@@ -247,6 +245,14 @@ async function signInUserServer({ usernameOrEmail, password }) {
     };
 }
 
+async function refreshSessionServer(refreshToken) {
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase is not configured');
+    const { data, error } = await client.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data?.session) throw new Error(error?.message || 'Session refresh failed');
+    return data.session;
+}
+
 /**
  * Sync player state to Supabase
  */
@@ -281,6 +287,70 @@ async function syncPlayerState(userId, state) {
     }
 }
 
+async function verifyAccessToken(accessToken) {
+    if (!accessToken || typeof accessToken !== 'string') return null;
+    const client = getSupabaseClient();
+    if (!client) return null;
+    try {
+        const { data, error } = await client.auth.getUser(accessToken);
+        if (error || !data?.user) return null;
+        return data.user;
+    } catch (error) {
+        console.error('Error verifying Supabase access token:', error);
+        return null;
+    }
+}
+
+async function commitPlayerCommand({ userId, expectedRevision, commandId, state, result }) {
+    const client = getSupabaseAdmin();
+    if (!client) return { status: 'unavailable', error: 'Supabase is not configured' };
+    const { data, error } = await client.rpc('commit_player_command', {
+        p_user_id: userId,
+        p_expected_revision: expectedRevision,
+        p_command_id: commandId,
+        p_state: state,
+        p_result: result || {}
+    });
+    if (error) {
+        console.error('Error committing player command:', error);
+        return { status: 'error', error: 'Failed to persist player command' };
+    }
+    return data || { status: 'error', error: 'Empty commit response' };
+}
+
+async function getPlayerCommandReceipt({ userId, commandId }) {
+    const client = getSupabaseAdmin();
+    if (!client) return null;
+    const { data, error } = await client
+        .from('player_command_receipts')
+        .select('resulting_revision, result')
+        .eq('user_id', userId)
+        .eq('command_id', commandId)
+        .maybeSingle();
+    if (error) {
+        console.error('Error reading player command receipt:', error);
+        return null;
+    }
+    return data || null;
+}
+
+async function replacePlayerState({ userId, expectedRevision, state }) {
+    const client = getSupabaseAdmin();
+    if (!client) return { status: 'unavailable', error: 'Supabase is not configured' };
+    const revision = Math.max(0, Math.floor(Number(expectedRevision) || 0));
+    const { data, error } = await client
+        .from('player_state')
+        .update({ state, state_revision: revision + 1 })
+        .eq('id', userId)
+        .eq('state_revision', revision)
+        .select('id, player_id, username, email, cash, rank_index, prestige_count, state, state_revision, created_at, updated_at')
+        .maybeSingle();
+    if (error) return { status: 'error', error: 'Failed to replace player state' };
+    if (!data) return { status: 'conflict' };
+    data.formatted_player_id = formatPlayerId(data.player_id);
+    return { status: 'applied', profile: data };
+}
+
 module.exports = {
     isSupabaseConfigured,
     getSupabaseClient,
@@ -291,5 +361,11 @@ module.exports = {
     getProfileByUserId,
     signUpUserAdmin,
     signInUserServer,
-    syncPlayerState
+    refreshSessionServer,
+    syncPlayerState,
+    verifyAccessToken,
+    commitPlayerCommand,
+    getPlayerCommandReceipt,
+    replacePlayerState,
+    getSupabaseConfig
 };

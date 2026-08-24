@@ -28,6 +28,10 @@ const VALID_TIMER_HOVER_MODES = new Set(['swap', 'tooltip', 'both']);
 const VALID_CRAFTING_VIEWS = new Set(['standard', 'compact', 'super-compact']);
 const VALID_CRAFTING_SORTS = new Set(['name', 'domain', 'effort', 'owned', 'craftable', 'missing']);
 const VALID_PREVIEW_MODES = new Set(['every', 'recursive-only', 'large-only', 'never']);
+const VALID_WISHLIST_ALERT_MODES = new Set(['newlyAvailable', 'everyRestock', 'oncePerMembership']);
+const VALID_SELL_ROLL_DISPLAYS = new Set(['off', 'badge', 'bar', 'both']);
+const VALID_SIMULATOR_HORIZONS = new Set(['current', 'next', 'future']);
+const VALID_FUTURE_BUDGET_MODES = new Set(['ascensions', 'targetTier', 'custom']);
 export const QUANTITY_PRESET_SYSTEMS = Object.freeze([
     'crafting', 'shop-buy', 'shop-sell', 'booster-activation',
     'socket-module-crafting', 'tool-upgrades', 'perk-upgrades'
@@ -73,7 +77,25 @@ const DEFAULT_SETTINGS = Object.freeze({
         search: '',
         category: 'all',
         sort: 'name-asc',
-        showUnavailableBoosterAction: true
+        showUnavailableBoosterAction: true,
+        lassoEnabled: true,
+        shiftRangeEnabled: true
+    }),
+    shopQol: Object.freeze({
+        wishlistAlertMode: 'newlyAvailable',
+        sellRoll: Object.freeze({
+            display: 'both',
+            mediumThreshold: 50,
+            greatThreshold: 80,
+            colors: Object.freeze({ terrible: '#b42318', medium: '#b26a00', great: '#1f7a4d' })
+        })
+    }),
+    prestigeSimulator: Object.freeze({
+        defaultHorizon: 'next',
+        futureBudgetMode: 'ascensions',
+        futureAscensions: 5,
+        goalWeights: Object.freeze({ career: 25, actions: 25, farming: 25, gambling: 25 }),
+        perkWeights: Object.freeze({})
     }),
     crafting: Object.freeze({
         view: 'standard',
@@ -100,6 +122,15 @@ const cloneDefaults = () => ({
         subjects: {}
     },
     inventory: { ...DEFAULT_SETTINGS.inventory },
+    shopQol: {
+        ...DEFAULT_SETTINGS.shopQol,
+        sellRoll: { ...DEFAULT_SETTINGS.shopQol.sellRoll, colors: { ...DEFAULT_SETTINGS.shopQol.sellRoll.colors } }
+    },
+    prestigeSimulator: {
+        ...DEFAULT_SETTINGS.prestigeSimulator,
+        goalWeights: { ...DEFAULT_SETTINGS.prestigeSimulator.goalWeights },
+        perkWeights: {}
+    },
     crafting: { ...DEFAULT_SETTINGS.crafting },
     controls: normalizeControls(DEFAULT_SETTINGS.controls),
     utilityRail: { ...DEFAULT_SETTINGS.utilityRail }
@@ -108,6 +139,11 @@ const cloneDefaults = () => ({
 export const getDefaultSettings = cloneDefaults;
 
 const normalizeBoolean = (value, fallback) => typeof value === 'boolean' ? value : fallback;
+const normalizeColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;
+const normalizeWeightMap = (candidate, keys, fallback = {}) => Object.fromEntries(keys.map(key => {
+    const numeric = Number(candidate?.[key]);
+    return [key, Number.isFinite(numeric) ? Math.min(100, Math.max(0, numeric)) : (fallback[key] ?? 0)];
+}));
 
 const normalizePresetValues = (candidate, fallback) => {
     if (!Array.isArray(candidate) || candidate.length !== 4) return [...fallback];
@@ -200,6 +236,10 @@ export const normalizeSettings = (candidate = {}) => {
     const bulkActions = value.bulkActions && typeof value.bulkActions === 'object' ? value.bulkActions : {};
     const inventory = value.inventory && typeof value.inventory === 'object' ? value.inventory : {};
     const crafting = value.crafting && typeof value.crafting === 'object' ? value.crafting : {};
+    const shopQol = value.shopQol && typeof value.shopQol === 'object' ? value.shopQol : {};
+    const sellRoll = shopQol.sellRoll && typeof shopQol.sellRoll === 'object' ? shopQol.sellRoll : {};
+    const sellRollColors = sellRoll.colors && typeof sellRoll.colors === 'object' ? sellRoll.colors : {};
+    const simulator = value.prestigeSimulator && typeof value.prestigeSimulator === 'object' ? value.prestigeSimulator : {};
     const utilityRail = value.utilityRail && typeof value.utilityRail === 'object' ? value.utilityRail : {};
     const maxVisible = Number.parseInt(value.maxVisible, 10);
 
@@ -233,7 +273,42 @@ export const normalizeSettings = (candidate = {}) => {
             showUnavailableBoosterAction: normalizeBoolean(
                 inventory.showUnavailableBoosterAction,
                 defaults.inventory.showUnavailableBoosterAction
-            )
+            ),
+            lassoEnabled: normalizeBoolean(inventory.lassoEnabled, defaults.inventory.lassoEnabled),
+            shiftRangeEnabled: normalizeBoolean(inventory.shiftRangeEnabled, defaults.inventory.shiftRangeEnabled)
+        },
+        shopQol: {
+            wishlistAlertMode: VALID_WISHLIST_ALERT_MODES.has(shopQol.wishlistAlertMode)
+                ? shopQol.wishlistAlertMode
+                : defaults.shopQol.wishlistAlertMode,
+            sellRoll: (() => {
+                const rawMedium = Math.floor(Number(sellRoll.mediumThreshold));
+                const rawGreat = Math.floor(Number(sellRoll.greatThreshold));
+                const validThresholds = Number.isFinite(rawMedium) && Number.isFinite(rawGreat)
+                    && rawMedium >= 0 && rawMedium < rawGreat && rawGreat <= 100;
+                return {
+                    display: VALID_SELL_ROLL_DISPLAYS.has(sellRoll.display) ? sellRoll.display : defaults.shopQol.sellRoll.display,
+                    mediumThreshold: validThresholds ? rawMedium : defaults.shopQol.sellRoll.mediumThreshold,
+                    greatThreshold: validThresholds ? rawGreat : defaults.shopQol.sellRoll.greatThreshold,
+                    colors: {
+                        terrible: normalizeColor(sellRollColors.terrible, defaults.shopQol.sellRoll.colors.terrible),
+                        medium: normalizeColor(sellRollColors.medium, defaults.shopQol.sellRoll.colors.medium),
+                        great: normalizeColor(sellRollColors.great, defaults.shopQol.sellRoll.colors.great)
+                    }
+                };
+            })()
+        },
+        prestigeSimulator: {
+            defaultHorizon: VALID_SIMULATOR_HORIZONS.has(simulator.defaultHorizon) ? simulator.defaultHorizon : defaults.prestigeSimulator.defaultHorizon,
+            futureBudgetMode: VALID_FUTURE_BUDGET_MODES.has(simulator.futureBudgetMode) ? simulator.futureBudgetMode : defaults.prestigeSimulator.futureBudgetMode,
+            futureAscensions: Number.isSafeInteger(Number(simulator.futureAscensions))
+                ? Math.min(1000, Math.max(0, Number(simulator.futureAscensions)))
+                : defaults.prestigeSimulator.futureAscensions,
+            goalWeights: normalizeWeightMap(simulator.goalWeights, ['career', 'actions', 'farming', 'gambling'], defaults.prestigeSimulator.goalWeights),
+            perkWeights: normalizeWeightMap(simulator.perkWeights, [
+                'cronyism', 'investiture', 'partiality', 'serendipity', 'amnesiac',
+                'water_byproducts', 'numismatist', 'jackpot_fever'
+            ])
         },
         crafting: {
             view: VALID_CRAFTING_VIEWS.has(crafting.view) ? crafting.view : defaults.crafting.view,

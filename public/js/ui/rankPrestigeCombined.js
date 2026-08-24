@@ -1,7 +1,10 @@
 // Rank & Ascension Combined UI Renderer and Modal Manager
 import { getState, getRankData, getPerkData } from '../state.js';
 import { formatDisplayNumber, formatMoney } from '../utils.js';
-import { apiCall, doUpgradePerk, doRankUp } from '../api.js';
+import {
+    apiCall, doUpgradePerk, doRankUp, doSimulatePerks, doOptimizePerks,
+    doApplyPerkAllocation, doAscendAndApplyAllocation, doPreviewRankTarget
+} from '../api.js';
 import { renderHeader, renderAll } from './header.js';
 import { showToast } from './toast.js';
 import { showConfirmation, openDialog, closeDialog } from './modal.js';
@@ -39,6 +42,7 @@ export const renderRankPrestige = () => {
     const btnPromote = document.getElementById('btn-rp-promote');
     const nextRankNameEl = document.getElementById('rp-next-rank-name');
     const nextRankCostEl = document.getElementById('rp-next-rank-cost');
+    const nextRankDeficitEl = document.getElementById('rp-next-rank-deficit');
 
     if (nextRankInfo) {
         if (nextRankNameEl) nextRankNameEl.textContent = `Rank ${curRankIndex + 2} - ${nextRankInfo.name}`;
@@ -49,6 +53,11 @@ export const renderRankPrestige = () => {
         let cost = Math.floor(nextRankInfo.basePrice * tierMult * (1 - 0.025 * cronyismLevel));
 
         if (nextRankCostEl) nextRankCostEl.textContent = formatMoney(cost);
+        const deficit = Math.max(0, cost - (playerState.cash || 0));
+        if (nextRankDeficitEl) {
+            nextRankDeficitEl.textContent = deficit === 0 ? 'Affordable now' : `${formatMoney(deficit)} more cash needed`;
+            nextRankDeficitEl.classList.toggle('is-ready', deficit === 0);
+        }
         if (btnPromote) {
             btnPromote.disabled = playerState.cash < cost;
             if (playerState.cash >= cost) {
@@ -60,6 +69,7 @@ export const renderRankPrestige = () => {
     } else {
         if (nextRankNameEl) nextRankNameEl.textContent = "MAX RANK REACHED";
         if (nextRankCostEl) nextRankCostEl.textContent = "N/A";
+        if (nextRankDeficitEl) nextRankDeficitEl.textContent = 'No further ranks';
         if (btnPromote) {
             btnPromote.disabled = true;
             btnPromote.classList.remove('ready-highlight');
@@ -106,6 +116,132 @@ export const renderRankPrestige = () => {
 
     // Perks Grid
     renderPerksGrid();
+    renderPerkSimulator();
+};
+
+const SIMULATOR_PERKS = ['cronyism', 'investiture', 'partiality', 'serendipity', 'amnesiac', 'water_byproducts', 'numismatist', 'jackpot_fever'];
+let simulatorTargets = null;
+let simulatorRequestId = 0;
+
+const simulatorBudget = (state, settings, horizon, mode, value) => {
+    const current = Math.max(0, Math.floor(Number(state.prestigePoints) || 0));
+    if (horizon === 'current') return current;
+    if (horizon === 'next') return current + 5;
+    if (mode === 'targetTier') return current + (Math.max(0, Math.floor(value) - (state.prestigeCount || 0)) * 5);
+    if (mode === 'custom') return Math.max(current, Math.floor(Number(value) || current));
+    return current + (Math.max(0, Math.floor(Number(value) || settings.futureAscensions || 5)) * 5);
+};
+
+const formatEffect = (perkId, value) => {
+    if (perkId === 'cronyism' || perkId === 'investiture' || perkId === 'amnesiac') return `${(value * 100).toFixed(1)}%`;
+    if (perkId === 'numismatist') return formatMoney(value);
+    return `${Number(value).toFixed(2)}×`;
+};
+
+const updateSimulatorPreview = async () => {
+    const root = document.getElementById('prestige-simulator');
+    if (!root || !simulatorTargets) return;
+    const settings = getStoredSettings().prestigeSimulator;
+    const horizon = root.querySelector('#sim-horizon')?.value || settings.defaultHorizon;
+    const futureMode = root.querySelector('#sim-future-mode')?.value || settings.futureBudgetMode;
+    const futureValue = root.querySelector('#sim-future-value')?.value;
+    const budget = simulatorBudget(getState(), settings, horizon, futureMode, futureValue);
+    const goalWeights = Object.fromEntries(['career', 'actions', 'farming', 'gambling'].map(goal => [goal, Number(root.querySelector(`[data-sim-goal="${goal}"]`)?.value) || 0]));
+    const requestId = ++simulatorRequestId;
+    const summary = root.querySelector('#sim-summary');
+    if (summary) summary.innerHTML = '<span class="text-subtle">Calculating allocation…</span>';
+    try {
+        const result = await doSimulatePerks(simulatorTargets, budget, { goalWeights });
+        if (requestId !== simulatorRequestId || !document.body.contains(root)) return;
+        if (!result.success) throw new Error(result.error || 'Simulation failed');
+        if (summary) summary.innerHTML = `<div class="sim-budget-strip"><strong>${result.spent} spent</strong><span>${result.remaining} remaining</span><span>${budget} point budget</span></div>
+            <div class="sim-effects-grid">${SIMULATOR_PERKS.map(id => `<div><span>${getPerkData()[id]?.name || id}</span><strong>${formatEffect(id, result.effects[id].before)} → ${formatEffect(id, result.effects[id].after)}</strong></div>`).join('')}</div>`;
+        root.querySelector('#sim-apply').disabled = result.spent < 1 || horizon === 'future' || (horizon === 'next' && !root.dataset.canAscend);
+        root.querySelector('#sim-apply').textContent = horizon === 'next' ? 'Ascend & Apply Allocation' : 'Apply Allocation';
+    } catch (error) {
+        if (summary) summary.innerHTML = `<span class="text-danger">${error.message || 'Simulation failed'}</span>`;
+        const apply = root.querySelector('#sim-apply');
+        if (apply) apply.disabled = true;
+    }
+};
+
+const renderPerkSimulator = () => {
+    const root = document.getElementById('prestige-simulator');
+    const state = getState();
+    if (!root || !state) return;
+    const perkData = getPerkData();
+    const settings = getStoredSettings().prestigeSimulator;
+    if (!simulatorTargets) simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(state.perks?.[id]) || 0]));
+    for (const id of SIMULATOR_PERKS) simulatorTargets[id] = Math.max(Number(state.perks?.[id]) || 0, Math.min(perkData[id]?.maxLevel || 0, simulatorTargets[id] || 0));
+    const canAscend = (state.rankIndex || 0) >= 106 && (state.cash || 0) >= (state.prestigeCount === 0 ? 0 : Math.floor(550000000 * ((state.prestigeCount || 0) + 2) * (1 - 0.025 * Math.min(25, state.perks?.investiture || 0))));
+    root.dataset.canAscend = canAscend ? 'true' : '';
+    root.innerHTML = `
+        <div class="sim-controls card">
+            <label class="form-group"><span class="form-label">Planning horizon</span><select id="sim-horizon" name="sim-horizon" class="form-select" autocomplete="off">
+                <option value="current" ${settings.defaultHorizon === 'current' ? 'selected' : ''}>Current unspent points</option>
+                <option value="next" ${settings.defaultHorizon === 'next' ? 'selected' : ''}>After next ascension (+5)</option>
+                <option value="future" ${settings.defaultHorizon === 'future' ? 'selected' : ''}>Future hypothetical</option>
+            </select></label>
+            <label class="form-group"><span class="form-label">Future budget mode</span><select id="sim-future-mode" name="sim-future-mode" class="form-select" autocomplete="off">
+                <option value="ascensions" ${settings.futureBudgetMode === 'ascensions' ? 'selected' : ''}>Number of ascensions</option>
+                <option value="targetTier" ${settings.futureBudgetMode === 'targetTier' ? 'selected' : ''}>Target prestige tier</option>
+                <option value="custom" ${settings.futureBudgetMode === 'custom' ? 'selected' : ''}>Custom point budget</option>
+            </select></label>
+            <label class="form-group"><span class="form-label">Future value</span><input id="sim-future-value" name="sim-future-value" class="form-input" type="number" inputmode="numeric" autocomplete="off" min="0" value="${settings.futureAscensions}"></label>
+        </div>
+        <fieldset class="sim-goals card"><legend>Optimizer priorities</legend>${['career', 'actions', 'farming', 'gambling'].map(goal => `<label><span>${goal.charAt(0).toUpperCase() + goal.slice(1)}</span><input type="range" name="sim-goal-${goal}" min="0" max="100" value="${settings.goalWeights[goal]}" data-sim-goal="${goal}"><output>${settings.goalWeights[goal]}</output></label>`).join('')}</fieldset>
+        <div class="sim-perk-grid">${SIMULATOR_PERKS.map(id => {
+            const current = Number(state.perks?.[id]) || 0;
+            const max = perkData[id]?.maxLevel || current;
+            return `<label class="sim-perk-card"><span><strong>${perkData[id]?.name || id}</strong><small>Current ${current} · Max ${max}</small></span><input type="number" name="sim-perk-${id}" inputmode="numeric" autocomplete="off" min="${current}" max="${max}" value="${simulatorTargets[id]}" data-sim-perk="${id}"></label>`;
+        }).join('')}</div>
+        <div id="sim-summary" class="sim-summary card" role="status" aria-live="polite"></div>
+        <div class="sim-actions"><button id="sim-optimize" class="action-btn secondary-btn" type="button"><iconify-icon icon="lucide:sparkles" aria-hidden="true"></iconify-icon> Recommend Allocation</button><button id="sim-reset" class="action-btn secondary-btn" type="button">Reset</button><button id="sim-apply" class="action-btn accent-btn" type="button">Apply Allocation</button></div>`;
+
+    root.querySelectorAll('[data-sim-perk]').forEach(input => input.addEventListener('input', () => {
+        simulatorTargets[input.dataset.simPerk] = Number(input.value);
+        void updateSimulatorPreview();
+    }));
+    root.querySelectorAll('#sim-horizon, #sim-future-mode, #sim-future-value, [data-sim-goal]').forEach(input => input.addEventListener('input', event => {
+        if (event.target.matches('[data-sim-goal]')) event.target.nextElementSibling.textContent = event.target.value;
+        void updateSimulatorPreview();
+    }));
+    root.querySelector('#sim-reset')?.addEventListener('click', () => {
+        simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(getState().perks?.[id]) || 0]));
+        renderPerkSimulator();
+    });
+    root.querySelector('#sim-optimize')?.addEventListener('click', async event => {
+        const optimizeButton = event.currentTarget;
+        const horizon = root.querySelector('#sim-horizon').value;
+        const budget = simulatorBudget(getState(), settings, horizon, root.querySelector('#sim-future-mode').value, root.querySelector('#sim-future-value').value);
+        const goalWeights = Object.fromEntries(['career', 'actions', 'farming', 'gambling'].map(goal => [goal, Number(root.querySelector(`[data-sim-goal="${goal}"]`).value)]));
+        optimizeButton.disabled = true;
+        try {
+            const result = await doOptimizePerks(budget, { goalWeights });
+            simulatorTargets = { ...result.targetLevels };
+            renderPerkSimulator();
+            showToast('Recommended allocation loaded. Review it before applying.', 'success');
+        } catch (error) { showToast(error.message || 'Optimizer failed', 'error'); }
+        finally { if (optimizeButton.isConnected) optimizeButton.disabled = false; }
+    });
+    root.querySelector('#sim-apply')?.addEventListener('click', async event => {
+        const horizon = root.querySelector('#sim-horizon').value;
+        const isAscension = horizon === 'next';
+        const approved = await showConfirmation(
+            'applyPerkPlan',
+            isAscension ? 'Ascend and apply this allocation?' : 'Apply this perk allocation?',
+            isAscension ? 'This atomically ascends, resets cash and rank, awards 5 points, and applies the reviewed perk plan.' : 'Prestige Points will be spent immediately. Perk levels cannot be reduced.',
+            { allowIgnore: false, confirmLabel: isAscension ? 'Ascend & Apply' : 'Apply Allocation' }
+        );
+        if (!approved) return;
+        try {
+            await (isAscension ? doAscendAndApplyAllocation(simulatorTargets) : doApplyPerkAllocation(simulatorTargets));
+            simulatorTargets = null;
+            renderAll();
+            showToast(isAscension ? 'Ascension and perk allocation complete.' : 'Perk allocation applied.', 'success');
+        } catch (error) { showToast(error.message || 'Allocation failed', 'error'); }
+    });
+    void updateSimulatorPreview();
 };
 
 const renderPerksGrid = () => {
@@ -490,7 +626,7 @@ export const setupTargetedModal = () => {
     const btnCancel = document.getElementById('btn-targeted-cancel');
     const btnConfirm = document.getElementById('btn-targeted-confirm');
 
-    const maxAffordableCheckbox = document.getElementById('targeted-max-checkbox');
+    const modeInputs = [...document.querySelectorAll('input[name="targeted-rank-mode"]')];
     const customControls = document.getElementById('targeted-custom-controls');
     const tierInput = document.getElementById('targeted-tier-input');
     const rankSelect = document.getElementById('targeted-rank-select');
@@ -513,27 +649,32 @@ export const setupTargetedModal = () => {
         }
     };
 
-    let currentCalculatedTarget = null;
-
-    const updateModalPreview = () => {
+    let previewRequestId = 0;
+    const updateModalPreview = async () => {
         const playerState = getState();
         if (!playerState) return;
 
         const rankData = getRankData();
-        const isMax = Boolean(maxAffordableCheckbox?.checked);
+        const mode = modeInputs.find(input => input.checked)?.value || 'next';
+        const isMax = mode === 'max';
 
-        if (isMax) {
-            if (customControls) customControls.classList.add('hidden');
-        } else {
-            if (customControls) customControls.classList.remove('hidden');
+        customControls?.classList.toggle('hidden', mode !== 'custom');
+
+        const reqTier = mode === 'custom' ? (parseInt(tierInput.value, 10) || (playerState.prestigeCount || 0)) : (playerState.prestigeCount || 0);
+        const reqRankIndex = mode === 'next' ? Math.min(rankData.length - 1, (playerState.rankIndex || 0) + 1)
+            : mode === 'custom' ? (parseInt(rankSelect.value, 10) || 0) : (playerState.rankIndex || 0);
+
+        const requestId = ++previewRequestId;
+        if (costBannerEl) costBannerEl.textContent = 'Calculating authoritative cost…';
+        if (btnConfirm) btnConfirm.disabled = true;
+        let calc;
+        try {
+            calc = await doPreviewRankTarget(reqTier, reqRankIndex, isMax);
+        } catch (error) {
+            if (requestId === previewRequestId && costBannerEl) costBannerEl.textContent = error.message || 'Unable to calculate advancement';
+            return;
         }
-
-        const reqTier = isMax ? (playerState.prestigeCount || 0) : parseInt(tierInput.value, 10) || (playerState.prestigeCount || 0);
-        const reqRankIndex = isMax ? (playerState.rankIndex || 0) : parseInt(rankSelect.value, 10) || 0;
-
-        const calc = calculateTargetedCostPreview(playerState, reqTier, reqRankIndex, isMax);
-        currentCalculatedTarget = calc;
-
+        if (requestId !== previewRequestId) return;
         const targetRankObj = rankData[calc.targetRankIndex] || { name: 'Unknown' };
 
         if (promptTextEl) {
@@ -550,22 +691,22 @@ export const setupTargetedModal = () => {
         }
     };
 
-    if (btnOpen) {
-        btnOpen.addEventListener('click', () => {
+    const openTargetedModal = () => {
             populateRanks();
             const playerState = getState();
             if (playerState) {
                 if (tierInput) tierInput.value = playerState.prestigeCount || 0;
                 if (rankSelect) rankSelect.value = playerState.rankIndex || 0;
             }
-            updateModalPreview();
+            void updateModalPreview();
             openDialog(modal, {
-                initialFocus: '#targeted-max-checkbox',
+                initialFocus: 'input[name="targeted-rank-mode"]:checked',
                 closeOnBackdrop: false,
                 returnFocus: btnOpen
             });
-        });
-    }
+    };
+    if (btnOpen) btnOpen.addEventListener('click', openTargetedModal);
+    document.getElementById('header-rank-tracker')?.addEventListener('click', openTargetedModal);
 
     const closeModal = () => {
         closeDialog(modal, { reason: 'cancel' });
@@ -574,15 +715,18 @@ export const setupTargetedModal = () => {
     if (btnClose) btnClose.addEventListener('click', closeModal);
     if (btnCancel) btnCancel.addEventListener('click', closeModal);
 
-    if (maxAffordableCheckbox) maxAffordableCheckbox.addEventListener('change', updateModalPreview);
-    if (tierInput) tierInput.addEventListener('input', updateModalPreview);
-    if (rankSelect) rankSelect.addEventListener('change', updateModalPreview);
+    modeInputs.forEach(input => input.addEventListener('change', () => void updateModalPreview()));
+    if (tierInput) tierInput.addEventListener('input', () => void updateModalPreview());
+    if (rankSelect) rankSelect.addEventListener('change', () => void updateModalPreview());
 
     if (btnConfirm) {
         btnConfirm.addEventListener('click', async () => {
-            const isMax = Boolean(maxAffordableCheckbox?.checked);
-            const reqTier = parseInt(tierInput.value, 10) || 0;
-            const reqRankIndex = parseInt(rankSelect.value, 10) || 0;
+            const playerState = getState();
+            const mode = modeInputs.find(input => input.checked)?.value || 'next';
+            const isMax = mode === 'max';
+            const reqTier = mode === 'custom' ? (parseInt(tierInput.value, 10) || 0) : (playerState.prestigeCount || 0);
+            const reqRankIndex = mode === 'next' ? Math.min(getRankData().length - 1, (playerState.rankIndex || 0) + 1)
+                : mode === 'custom' ? (parseInt(rankSelect.value, 10) || 0) : (playerState.rankIndex || 0);
 
             try {
                 btnConfirm.disabled = true;

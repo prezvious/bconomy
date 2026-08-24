@@ -43,8 +43,14 @@ assert.deepStrictEqual(defaults.inventory, {
     search: '',
     category: 'all',
     sort: 'name-asc',
-    showUnavailableBoosterAction: true
+    showUnavailableBoosterAction: true,
+    lassoEnabled: true,
+    shiftRangeEnabled: true
 });
+assert.strictEqual(defaults.shopQol.sellRoll.display, 'both');
+assert.deepStrictEqual([defaults.shopQol.sellRoll.mediumThreshold, defaults.shopQol.sellRoll.greatThreshold], [50, 80]);
+assert.strictEqual(defaults.shopQol.wishlistAlertMode, 'newlyAvailable');
+assert.strictEqual(defaults.prestigeSimulator.defaultHorizon, 'next');
 assert.deepStrictEqual(defaults.bulkActions, { skipAllPreviews: false });
 console.log('✓ Defaults use full values, balanced density, and smart adaptive timer formatting');
 

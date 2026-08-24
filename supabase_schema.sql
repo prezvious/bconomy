@@ -12,7 +12,9 @@ create table if not exists public.player_state (
   cash numeric not null default 0,
   rank_index integer not null default 0,
   prestige_count integer not null default 0,
+  state_revision bigint not null default 0 constraint player_state_state_revision_nonnegative check (state_revision >= 0),
   state jsonb not null default '{
+    "schemaVersion": 1,
     "cash": 0,
     "rankIndex": 0,
     "prestigeCount": 0,
@@ -42,11 +44,30 @@ create table if not exists public.player_state (
         "fish": { "T1": 0, "T2": 0, "T3": 0, "T4": 0, "T5": 0, "T6": 0 },
         "hunt": { "T1": 0, "T2": 0, "T3": 0, "T4": 0, "T5": 0, "T6": 0 }
       }
-    }
+    },
+    "lockedItems": [],
+    "favoriteItems": [],
+    "shopWishlist": {}
   }'::jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+alter table public.player_state
+  add column if not exists state_revision bigint not null default 0;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'player_state_state_revision_nonnegative'
+      and conrelid = 'public.player_state'::regclass
+  ) then
+    alter table public.player_state
+      add constraint player_state_state_revision_nonnegative check (state_revision >= 0);
+  end if;
+end $$;
 
 -- 2. Create Indexes for performance
 create index if not exists idx_player_state_player_id on public.player_state(player_id);
@@ -68,16 +89,8 @@ create policy "Users can read own profile"
   for select
   using (auth.uid() = id);
 
-create policy "Users can update own state"
-  on public.player_state
-  for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
-
-create policy "Users can insert own profile"
-  on public.player_state
-  for insert
-  with check (auth.uid() = id);
+-- Player-state writes are server-authoritative. The service role bypasses RLS;
+-- authenticated browser clients retain read-only access to their own profile.
 
 -- 4. Automated User Creation Trigger
 -- When a user registers via Supabase Auth, automatically create their player_state row
@@ -147,5 +160,83 @@ drop trigger if exists on_player_state_updated on public.player_state;
 create trigger on_player_state_updated
   before update on public.player_state
   for each row execute procedure public.handle_updated_at();
+
+-- 6. Idempotent, revision-checked command commits
+create table if not exists public.player_command_receipts (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  command_id uuid not null,
+  resulting_revision bigint not null,
+  result jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  primary key (user_id, command_id)
+);
+
+create index if not exists idx_player_command_receipts_created_at
+  on public.player_command_receipts(created_at);
+
+alter table public.player_command_receipts enable row level security;
+
+create or replace function public.commit_player_command(
+  p_user_id uuid,
+  p_expected_revision bigint,
+  p_command_id uuid,
+  p_state jsonb,
+  p_result jsonb
+)
+returns jsonb
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  current_revision bigint;
+  existing_receipt public.player_command_receipts%rowtype;
+begin
+  select * into existing_receipt
+  from public.player_command_receipts
+  where user_id = p_user_id and command_id = p_command_id;
+
+  if found then
+    return jsonb_build_object(
+      'status', 'duplicate',
+      'revision', existing_receipt.resulting_revision,
+      'result', existing_receipt.result
+    );
+  end if;
+
+  select state_revision into current_revision
+  from public.player_state
+  where id = p_user_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('status', 'missing');
+  end if;
+
+  if current_revision <> p_expected_revision then
+    return jsonb_build_object('status', 'conflict', 'revision', current_revision);
+  end if;
+
+  update public.player_state
+  set state = p_state,
+      state_revision = current_revision + 1
+  where id = p_user_id;
+
+  insert into public.player_command_receipts(user_id, command_id, resulting_revision, result)
+  values (p_user_id, p_command_id, current_revision + 1, coalesce(p_result, '{}'::jsonb));
+
+  delete from public.player_command_receipts
+  where user_id = p_user_id
+    and created_at < timezone('utc'::text, now()) - interval '24 hours';
+
+  return jsonb_build_object(
+    'status', 'applied',
+    'revision', current_revision + 1,
+    'result', coalesce(p_result, '{}'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.commit_player_command(uuid, bigint, uuid, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.commit_player_command(uuid, bigint, uuid, jsonb, jsonb) to service_role;
 
 -- Schema installation complete!

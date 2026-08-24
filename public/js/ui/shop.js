@@ -4,7 +4,11 @@
  */
 import { getState } from '../state.js';
 import { formatNumberCommas, formatDisplayNumber, formatMoney, displayItemName, getItemCategory, getItemIcon, iconHtml, isBoosterItem } from '../utils.js';
-import { doGetShopState, doForceRestock, doBuyShopItem, doSellShopItem, doBuyBooster, doActivateBooster, doPreviewBulkSell, doExecuteBulkSell, doPreviewBulkBuy, doExecuteBulkBuy } from '../api.js';
+import {
+    doGetShopState, doForceRestock, doBuyShopItem, doSellShopItem, doBuyBooster, doActivateBooster,
+    doPreviewBulkSell, doExecuteBulkSell, doPreviewBulkBuy, doExecuteBulkBuy,
+    doGetItemCatalog, doSetWishlist, doPreviewExtendActiveBoosters, doExtendActiveBoosters
+} from '../api.js';
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { renderAll } from './header.js';
@@ -30,6 +34,7 @@ let lastBulkOptions = null;
 let lastBulkPreviewPayload = null;
 let restockTimerInterval = null;
 let boosterTimerInterval = null;
+let itemCatalog = null;
 const persistentShopBindings = new WeakMap();
 
 const bindPersistentShopEvent = (element, eventName, handler) => {
@@ -60,10 +65,12 @@ export const renderShop = async ({ resetControls = false } = {}) => {
 
     // Fetch latest state from server (triggers time-gated restock if deadline passed)
     let state = getState();
+    let sellRolls = {};
     try {
         const res = await doGetShopState();
         if (res && res.state) {
             state = res.state;
+            sellRolls = res.sellRolls || {};
         }
     } catch (err) {
         console.error('Failed to sync shop state:', err);
@@ -75,6 +82,8 @@ export const renderShop = async ({ resetControls = false } = {}) => {
     const boosterListings = shop.boosterListings || {};
     const inventory = state.inventory || {};
     const boosters = state.boosters || {};
+    const wishlist = state.shopWishlist || {};
+    notifyWishlistAvailability(state, buyListings, boosterListings);
     const buyCategories = [...new Set(Object.keys(buyListings).map(getItemCategory))].sort();
     const sellableNames = Object.keys(inventory).filter(name => Number(inventory[name]) > 0 && Number(sellPrices[name]) > 0 && !isBoosterItem(name));
     const sellCategories = [...new Set(sellableNames.map(getItemCategory))].sort();
@@ -98,7 +107,7 @@ export const renderShop = async ({ resetControls = false } = {}) => {
                 <div class="summary-metric"><span class="summary-label">Available Cash</span><strong class="summary-value" title="${formatNumberCommas(state.cash || 0)}">${formatMoney(state.cash || 0)}</strong></div>
                 <div class="summary-metric"><span class="summary-label">Next Restock</span><strong class="summary-value" id="shop-restock-timer">${formatCountdown(remainingMs)}</strong></div>
                 <div class="summary-metric"><span class="summary-label">Buy Listings</span><strong class="summary-value">${formatDisplayNumber(Object.keys(buyListings).length + Object.keys(boosterListings).length)}</strong></div>
-                <div class="summary-action"><button id="btn-force-restock-shop" class="action-btn secondary-btn" type="button" title="Restock shop items and boosters immediately"><iconify-icon icon="lucide:refresh-cw" aria-hidden="true"></iconify-icon> Restock Now</button></div>
+                <div class="summary-action shop-summary-actions"><button id="btn-manage-shop-wishlist" class="action-btn secondary-btn" type="button"><iconify-icon icon="lucide:bookmark" aria-hidden="true"></iconify-icon> Wishlist (${Object.keys(wishlist).length})</button><button id="btn-force-restock-shop" class="action-btn secondary-btn" type="button" title="Restock shop items and boosters immediately"><iconify-icon icon="lucide:refresh-cw" aria-hidden="true"></iconify-icon> Restock Now</button></div>
             </div>
 
             <!-- Trade mode selector and utility action -->
@@ -129,7 +138,7 @@ export const renderShop = async ({ resetControls = false } = {}) => {
                     <p class="section-subtext">Action-specific boosters provide 2× loot yield. Boosters cannot be sold back to the shop.</p>
                 </div>
                 <div class="booster-shop-grid mb-8">
-                    ${renderBoosterListings(boosterListings)}
+                    ${renderBoosterListings(boosterListings, wishlist)}
                 </div>
 
                 <!-- Normal Items Buy Shop -->
@@ -140,11 +149,11 @@ export const renderShop = async ({ resetControls = false } = {}) => {
                 <div class="page-toolbar shop-catalog-toolbar mb-4" data-toolbar-mode="buy" aria-label="Buy catalog controls">
                     <label class="toolbar-search" for="buy-search-input"><span class="sr-only">Search buy listings</span><iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon><input type="search" id="buy-search-input" name="buy-search" autocomplete="off" class="search-input" placeholder="Search buy listings…" value="${escapeHtml(shopViewState.buySearch)}"></label>
                     <label class="toolbar-field" for="buy-category-filter"><span>Category</span><select id="buy-category-filter" class="form-select" name="buy-category" autocomplete="off">${categoryOptions(buyCategories)}</select></label>
-                    <label class="toolbar-field" for="buy-availability-filter"><span>Availability</span><select id="buy-availability-filter" class="form-select" name="buy-availability" autocomplete="off"><option value="available">Available first</option><option value="all">Show all</option><option value="unavailable">Unavailable only</option></select></label>
+                    <label class="toolbar-field" for="buy-availability-filter"><span>Availability</span><select id="buy-availability-filter" class="form-select" name="buy-availability" autocomplete="off"><option value="available">Available first</option><option value="all">Show all</option><option value="unavailable">Unavailable only</option><option value="wishlist">Wishlist only</option></select></label>
                     <label class="toolbar-field" for="buy-sort"><span>Sort</span><select id="buy-sort" class="form-select" name="buy-sort" autocomplete="off"><option value="availability">Availability</option><option value="name">Name A–Z</option><option value="price">Price: Low to High</option><option value="amount">Stock: High to Low</option><option value="category">Category</option></select></label>
                 </div>
                 <div class="shop-items-grid" id="buy-items-grid">
-                    ${renderBuyItemsGrid(buyListings)}
+                    ${renderBuyItemsGrid(buyListings, wishlist)}
                 </div>
             </div>
 
@@ -160,7 +169,7 @@ export const renderShop = async ({ resetControls = false } = {}) => {
                     <label class="toolbar-field" for="sell-sort"><span>Sort</span><select id="sell-sort" class="form-select" name="sell-sort" autocomplete="off"><option value="availability">Owned Quantity</option><option value="name">Name A–Z</option><option value="price">Payout: Low to High</option><option value="amount">Owned: High to Low</option><option value="category">Category</option></select></label>
                 </div>
                 <div class="shop-items-grid" id="sell-items-grid">
-                    ${renderSellItemsGrid(inventory, sellPrices)}
+                    ${renderSellItemsGrid(inventory, sellPrices, sellRolls)}
                 </div>
             </div>
         </div>
@@ -239,6 +248,83 @@ const startBoosterCountdownTimers = () => {
     }, 1000);
 };
 
+const availableWishlistItems = (wishlist, buyListings, boosterListings) => Object.keys(wishlist || {}).filter(itemName => {
+    const item = buyListings[itemName];
+    const booster = boosterListings[itemName];
+    return Boolean((item?.available && item.stock > 0) || (booster?.available && (booster.stock === null || booster.stock === Infinity || booster.stock > 0)));
+});
+
+const notifyWishlistAvailability = (state, buyListings, boosterListings) => {
+    const wishlist = state.shopWishlist || {};
+    const available = availableWishlistItems(wishlist, buyListings, boosterListings);
+    const settings = getStoredSettings().shopQol;
+    let notice = [];
+    try {
+        const prior = new Set(JSON.parse(localStorage.getItem('bconomy_wishlist_available') || '[]'));
+        const alertedMemberships = JSON.parse(localStorage.getItem('bconomy_wishlist_membership_alerts') || '{}');
+        const restockKey = String(state.shop?.nextRestockAt || 0);
+        if (settings.wishlistAlertMode === 'everyRestock') {
+            if (localStorage.getItem('bconomy_wishlist_restock_alert') !== restockKey) notice = available;
+            localStorage.setItem('bconomy_wishlist_restock_alert', restockKey);
+        } else if (settings.wishlistAlertMode === 'oncePerMembership') {
+            notice = available.filter(id => alertedMemberships[id] !== wishlist[id]?.addedAt);
+            for (const id of notice) alertedMemberships[id] = wishlist[id]?.addedAt;
+            localStorage.setItem('bconomy_wishlist_membership_alerts', JSON.stringify(alertedMemberships));
+        } else {
+            notice = available.filter(id => !prior.has(id));
+        }
+        localStorage.setItem('bconomy_wishlist_available', JSON.stringify(available));
+    } catch (_) { /* Storage may be unavailable; highlighting still works. */ }
+    if (notice.length) showToast(`${notice.length} wishlist item${notice.length === 1 ? '' : 's'} available: ${notice.slice(0, 3).map(displayItemName).join(', ')}${notice.length > 3 ? '…' : ''}`, 'success');
+};
+
+const sellRollMarkup = roll => {
+    const preferences = getStoredSettings().shopQol.sellRoll;
+    if (!roll || roll.fixed || preferences.display === 'off') return roll?.fixed ? '<span class="sell-roll-fixed">Fixed price</span>' : '';
+    const percentage = Math.round(roll.percentage);
+    const band = percentage >= preferences.greatThreshold ? 'great' : percentage >= preferences.mediumThreshold ? 'medium' : 'terrible';
+    const color = preferences.colors[band];
+    const badge = `<span class="sell-roll-badge" style="--sell-roll-color:${color}" title="${percentage}% through the current ${formatMoney(roll.min)}–${formatMoney(roll.max)} sell range">${percentage}% · ${band}</span>`;
+    const bar = `<span class="sell-roll-track" role="progressbar" aria-label="Sell price roll" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percentage}" aria-valuetext="${percentage}% through the price range · ${band} deal" title="${percentage}% · ${band} deal"><span style="width:${percentage}%;--sell-roll-color:${color}"></span></span>`;
+    if (preferences.display === 'badge') return badge;
+    if (preferences.display === 'bar') return bar;
+    return `<span class="sell-roll-indicator">${badge}${bar}</span>`;
+};
+
+const openWishlistManager = async () => {
+    if (!itemCatalog) {
+        const response = await doGetItemCatalog();
+        itemCatalog = response.items || [];
+    }
+    let dialog = document.getElementById('shop-wishlist-dialog');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'shop-wishlist-dialog';
+        dialog.className = 'modal hidden';
+        dialog.dataset.appDialog = '';
+        document.body.appendChild(dialog);
+    }
+    const renderManager = (query = '') => {
+        const wished = getState().shopWishlist || {};
+        const candidates = itemCatalog.filter(item => item.shopEligible || item.sellable || item.category === 'booster')
+            .filter(item => !query || item.displayName.toLowerCase().includes(query.toLowerCase()) || item.id.toLowerCase().includes(query.toLowerCase()));
+        dialog.innerHTML = `<div class="modal-content card charter-modal modal-dialog modal-wide"><div class="modal-header"><div class="modal-header-title"><iconify-icon icon="lucide:bookmark" class="modal-icon" aria-hidden="true"></iconify-icon><h3>Shop Restock Wishlist</h3></div><button class="modal-close-btn" type="button" data-wishlist-close aria-label="Close wishlist"><iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon></button></div>
+            <div class="modal-body"><label class="toolbar-search wishlist-search"><iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon><span class="sr-only">Search shop wishlist</span><input id="wishlist-search" name="wishlist-search" class="search-input" type="search" autocomplete="off" placeholder="Search shop items…" value="${escapeHtml(query)}"></label><p class="text-subtle text-sm">Wishlisted listings are highlighted after every restock. Alerts follow your Settings preference.</p><div class="wishlist-manager-grid">${candidates.map(item => `<button class="wishlist-manager-item ${wished[item.id] ? 'is-wished' : ''}" type="button" data-wishlist-item="${escapeHtml(item.id)}" aria-pressed="${Boolean(wished[item.id])}">${iconHtml(getItemIcon(item.id))}<span>${escapeHtml(item.displayName)}</span>${iconHtml(wished[item.id] ? 'lucide:bookmark-check' : 'lucide:bookmark-plus')}</button>`).join('')}</div></div></div>`;
+        dialog.querySelector('[data-wishlist-close]')?.addEventListener('click', () => closeDialog(dialog, { reason: 'close' }));
+        dialog.querySelector('#wishlist-search')?.addEventListener('input', event => renderManager(event.target.value));
+        dialog.querySelectorAll('[data-wishlist-item]').forEach(button => button.addEventListener('click', async () => {
+            const wishedNow = Boolean(getState().shopWishlist?.[button.dataset.wishlistItem]);
+            try {
+                await doSetWishlist([button.dataset.wishlistItem], !wishedNow, button);
+                renderManager(dialog.querySelector('#wishlist-search')?.value || '');
+                await renderShop();
+            } catch (error) { showToast(error.message || 'Could not update wishlist', 'error'); }
+        }));
+    };
+    renderManager();
+    openDialog(dialog, { initialFocus: '#wishlist-search', closeOnBackdrop: true });
+};
+
 const renderActiveBoostersHUD = (boosters, now) => {
     const activeList = [];
     const activeUntil = (boosters && boosters.activeUntil) || {};
@@ -276,6 +362,7 @@ const renderActiveBoostersHUD = (boosters, now) => {
             <div class="hud-header">
                 <iconify-icon icon="lucide:flame" class="hud-icon active-flame" aria-hidden="true"></iconify-icon>
                 <span>Active Loot Boosters</span>
+                <button id="btn-extend-active-boosters" class="action-btn primary-btn btn-sm" type="button"><iconify-icon icon="lucide:timer-reset" aria-hidden="true"></iconify-icon> Extend All Active Boosters</button>
             </div>
             <div class="active-boosters-tags">
                 ${activeList.map(b => `
@@ -294,7 +381,7 @@ const renderActiveBoostersHUD = (boosters, now) => {
 // ── Bulk Actions Modal & Rendering Logic ──
 
 // Shared market-card renderer keeps booster, buy, and sell listings aligned.
-const renderBoosterListings = (boosterListings) => {
+const renderBoosterListings = (boosterListings, wishlist = {}) => {
     const keys = Object.keys(boosterListings);
     if (keys.length === 0) {
         return `<div class="empty-state-card card charter-card"><iconify-icon icon="lucide:zap-off" class="empty-icon" aria-hidden="true"></iconify-icon><h4>No Booster Listings</h4><p>A fresh selection will appear at the next restock.</p></div>`;
@@ -314,7 +401,7 @@ const renderBoosterListings = (boosterListings) => {
         const actionName = escapeHtml(String(listing.action || 'loot').toUpperCase());
 
         return `
-            <article class="market-card booster-card card ${isOutOfStock ? 'out-of-stock' : ''}" data-name="${escapeHtml(boosterName.toLowerCase())}">
+            <article class="market-card booster-card card ${isOutOfStock ? 'out-of-stock' : ''} ${wishlist[boosterName] ? 'wishlist-highlight' : ''}" data-name="${escapeHtml(boosterName.toLowerCase())}" data-wishlist="${Boolean(wishlist[boosterName])}">
                 <div class="market-card-header">
                     <div class="market-item-identity">
                         <span class="market-item-icon item-icon-wrap" data-cat="booster">${iconHtml(`lucide:${actionIcon}`, 'item-icon')}</span>
@@ -323,7 +410,7 @@ const renderBoosterListings = (boosterListings) => {
                             <span class="market-item-meta">${durationMins}m duration · 2× loot yield</span>
                         </div>
                     </div>
-                    <div class="market-badge-stack"><span class="badge tier-badge">${escapeHtml(listing.tier)}</span><span class="badge action-badge">${actionName}</span></div>
+                    <div class="market-badge-stack">${wishlist[boosterName] ? '<span class="badge wishlist-badge"><iconify-icon icon="lucide:bookmark-check" aria-hidden="true"></iconify-icon> Wishlist</span>' : ''}<span class="badge tier-badge">${escapeHtml(listing.tier)}</span><span class="badge action-badge">${actionName}</span></div>
                 </div>
                 <dl class="market-card-metrics">
                     <div><dt>Unit price</dt><dd>${formatMoney(listing.buyPrice)}</dd></div>
@@ -334,7 +421,7 @@ const renderBoosterListings = (boosterListings) => {
     }).join('');
 };
 
-const renderBuyItemsGrid = (buyListings) => {
+const renderBuyItemsGrid = (buyListings, wishlist = {}) => {
     const items = Object.keys(buyListings);
     if (items.length === 0) {
         return `<div class="empty-state-card card charter-card"><iconify-icon icon="lucide:package-open" class="empty-icon" aria-hidden="true"></iconify-icon><h4>No Items in Stock</h4><p>Check back after the next restock for a new catalog.</p></div>`;
@@ -351,7 +438,7 @@ const renderBuyItemsGrid = (buyListings) => {
         const categoryLabel = escapeHtml(category.charAt(0).toUpperCase() + category.slice(1));
 
         return `
-            <article class="market-card shop-item-card card ${isOutOfStock ? 'out-of-stock' : ''}" data-name="${escapeHtml(itemName.toLowerCase())}" data-category="${escapeHtml(category)}" data-available="${String(!isOutOfStock)}" data-price="${Number(listing.buyPrice) || 0}" data-amount="${Number(listing.stock) || 0}">
+            <article class="market-card shop-item-card card ${isOutOfStock ? 'out-of-stock' : ''} ${wishlist[itemName] ? 'wishlist-highlight' : ''}" data-name="${escapeHtml(itemName.toLowerCase())}" data-category="${escapeHtml(category)}" data-available="${String(!isOutOfStock)}" data-wishlist="${Boolean(wishlist[itemName])}" data-price="${Number(listing.buyPrice) || 0}" data-amount="${Number(listing.stock) || 0}">
                 <div class="market-card-header">
                     <div class="market-item-identity">
                         <span class="market-item-icon item-icon-wrap" data-cat="${escapeHtml(category)}">${iconHtml(getItemIcon(itemName), 'item-icon')}</span>
@@ -360,7 +447,7 @@ const renderBuyItemsGrid = (buyListings) => {
                             <span class="market-item-meta">${categoryLabel}</span>
                         </div>
                     </div>
-                    <span class="stock-badge ${isOutOfStock ? 'badge-red' : 'badge-green'}">${isOutOfStock ? 'No stock' : `${formatDisplayNumber(listing.stock)} in stock`}</span>
+                    <div class="market-badge-stack">${wishlist[itemName] ? '<span class="badge wishlist-badge"><iconify-icon icon="lucide:bookmark-check" aria-hidden="true"></iconify-icon> Wishlist</span>' : ''}<span class="stock-badge ${isOutOfStock ? 'badge-red' : 'badge-green'}">${isOutOfStock ? 'No stock' : `${formatDisplayNumber(listing.stock)} in stock`}</span></div>
                 </div>
                 <dl class="market-card-metrics">
                     <div><dt>Unit price</dt><dd>${formatMoney(listing.buyPrice)}</dd></div>
@@ -378,7 +465,7 @@ const renderBuyItemsGrid = (buyListings) => {
     }).join('');
 };
 
-const renderSellItemsGrid = (inventory, sellPrices) => {
+const renderSellItemsGrid = (inventory, sellPrices, sellRolls = {}) => {
     const ownedItems = Object.entries(inventory).filter(([itemName, quantity]) => quantity > 0 && !isBoosterItem(itemName) && Number.isFinite(Number(sellPrices[itemName])) && Number(sellPrices[itemName]) > 0);
     if (ownedItems.length === 0) {
         return `<div class="empty-state-card card charter-card"><iconify-icon icon="lucide:package-open" class="empty-icon" aria-hidden="true"></iconify-icon><h4>No Sellable Items</h4><p>Gather materials or harvest crops to create a sellable inventory.</p></div>`;
@@ -407,6 +494,7 @@ const renderSellItemsGrid = (inventory, sellPrices) => {
                     <div><dt>Unit payout</dt><dd class="text-success">+${formatMoney(unitSellPrice)}</dd></div>
                     <div><dt>Available</dt><dd>${formatDisplayNumber(ownedQty)} units</dd></div>
                 </dl>
+                ${sellRollMarkup(sellRolls[itemName])}
                 <div class="market-card-action">
                     <div class="qty-input-group">
                         <input type="number" class="qty-input sell-qty-input" id="${inputId}" name="${inputId}" aria-label="Quantity of ${displayName} to sell" inputmode="numeric" min="1" max="${ownedQty}" value="1">
@@ -418,8 +506,9 @@ const renderSellItemsGrid = (inventory, sellPrices) => {
     }).join('');
 };
 
-const openBulkActionsModal = (initialMode = 'sell') => {
+export const openBulkActionsModal = (initialMode = 'sell', { selectedItems = null } = {}) => {
     bulkModalMode = initialMode;
+    if (Array.isArray(selectedItems)) sessionStorage.setItem('bconomy_bulk_sell_selection', JSON.stringify(selectedItems));
     const modal = document.getElementById('bulk-actions-modal');
     if (!modal) return;
 
@@ -477,6 +566,13 @@ const renderBulkModalContent = () => {
 
     if (bulkModalMode === 'sell') {
         const ownedItems = Object.entries(inventory).filter(([k, v]) => v > 0 && !isBoosterItem(k) && sellPrices[k] !== undefined);
+        let requestedSelection = null;
+        try {
+            const stored = JSON.parse(sessionStorage.getItem('bconomy_bulk_sell_selection') || 'null');
+            if (Array.isArray(stored)) requestedSelection = new Set(stored);
+        } catch (_) { /* Ignore malformed one-time UI state. */ }
+        sessionStorage.removeItem('bconomy_bulk_sell_selection');
+        const initiallyChecked = name => requestedSelection ? requestedSelection.has(name) : true;
         
         body.innerHTML = `
             <div class="bulk-presets-bar mb-3">
@@ -508,7 +604,7 @@ const renderBulkModalContent = () => {
                 <table class="bulk-table">
                     <thead>
                         <tr>
-                            <th class="bulk-select-cell"><input type="checkbox" id="bulk-sell-master-check" aria-label="Select all sellable items" checked /></th>
+                            <th class="bulk-select-cell"><input type="checkbox" id="bulk-sell-master-check" aria-label="Select all sellable items" ${ownedItems.length > 0 && ownedItems.every(([name]) => initiallyChecked(name)) ? 'checked' : ''} /></th>
                             <th>Item Name</th>
                             <th>Owned Qty</th>
                             <th>Reserve Qty</th>
@@ -519,7 +615,7 @@ const renderBulkModalContent = () => {
                         ${ownedItems.length === 0 ? `<tr><td colspan="5" class="bulk-empty-cell">No sellable items in inventory</td></tr>` : 
                             ownedItems.map(([name, qty]) => `
                             <tr class="bulk-item-row">
-                                <td class="bulk-select-cell"><input type="checkbox" class="bulk-sell-item-check" data-item="${escapeHtml(name)}" aria-label="Select ${escapeHtml(displayItemName(name))} to sell" checked /></td>
+                                <td class="bulk-select-cell"><input type="checkbox" class="bulk-sell-item-check" data-item="${escapeHtml(name)}" aria-label="Select ${escapeHtml(displayItemName(name))} to sell" ${initiallyChecked(name) ? 'checked' : ''} /></td>
                                 <td><b>${escapeHtml(displayItemName(name))}</b></td>
                                 <td>${formatDisplayNumber(qty)}</td>
                                 <td>
@@ -532,6 +628,7 @@ const renderBulkModalContent = () => {
                 </table>
             </div>
         `;
+        if (requestedSelection) document.getElementById('preset-sell-all')?.classList.remove('active');
 
         const setActiveSellChip = (activeId) => {
             document.querySelectorAll('#bulk-modal-body .preset-chip').forEach(chip => {
@@ -981,7 +1078,10 @@ const applyShopCatalogControls = mode => {
     cards.forEach(card => {
         const matchesQuery = !query || card.dataset.name.includes(query);
         const matchesCategory = category === 'all' || card.dataset.category === category;
-        const matchesAvailability = !isBuy || availability === 'all' || (availability === 'available' ? card.dataset.available === 'true' : card.dataset.available !== 'true');
+        const matchesAvailability = !isBuy || availability === 'all'
+            || (availability === 'available' ? card.dataset.available === 'true'
+                : availability === 'wishlist' ? card.dataset.wishlist === 'true'
+                    : card.dataset.available !== 'true');
         const visible = matchesQuery && matchesCategory && matchesAvailability;
         card.hidden = !visible;
         if (visible) visibleCount += 1;
@@ -1077,6 +1177,28 @@ const setupShopEventListeners = () => {
     // Preview confirm execute button
     bindPersistentShopEvent(document.getElementById('btn-preview-confirm'), 'click', (e) => {
         handleConfirmExecute(e.currentTarget);
+    });
+
+    document.getElementById('btn-manage-shop-wishlist')?.addEventListener('click', () => {
+        void openWishlistManager().catch(error => showToast(error.message || 'Wishlist unavailable', 'error'));
+    });
+
+    document.getElementById('btn-extend-active-boosters')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        try {
+            const plan = await doPreviewExtendActiveBoosters();
+            if (!plan.totalUnits) {
+                showToast('No unlocked owned boosters match the currently active slots.', 'error');
+                return;
+            }
+            const breakdown = (plan.breakdown || []).map(item => `${formatDisplayNumber(item.quantity)}× ${displayItemName(item.itemName)}`).join(', ');
+            const skipped = (plan.skipped || []).length ? ` ${plan.skipped.length} active slot${plan.skipped.length === 1 ? '' : 's'} will be skipped because stock is missing or locked.` : '';
+            const approved = await showConfirmation('extendAllBoosters', 'Extend every active booster?', `Consume all matching unlocked boosters (${breakdown}) and append their durations from each slot's current expiry.${skipped}`, { allowIgnore: false, confirmLabel: 'Extend All Boosters' });
+            if (!approved) return;
+            const result = await doExtendActiveBoosters(button);
+            showToast(`Extended ${result.activeSlots || plan.activeSlots} active booster slot${(result.activeSlots || plan.activeSlots) === 1 ? '' : 's'} with ${result.totalUnits || plan.totalUnits} booster${(result.totalUnits || plan.totalUnits) === 1 ? '' : 's'}.`, 'success');
+            renderAll();
+        } catch (error) { showToast(error.message || 'Could not extend active boosters', 'error'); }
     });
 
     // Force Restock button

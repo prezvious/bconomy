@@ -9,15 +9,56 @@ import {
     signInUser,
     signOutUser,
     getAuthSession,
-    getAuthProfile
+    getAuthProfile,
+    setAuthProfile,
+    getAuthHeaders
 } from '../auth.js';
-import { getState, setState, saveState } from '../state.js';
+import { getState, setState, saveState, loadState, setRevision } from '../state.js';
 import { showToast } from './toast.js';
 import { renderAll } from './header.js';
-import { openDialog, closeDialog } from './modal.js';
+import { openDialog, closeDialog, showConfirmation } from './modal.js';
 
 let authModalEl = null;
 let currentTab = 'signin'; // 'signin' | 'signup'
+
+const saveSummary = state => {
+    const inventoryTypes = Object.values(state?.inventory || {}).filter(quantity => Number(quantity) > 0).length;
+    return `$${Math.max(0, Math.floor(Number(state?.cash) || 0)).toLocaleString()} cash · Rank ${Math.max(0, Math.floor(Number(state?.rankIndex) || 0)) + 1} · Tier ${Math.max(0, Math.floor(Number(state?.prestigeCount) || 0))} · ${inventoryTypes} item types`;
+};
+
+const hasMeaningfulProgress = state => Math.max(0, Number(state?.cash) || 0) > 0
+    || Math.max(0, Number(state?.rankIndex) || 0) > 0
+    || Math.max(0, Number(state?.prestigeCount) || 0) > 0
+    || Object.values(state?.inventory || {}).some(quantity => Number(quantity) > 0);
+
+export const reconcileSignedState = async (profile, deviceState) => {
+    let resolvedProfile = profile;
+    const cloudState = profile?.state;
+    const differs = JSON.stringify(cloudState || {}) !== JSON.stringify(deviceState || {});
+    if (cloudState && deviceState && differs && hasMeaningfulProgress(cloudState) && hasMeaningfulProgress(deviceState)) {
+        const useDevice = await showConfirmation(
+            'cloud-device-save-choice',
+            'Choose which progress to keep',
+            `Cloud: ${saveSummary(cloudState)}. This device: ${saveSummary(deviceState)}. Choose This Device to replace the cloud save, or Cloud Save to keep the account progress.`,
+            { allowIgnore: false, confirmLabel: 'Use This Device', cancelLabel: 'Use Cloud Save' }
+        );
+        if (useDevice) {
+            const response = await fetch('/api/player/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ expectedRevision: Math.max(0, Number(profile.state_revision) || 0), deviceState })
+            });
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || 'Device progress could not be imported.');
+            resolvedProfile = data;
+        }
+    }
+    setState(resolvedProfile?.state || cloudState || deviceState);
+    setRevision(resolvedProfile?.state_revision || 0);
+    if (resolvedProfile) setAuthProfile(resolvedProfile);
+    saveState();
+    return resolvedProfile;
+};
 
 const ENGLISH_ADJECTIVES = [
     'Orange', 'Blue', 'Green', 'Golden', 'Silver', 'Crimson', 'Amber', 'Violet', 'Indigo', 'Emerald',
@@ -319,6 +360,7 @@ async function handleSignIn(e) {
             submitBtn.classList.add('btn-loading');
         }
 
+        const deviceState = getState();
         const data = await signInUser({ usernameOrEmail: identifier, password });
         showToast(`Welcome back, Guild Master ${data.profile?.username || ''}!`, 'success');
         closeAuthModal();
@@ -326,8 +368,7 @@ async function handleSignIn(e) {
         // Load user's cloud saved state
         const profile = getAuthProfile();
         if (profile && profile.state && Object.keys(profile.state).length > 0) {
-            setState(profile.state);
-            saveState(profile.state);
+            await reconcileSignedState(profile, deviceState);
             renderAll();
         }
         updateAccountHeaderUI();
@@ -372,6 +413,7 @@ async function handleSignUp(e) {
             submitBtn.classList.add('btn-loading');
         }
 
+        const deviceState = getState();
         const data = await signUpUser({ username, email, password });
         showToast(`Enlisted successfully as Player ${data.profile?.formatted_player_id || '#' + data.profile?.player_id}!`, 'success');
         closeAuthModal();
@@ -379,8 +421,7 @@ async function handleSignUp(e) {
         // Sync initial state if available
         const profile = getAuthProfile();
         if (profile && profile.state && Object.keys(profile.state).length > 0) {
-            setState(profile.state);
-            saveState(profile.state);
+            await reconcileSignedState(profile, deviceState);
             renderAll();
         }
         updateAccountHeaderUI();
@@ -419,6 +460,8 @@ export function openAccountDetailsModal(returnFocus = null) {
         signoutBtn.onclick = async () => {
             closeDialog(modal, { reason: 'signout' });
             await signOutUser();
+            const guestState = loadState();
+            if (guestState) setState(guestState);
             showToast('Signed out of Bconomy.', 'info');
             updateAccountHeaderUI();
             renderAll();

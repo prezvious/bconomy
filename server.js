@@ -8,13 +8,19 @@ const cors = require('cors');
 const path = require('path');
 const {
     isSupabaseConfigured,
-    findEmailByUsername,
     getProfileByUserId,
     signUpUserAdmin,
     signInUserServer,
-    syncPlayerState,
-    formatPlayerId
+    refreshSessionServer,
+    verifyAccessToken,
+    commitPlayerCommand,
+    getPlayerCommandReceipt,
+    replacePlayerState,
+    getSupabaseConfig
 } = require('./src/db/supabase');
+const { executeCommand, executeQuery } = require('./src/api/gameGateway');
+const { normalizePlayerState, createDefaultState } = require('./src/state/playerState');
+const { getAllItems } = require('./src/data/itemRegistry');
 const ActionEngine = require('./src/engine/actionEngine');
 const ToolEngine = require('./src/engine/toolEngine');
 const CraftingEngine = require('./src/engine/craftingEngine');
@@ -47,7 +53,12 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', version: require('./package.json').version, supabaseConfigured: isSupabaseConfigured() });
+});
+
 const DEFAULT_STATE = {
+    schemaVersion: 1,
     cash: 0,
     rankIndex: 0,
     prestigeCount: 0,
@@ -87,7 +98,8 @@ const DEFAULT_STATE = {
         }
     },
     lockedItems: [],
-    pinnedItems: [],
+    favoriteItems: [],
+    shopWishlist: {},
     workShift: {
         currentStreak: 0,
         lastWorkAt: 0,
@@ -98,14 +110,199 @@ const DEFAULT_STATE = {
 
 // State endpoints
 app.get('/api/state/default', (req, res) => {
-    const initialState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    const initialState = createDefaultState();
     FarmEngine.ensureFarmState(initialState);
     ShopEngine.ensureShopState(initialState);
     FactionEngine.ensureFactionState(initialState);
-    res.json(initialState);
+    res.json(normalizePlayerState(initialState));
 });
 
 const isObjectState = (state) => state && typeof state === 'object' && !Array.isArray(state);
+
+const getBearerToken = req => {
+    const header = req.get('authorization') || '';
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1].trim() : '';
+};
+
+const isUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+
+const requireGameApiVersion = (req, res) => {
+    const version = req.get('x-bconomy-api-version');
+    if (version !== '1') {
+        res.status(426).json({ error: { code: 'INCOMPATIBLE_CLIENT', message: 'Reload Bconomy to use the current game API.' } });
+        return false;
+    }
+    return true;
+};
+
+const resolveGameContext = async (req, { query = false } = {}) => {
+    const token = getBearerToken(req);
+    if (token) {
+        const user = await verifyAccessToken(token);
+        if (!user) return { errorStatus: 401, error: { code: 'INVALID_AUTH', message: 'Your session expired. Sign in again.' } };
+        const profile = await getProfileByUserId(user.id);
+        if (!profile) return { errorStatus: 404, error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } };
+        return {
+            mode: 'signed',
+            user,
+            profile,
+            state: normalizePlayerState(profile.state && Object.keys(profile.state).length ? profile.state : createDefaultState()),
+            revision: Math.max(0, Math.floor(Number(profile.state_revision) || 0))
+        };
+    }
+    const guestState = req.body?.guestState ?? req.body?.playerState;
+    if (!isObjectState(guestState)) {
+        return { errorStatus: 400, error: { code: 'GUEST_STATE_REQUIRED', message: 'Guest requests require a valid local state envelope.' } };
+    }
+    return {
+        mode: 'guest',
+        state: normalizePlayerState(guestState),
+        revision: Math.max(0, Math.floor(Number(req.body?.expectedRevision) || 0))
+    };
+};
+
+const logGameRequest = ({ kind, type, commandId, revision, status, startedAt }) => {
+    console.info(JSON.stringify({
+        event: `game_${kind}`,
+        type,
+        commandId: commandId || null,
+        revision,
+        status,
+        durationMs: Date.now() - startedAt
+    }));
+};
+
+app.get('/api/catalog/items', (req, res) => {
+    res.json({ version: 1, items: getAllItems() });
+});
+
+app.post('/api/game/queries', async (req, res) => {
+    const startedAt = Date.now();
+    if (!requireGameApiVersion(req, res)) return;
+    const { type, payload = {} } = req.body || {};
+    if (typeof type !== 'string' || !type) {
+        return res.status(400).json({ error: { code: 'INVALID_QUERY', message: 'Query type is required.' } });
+    }
+    try {
+        const context = await resolveGameContext(req, { query: true });
+        if (context.error) return res.status(context.errorStatus).json({ error: context.error });
+        const outcome = executeQuery(context.state, type, payload, Date.now());
+        if (!outcome.ok) {
+            logGameRequest({ kind: 'query', type, revision: context.revision, status: outcome.code, startedAt });
+            return res.status(422).json({ error: { code: outcome.code, message: outcome.error, details: outcome.details } });
+        }
+        logGameRequest({ kind: 'query', type, revision: context.revision, status: 'ok', startedAt });
+        res.json({ revision: context.revision, result: outcome.result });
+    } catch (error) {
+        console.error('Game query failed:', error);
+        logGameRequest({ kind: 'query', type, revision: null, status: 'internal_error', startedAt });
+        res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The game query could not be completed.' } });
+    }
+});
+
+app.post('/api/game/commands', async (req, res) => {
+    const startedAt = Date.now();
+    if (!requireGameApiVersion(req, res)) return;
+    const { commandId, expectedRevision, type, payload = {} } = req.body || {};
+    if (!isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || typeof type !== 'string' || !type) {
+        return res.status(400).json({ error: { code: 'INVALID_COMMAND', message: 'Command ID, non-negative revision, and type are required.' } });
+    }
+    try {
+        const context = await resolveGameContext(req);
+        if (context.error) return res.status(context.errorStatus).json({ error: context.error });
+        if (context.mode === 'signed' && req.body.guestState !== undefined) {
+            return res.status(400).json({ error: { code: 'SIGNED_STATE_FORBIDDEN', message: 'Signed commands cannot supply client-owned state.' } });
+        }
+        if (context.mode === 'signed') {
+            const receipt = await getPlayerCommandReceipt({ userId: context.user.id, commandId });
+            if (receipt) {
+                const revision = context.revision;
+                logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt });
+                return res.json({ state: context.state, revision, result: receipt.result || {}, duplicate: true });
+            }
+        }
+        if (expectedRevision !== context.revision) {
+            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: 'conflict', startedAt });
+            return res.status(409).json({
+                error: { code: 'STATE_CONFLICT', message: 'Progress changed in another session. Review the latest state and try again.' },
+                state: context.state,
+                revision: context.revision
+            });
+        }
+        const outcome = executeCommand(context.state, type, payload, Date.now());
+        if (!outcome.ok) {
+            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: outcome.code, startedAt });
+            return res.status(422).json({ error: { code: outcome.code, message: outcome.error, details: outcome.details }, state: context.state, revision: context.revision });
+        }
+
+        if (context.mode === 'signed') {
+            const commit = await commitPlayerCommand({
+                userId: context.user.id,
+                expectedRevision,
+                commandId,
+                state: outcome.state,
+                result: outcome.result
+            });
+            if (commit.status === 'conflict') {
+                const latest = await getProfileByUserId(context.user.id);
+                return res.status(409).json({
+                    error: { code: 'STATE_CONFLICT', message: 'Progress changed in another session. Review the latest state and try again.' },
+                    state: normalizePlayerState(latest?.state || context.state),
+                    revision: Math.max(0, Math.floor(Number(latest?.state_revision) || 0))
+                });
+            }
+            if (commit.status === 'duplicate') {
+                const latest = await getProfileByUserId(context.user.id);
+                const revision = Math.max(0, Math.floor(Number(latest?.state_revision ?? commit.revision) || 0));
+                logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt });
+                return res.json({ state: normalizePlayerState(latest?.state || outcome.state), revision, result: commit.result || outcome.result, duplicate: true });
+            }
+            if (commit.status !== 'applied') {
+                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: commit.status, startedAt });
+                return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Progress could not be safely saved. Try again.' } });
+            }
+            const revision = Math.max(0, Math.floor(Number(commit.revision) || expectedRevision + 1));
+            logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied', startedAt });
+            return res.json({ state: outcome.state, revision, result: outcome.result, duplicate: false });
+        }
+
+        const revision = expectedRevision + 1;
+        logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied_guest', startedAt });
+        res.json({ state: outcome.state, revision, result: outcome.result, duplicate: false });
+    } catch (error) {
+        console.error('Game command failed:', error);
+        logGameRequest({ kind: 'command', type, commandId, revision: null, status: 'internal_error', startedAt });
+        res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The game command could not be completed.' } });
+    }
+});
+
+app.get('/api/player/profile', async (req, res) => {
+    const user = await verifyAccessToken(getBearerToken(req));
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    const profile = await getProfileByUserId(user.id);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    profile.state = normalizePlayerState(profile.state);
+    res.json(profile);
+});
+
+app.post('/api/player/import', async (req, res) => {
+    const user = await verifyAccessToken(getBearerToken(req));
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    const expectedRevision = Number(req.body?.expectedRevision);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || !isObjectState(req.body?.deviceState)) {
+        return res.status(400).json({ error: 'A device save and expected revision are required' });
+    }
+    const state = normalizePlayerState(req.body.deviceState);
+    const outcome = await replacePlayerState({ userId: user.id, expectedRevision, state });
+    if (outcome.status === 'conflict') {
+        const latest = await getProfileByUserId(user.id);
+        return res.status(409).json({ error: 'Cloud progress changed before import', profile: latest });
+    }
+    if (outcome.status !== 'applied') return res.status(503).json({ error: 'Device progress could not be imported safely' });
+    outcome.profile.state = normalizePlayerState(outcome.profile.state);
+    res.json(outcome.profile);
+});
 
 // Inventory Lock & Pin endpoints
 app.post('/api/inventory/lock', (req, res) => {
@@ -958,10 +1155,11 @@ app.get('/api/data/faction-multipliers', (req, res) => {
 
 // Supabase Auth & Profile Endpoints
 app.get('/api/config/auth', (req, res) => {
+    const { url, anonKey } = getSupabaseConfig();
     res.json({
         enabled: isSupabaseConfigured(),
-        supabaseUrl: process.env.SUPABASE_URL || 'https://mlaivuzdwevmzuhxjraw.supabase.co',
-        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MTQ5NDUsImV4cCI6MjEwMjk5MDk0NX0.2FvGex8DNjpzUY7Yeh4DFd7RCBeV3PFlUQ0I8r71nfc'
+        supabaseUrl: url || null,
+        supabaseAnonKey: anonKey || null
     });
 });
 
@@ -972,7 +1170,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     try {
-        const initialState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        const initialState = createDefaultState();
         FarmEngine.ensureFarmState(initialState);
         ShopEngine.ensureShopState(initialState);
         FactionEngine.ensureFactionState(initialState);
@@ -1003,37 +1201,36 @@ app.post('/api/auth/signin', async (req, res) => {
     }
 });
 
+app.post('/api/auth/refresh', async (req, res) => {
+    const refreshToken = req.body?.refreshToken;
+    if (!refreshToken || typeof refreshToken !== 'string') return res.status(400).json({ error: 'Refresh token is required.' });
+    try {
+        const session = await refreshSessionServer(refreshToken);
+        res.json({ session });
+    } catch (error) {
+        res.status(401).json({ error: 'Session could not be refreshed.' });
+    }
+});
+
 app.post('/api/player/find-email', async (req, res) => {
-    const { username } = req.body;
-    if (!username) {
-        return res.status(400).json({ error: 'Username is required' });
-    }
-    const email = await findEmailByUsername(username);
-    if (!email) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ email });
+    res.status(410).json({ error: 'Email lookup has been removed. Sign in with your username or email.' });
 });
 
 app.get('/api/player/profile/:userId', async (req, res) => {
     const { userId } = req.params;
-    if (!userId) {
-        return res.status(400).json({ error: 'User ID is required' });
-    }
+    const user = await verifyAccessToken(getBearerToken(req));
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!userId || user.id !== userId) return res.status(403).json({ error: 'Profile ownership mismatch' });
     const profile = await getProfileByUserId(userId);
     if (!profile) {
         return res.status(404).json({ error: 'Profile not found' });
     }
+    profile.state = normalizePlayerState(profile.state);
     res.json(profile);
 });
 
 app.post('/api/player/sync', async (req, res) => {
-    const { userId, playerState } = req.body;
-    if (!userId || !playerState) {
-        return res.status(400).json({ error: 'Missing userId or playerState' });
-    }
-    const success = await syncPlayerState(userId, playerState);
-    res.json({ success });
+    res.status(410).json({ success: false, error: 'Full-state sync was removed. Progress is saved per command.' });
 });
 
 const PORT = 3000;

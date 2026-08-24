@@ -11,6 +11,58 @@ const VALID_TIERS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
 const VALID_BULK_MODES = ['allOwned', 'oneEach', 'custom'];
 
 class BoosterEngine {
+    static buildExtendActivePlan(playerState, now = Date.now()) {
+        if (!playerState || typeof playerState !== 'object' || Array.isArray(playerState)) {
+            return { success: false, error: 'Missing or invalid playerState' };
+        }
+        this.ensureBoosterState(playerState);
+        const locked = new Set(Array.isArray(playerState.lockedItems) ? playerState.lockedItems : []);
+        const quantities = {};
+        const skipped = [];
+        let activeSlots = 0;
+
+        for (const actionType of VALID_ACTIONS) {
+            for (const tier of VALID_TIERS) {
+                const previousExpiry = playerState.boosters.activeUntil[actionType][tier] || 0;
+                if (previousExpiry <= now) continue;
+                activeSlots += 1;
+                const registryEntry = Object.entries(BOOSTER_REGISTRY)
+                    .find(([, definition]) => definition.action === actionType && definition.tier === tier);
+                const itemName = registryEntry?.[0] || null;
+                const ownedQuantity = itemName ? Math.max(0, Math.floor(Number(playerState.inventory?.[itemName]) || 0)) : 0;
+                if (!itemName || ownedQuantity <= 0) {
+                    skipped.push({ actionType, tier, itemName, previousExpiry, ownedQuantity, reason: 'unavailable' });
+                    continue;
+                }
+                if (locked.has(itemName)) {
+                    skipped.push({ actionType, tier, itemName, previousExpiry, ownedQuantity, reason: 'locked' });
+                    continue;
+                }
+                quantities[itemName] = ownedQuantity;
+            }
+        }
+
+        if (activeSlots === 0) {
+            return { success: true, action: 'extendActiveBoosters', mode: 'extendActiveAllOwned', activationTime: now, activeSlots: 0, totalUnits: 0, breakdown: [], tierSummaries: [], actionSummaries: [], skipped };
+        }
+        if (Object.keys(quantities).length === 0) {
+            return { success: true, action: 'extendActiveBoosters', mode: 'extendActiveAllOwned', activationTime: now, activeSlots, totalUnits: 0, breakdown: [], tierSummaries: [], actionSummaries: [], skipped };
+        }
+
+        const plan = this.buildBulkActivationPlan(playerState, { mode: 'custom', quantities }, now);
+        if (plan.error) return plan;
+        return { ...plan, action: 'extendActiveBoosters', mode: 'extendActiveAllOwned', activeSlots, skipped };
+    }
+
+    static extendActiveBoosters(playerState, now = Date.now()) {
+        const plan = this.buildExtendActivePlan(playerState, now);
+        if (plan.error) return plan;
+        if (!plan.totalUnits) return { success: false, error: 'No unlocked owned boosters match an active slot', preview: plan };
+        const quantities = Object.fromEntries(plan.breakdown.map(item => [item.itemName, item.quantity]));
+        const result = this.activateBoostersBulk(playerState, { mode: 'custom', quantities }, now);
+        return result.error ? result : { ...result, action: 'extendActiveBoosters', mode: 'extendActiveAllOwned', activeSlots: plan.activeSlots, skipped: plan.skipped };
+    }
+
     /**
      * Ensures playerState has a fully populated boosters.activeUntil structure.
      * @param {Object} playerState 

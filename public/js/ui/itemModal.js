@@ -11,7 +11,7 @@ import {
     getBoosterConfig
 } from '../utils.js';
 import { evaluateMathExpression, attachMathInputPreview } from '../utils/calculator.js';
-import { apiCall, doActivateBooster, doUseMelon } from '../api.js';
+import { apiCall, doActivateBooster, doUseMelon, doGetWhereUsed, doSetWishlist } from '../api.js';
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { renderHeader, renderAll } from './header.js';
@@ -128,15 +128,19 @@ export const openItemModal = async (rawName) => {
     if (btnUse) btnUse.onclick = null;
     if (btnConfirmSell) btnConfirmSell.onclick = null;
 
-    // Lock & Pin elements
+    // Lock, favorite, and wishlist elements
     const btnLock = document.getElementById('btn-item-modal-lock');
     const lockIconEl = document.getElementById('item-modal-lock-icon');
     const lockLabelEl = document.getElementById('item-modal-lock-label');
     const btnPin = document.getElementById('btn-item-modal-pin');
     const pinIconEl = document.getElementById('item-modal-pin-icon');
     const pinLabelEl = document.getElementById('item-modal-pin-label');
+    const btnWishlist = document.getElementById('btn-item-modal-wishlist');
+    const wishlistIconEl = document.getElementById('item-modal-wishlist-icon');
+    const wishlistLabelEl = document.getElementById('item-modal-wishlist-label');
+    const whereUsedEl = document.getElementById('item-modal-where-used');
 
-    const updateLockPinUi = (locked, pinned) => {
+    const updateFlagUi = (locked, favorite, wished) => {
         if (btnLock) {
             btnLock.classList.toggle('btn-locked-active', locked);
             btnLock.setAttribute('aria-pressed', locked ? 'true' : 'false');
@@ -149,14 +153,22 @@ export const openItemModal = async (rawName) => {
         }
 
         if (btnPin) {
-            btnPin.classList.toggle('btn-pinned-active', pinned);
-            btnPin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+            btnPin.classList.toggle('btn-pinned-active', favorite);
+            btnPin.setAttribute('aria-pressed', favorite ? 'true' : 'false');
         }
         if (pinIconEl) {
-            pinIconEl.innerHTML = iconHtml(pinned ? 'lucide:pin-off' : 'lucide:pin');
+            pinIconEl.innerHTML = iconHtml(favorite ? 'lucide:star-off' : 'lucide:star');
         }
         if (pinLabelEl) {
-            pinLabelEl.textContent = pinned ? 'Unpin Item' : 'Pin to Top';
+            pinLabelEl.textContent = favorite ? 'Remove Favorite' : 'Favorite';
+        }
+        if (btnWishlist) {
+            btnWishlist.classList.toggle('btn-pinned-active', wished);
+            btnWishlist.setAttribute('aria-pressed', wished ? 'true' : 'false');
+        }
+        if (wishlistIconEl) wishlistIconEl.innerHTML = iconHtml(wished ? 'lucide:bookmark-minus' : 'lucide:bookmark-plus');
+        if (wishlistLabelEl) {
+            wishlistLabelEl.textContent = wished ? 'Remove Wishlist' : 'Add to Wishlist';
         }
 
         // Disable use and sell buttons if item is locked
@@ -171,8 +183,9 @@ export const openItemModal = async (rawName) => {
     };
 
     const initialLocked = Array.isArray(playerState.lockedItems) && (playerState.lockedItems.includes(rawName) || playerState.lockedItems.includes(displayName));
-    const initialPinned = Array.isArray(playerState.pinnedItems) && (playerState.pinnedItems.includes(rawName) || playerState.pinnedItems.includes(displayName));
-    updateLockPinUi(initialLocked, initialPinned);
+    const initialFavorite = Array.isArray(playerState.favoriteItems) && (playerState.favoriteItems.includes(rawName) || playerState.favoriteItems.includes(displayName));
+    const initialWished = Boolean(playerState.shopWishlist?.[rawName] || playerState.shopWishlist?.[displayName]);
+    updateFlagUi(initialLocked, initialFavorite, initialWished);
 
     if (btnLock) {
         btnLock.onclick = async () => {
@@ -187,8 +200,9 @@ export const openItemModal = async (rawName) => {
                 }, btnLock);
                 const isNowLocked = res && res.locked !== undefined ? res.locked : nextLock;
                 showToast(isNowLocked ? `Locked ${displayName}` : `Unlocked ${displayName}`, 'info');
-                const curPinned = Array.isArray(getState().pinnedItems) && (getState().pinnedItems.includes(rawName) || getState().pinnedItems.includes(displayName));
-                updateLockPinUi(isNowLocked, curPinned);
+                const current = getState();
+                const favorite = Array.isArray(current.favoriteItems) && current.favoriteItems.includes(rawName);
+                updateFlagUi(isNowLocked, favorite, Boolean(current.shopWishlist?.[rawName]));
                 renderInventory();
             } catch (err) {
                 showToast(err.message || 'Failed to update lock status', 'error');
@@ -201,18 +215,18 @@ export const openItemModal = async (rawName) => {
     if (btnPin) {
         btnPin.onclick = async () => {
             const curState = getState();
-            const currentlyPinned = Array.isArray(curState.pinnedItems) && (curState.pinnedItems.includes(rawName) || curState.pinnedItems.includes(displayName));
-            const nextPin = !currentlyPinned;
+            const currentlyFavorite = Array.isArray(curState.favoriteItems) && (curState.favoriteItems.includes(rawName) || curState.favoriteItems.includes(displayName));
+            const nextFavorite = !currentlyFavorite;
             try {
                 btnPin.disabled = true;
                 const res = await apiCall('/api/inventory/pin', 'POST', {
                     itemName: rawName,
-                    pinned: nextPin
+                    pinned: nextFavorite
                 }, btnPin);
-                const isNowPinned = res && res.pinned !== undefined ? res.pinned : nextPin;
-                showToast(isNowPinned ? `Pinned ${displayName} to top` : `Unpinned ${displayName}`, 'info');
+                const isNowFavorite = nextFavorite;
+                showToast(isNowFavorite ? `Favorited ${displayName}` : `Removed ${displayName} from favorites`, 'info');
                 const curLocked = Array.isArray(getState().lockedItems) && (getState().lockedItems.includes(rawName) || getState().lockedItems.includes(displayName));
-                updateLockPinUi(curLocked, isNowPinned);
+                updateFlagUi(curLocked, isNowFavorite, Boolean(getState().shopWishlist?.[rawName]));
                 renderInventory();
             } catch (err) {
                 showToast(err.message || 'Failed to update pin status', 'error');
@@ -222,15 +236,51 @@ export const openItemModal = async (rawName) => {
         };
     }
 
+    if (btnWishlist) {
+        btnWishlist.onclick = async () => {
+            const wished = Boolean(getState().shopWishlist?.[rawName]);
+            try {
+                await doSetWishlist([rawName], !wished, btnWishlist);
+                const current = getState();
+                updateFlagUi(
+                    Array.isArray(current.lockedItems) && current.lockedItems.includes(rawName),
+                    Array.isArray(current.favoriteItems) && current.favoriteItems.includes(rawName),
+                    !wished
+                );
+                showToast(!wished ? `Added ${displayName} to the restock wishlist` : `Removed ${displayName} from the wishlist`, 'success');
+            } catch (error) {
+                showToast(error.message || 'Could not update wishlist', 'error');
+            }
+        };
+    }
+
     openDialog(modal, {
         initialFocus: '#btn-close-item-modal',
         closeOnBackdrop: true
     });
 
-    const [descriptions, farmMaterials] = await Promise.all([fetchDescriptions(), fetchFarmMaterials()]);
+    const [descriptions, farmMaterials, whereUsed] = await Promise.all([
+        fetchDescriptions(),
+        fetchFarmMaterials(),
+        doGetWhereUsed(rawName).catch(() => null)
+    ]);
     if (requestId !== itemRequestId || !modal.open) return;
     const descText = descriptions[rawName] || descriptions[displayName] || 'An item gathered or crafted within Bconomy.';
     if (descEl) descEl.textContent = descText;
+    if (whereUsedEl) {
+        const direct = whereUsed?.direct || whereUsed?.recipes || [];
+        const paths = whereUsed?.paths || [];
+        whereUsedEl.innerHTML = direct.length
+            ? `<div class="where-used-direct">${direct.map(recipe => `<button type="button" class="where-used-chip" data-where-used-recipe="${recipe.recipeId || recipe.id}">${recipe.outputName || displayItemName(recipe.outputItemId || recipe.id)}</button>`).join('')}</div>${paths.length ? `<details><summary>${paths.length} downstream path${paths.length === 1 ? '' : 's'}</summary><ul>${paths.slice(0, 20).map(path => `<li>${path.map(node => node.outputName || displayItemName(node.outputItemId)).join(' → ')}</li>`).join('')}</ul></details>` : ''}`
+            : '<p class="text-subtle text-sm">No crafting recipes consume this item.</p>';
+        whereUsedEl.querySelectorAll('[data-where-used-recipe]').forEach(button => button.addEventListener('click', async () => {
+            closeItemModal();
+            const { activateSection } = await import('../navigation.js');
+            activateSection('crafting');
+            const { openCraftingRecipe } = await import('./crafting.js');
+            openCraftingRecipe(button.dataset.whereUsedRecipe);
+        }));
+    }
 
     // Set Collapsible Details values
     const boosterConfig = getBoosterConfig(rawName) || getBoosterConfig(displayName);

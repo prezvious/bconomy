@@ -4,6 +4,7 @@ const {
     CATALOG_VERSION,
     MATERIAL_BY_ID,
     CRAFTABLE_BY_ID,
+    RECIPES,
     RECIPE_BY_ID,
     RECIPE_BY_OUTPUT_ID,
     validateCatalog
@@ -351,6 +352,93 @@ function resolveMaximum(playerState, recipe, mode) {
 class CraftingEngine {
     static validateCatalog() {
         return validateCatalog();
+    }
+
+    static getWhereUsed(itemId) {
+        if (typeof itemId !== 'string' || (!MATERIAL_BY_ID[itemId] && !CRAFTABLE_BY_ID[itemId])) {
+            return failure('UNKNOWN_ITEM', 'Unknown crafting item');
+        }
+        const directRecipes = RECIPES.filter(recipe => recipe.ingredients.some(input => input.itemId === itemId));
+        const direct = directRecipes.map(recipe => ({
+            recipeId: recipe.id,
+            outputItemId: recipe.output.itemId,
+            outputName: CRAFTABLE_BY_ID[recipe.output.itemId]?.name || recipe.output.itemId
+        }));
+        const paths = [];
+        const visit = (currentItemId, path, visited) => {
+            for (const recipe of RECIPES) {
+                if (!recipe.ingredients.some(input => input.itemId === currentItemId)) continue;
+                const outputItemId = recipe.output.itemId;
+                const nextNode = {
+                    recipeId: recipe.id,
+                    outputItemId,
+                    outputName: CRAFTABLE_BY_ID[outputItemId]?.name || outputItemId
+                };
+                const nextPath = [...path, nextNode];
+                paths.push(nextPath);
+                if (visited.has(outputItemId)) continue;
+                visit(outputItemId, nextPath, new Set([...visited, outputItemId]));
+            }
+        };
+        visit(itemId, [], new Set([itemId]));
+        return { ok: true, itemId, direct, paths };
+    }
+
+    static getMaxAffordableSummary(playerState, recipeId, mode = 'direct') {
+        const preview = this.preview(playerState, recipeId, 'max', mode);
+        if (!preview.ok) return preview;
+        const resolvedCraftCount = preview.resolvedCraftCount || 0;
+        const nextPlan = this.preview(playerState, recipeId, resolvedCraftCount + 1, mode);
+        const blockers = nextPlan.ok ? nextPlan.shortages || [] : [];
+        const lockedIds = new Set((nextPlan.ok ? nextPlan.lockedShortages : [])?.map(item => item.itemId) || []);
+        return {
+            ok: true,
+            catalogVersion: CATALOG_VERSION,
+            recipeId,
+            mode,
+            resolvedCraftCount,
+            output: preview.output,
+            craftable: resolvedCraftCount > 0,
+            blockers: blockers.map(item => ({ ...item, locked: lockedIds.has(item.itemId) })),
+            confirmation: preview.confirmation
+        };
+    }
+
+    static previewIntermediate(playerState, parentRecipeId, parentCraftCount, inputItemId) {
+        if (!Number.isSafeInteger(parentCraftCount) || parentCraftCount <= 0) {
+            return failure('INVALID_REQUEST', 'Parent craft count must be a positive integer');
+        }
+        const parentRecipe = RECIPE_BY_ID[parentRecipeId];
+        if (!parentRecipe) return failure('UNKNOWN_RECIPE', 'Unknown parent recipe');
+        const parentInput = parentRecipe.ingredients.find(input => input.itemId === inputItemId);
+        if (!parentInput) return failure('INVALID_REQUEST', 'Item is not an input of the parent recipe');
+        const intermediateRecipe = RECIPE_BY_OUTPUT_ID[inputItemId];
+        if (!intermediateRecipe) return failure('NO_INTERMEDIATE_RECIPE', 'Missing input has no crafting recipe');
+        const locked = new Set(playerState.lockedItems || []);
+        const storage = storageForItem(inputItemId);
+        const owned = Math.max(0, Math.floor(Number(playerState[storage]?.[inputItemId]) || 0));
+        const unlockedOwned = locked.has(inputItemId) ? 0 : owned;
+        const required = safeMultiply(parentInput.quantity, parentCraftCount);
+        if (required === null) return failure('UNSAFE_QUANTITY', 'Parent requirement exceeds safe integer limits');
+        const shortage = Math.max(0, required - unlockedOwned);
+        const craftRuns = shortage > 0 ? Math.ceil(shortage / intermediateRecipe.output.quantity) : 0;
+        const preview = craftRuns > 0 ? this.preview(playerState, intermediateRecipe.id, craftRuns, 'direct') : null;
+        return {
+            ok: true,
+            parentRecipeId,
+            inputItemId,
+            intermediateRecipeId: intermediateRecipe.id,
+            required,
+            owned,
+            unlockedOwned,
+            locked: locked.has(inputItemId),
+            shortage,
+            craftRuns,
+            producedQuantity: craftRuns * intermediateRecipe.output.quantity,
+            surplus: Math.max(0, (craftRuns * intermediateRecipe.output.quantity) - shortage),
+            canCraftImmediately: Boolean(preview?.craftable),
+            preview
+        };
     }
 
     static preview(playerState, recipeId, craftCount = 1, mode = 'direct') {

@@ -107,6 +107,15 @@ export function getAuthSession() {
     return currentSession;
 }
 
+export function getAccessToken() {
+    return currentSession?.access_token || '';
+}
+
+export function getAuthHeaders() {
+    const accessToken = getAccessToken();
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
 export function getAuthProfile() {
     return currentProfile;
 }
@@ -126,7 +135,10 @@ export function setAuthProfile(profile) {
 export async function refreshUserProfile(userId) {
     if (!userId) return null;
     try {
-        const res = await fetch(`/api/player/profile/${userId}`);
+        let res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
+        if (res.status === 401 && await refreshAuthSession()) {
+            res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
+        }
         if (res.ok) {
             const data = await res.json();
             currentProfile = data;
@@ -137,6 +149,26 @@ export async function refreshUserProfile(userId) {
         console.error('Error fetching user profile:', e);
     }
     return null;
+}
+
+export async function refreshAuthSession() {
+    const refreshToken = currentSession?.refresh_token;
+    if (!refreshToken) return false;
+    try {
+        const response = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.session) return false;
+        currentSession = data.session;
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentSession));
+        return true;
+    } catch (error) {
+        console.error('Failed to refresh auth session:', error);
+        return false;
+    }
 }
 
 /**

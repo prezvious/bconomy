@@ -4,6 +4,36 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v3.2.0] — 2026-08-25
+
+### Added
+- **Career and prestige planning**:
+  - Added a live next-rank deficit tracker in the global header and authoritative Next, Max Affordable, and Custom rank previews.
+  - Added an interactive Prestige & Perk Simulator for current, next-ascension, and future-hypothetical point budgets with weighted recommendations, manual allocation, exact effect deltas, and atomic Ascend & Apply.
+  - Added exact Max Affordable tool upgrades with cumulative material totals and next-level blockers.
+- **Shop and booster ergonomics**:
+  - Added a persistent restock wishlist with listing highlights, wishlist-only filtering, and configurable newly-available, every-restock, or once-per-membership alerts.
+  - Added configurable sell-price percentage badges and color progress bars calculated from each authoritative `[s_min, s_max]` range.
+  - Added Extend All Active Boosters with an exact review plan and atomic inventory consumption.
+- **Inventory organization**:
+  - Added universal item locking and favoriting independently of item ownership.
+  - Added checkbox selection, Shift-range selection, optional lasso selection, and a sticky batch toolbar for lock, unlock, favorite, unfavorite, and sell handoff actions.
+- **Crafting navigation**:
+  - Added Where Is This Used reverse lookup with direct consumers and downstream dependency paths.
+  - Added inline Craft Max Affordable results for Direct and Recursive modes.
+  - Added one-click direct crafting of missing intermediate inputs while preserving parent-recipe context.
+
+### Changed
+- Introduced canonical item metadata and versioned player-state normalization with automatic legacy pinned-item migration.
+- Routed browser game queries and mutations through versioned, typed `/api/game/queries` and `/api/game/commands` gateways.
+- Signed-in commands now use verified bearer tokens, optimistic state revisions, idempotent command receipts, and explicit cloud-versus-device reconciliation.
+
+### Security
+- Removed unsafe email-discovery and full-state sync behavior; obsolete endpoints now return `410 Gone`.
+- Supabase credentials are environment-only. Rotate any credential that appeared in repository history before deploying this release.
+
+---
+
 ## [v3.1.1] — 2026-08-24
 
 ### Changed

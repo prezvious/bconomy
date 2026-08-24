@@ -4,8 +4,54 @@
  */
 const { getRankUpCost, getAscensionCost } = require('../utils/formulas');
 const { RANKS, PERK_DEFINITIONS } = require('./dropTables');
+const { PerkSimulatorEngine } = require('./perkSimulatorEngine');
 
 class RankPrestigeEngine {
+    static getProgressionSummary(playerState) {
+        const currentRankIndex = Math.max(0, Math.floor(Number(playerState?.rankIndex) || 0));
+        const cash = Math.max(0, Math.floor(Number(playerState?.cash) || 0));
+        const atGod = currentRankIndex >= RANKS.length - 1;
+        const cost = atGod ? this.getAscensionCost(playerState) : this.getRankUpCost(playerState);
+        const target = atGod
+            ? { type: 'ascension', label: `Prestige Tier ${(playerState?.prestigeCount || 0) + 1}` }
+            : { type: 'rank', rankIndex: currentRankIndex + 1, label: RANKS[currentRankIndex + 1]?.name || 'Next Rank' };
+        return {
+            currentRankIndex,
+            currentRankName: RANKS[currentRankIndex]?.name || 'Unknown',
+            atGod,
+            cash,
+            cost,
+            deficit: Math.max(0, (cost || 0) - cash),
+            ready: cost !== null && cash >= cost,
+            target
+        };
+    }
+
+    static previewTargetedRankUp(playerState, targetTier, targetRankIndex, isMaxAffordable = false) {
+        const { calculateTargetedRankUpCost } = require('../utils/formulas');
+        return calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, RANKS, isMaxAffordable);
+    }
+
+    static applyPerkAllocation(playerState, targetLevels) {
+        const simulation = PerkSimulatorEngine.simulate(playerState, targetLevels);
+        if (simulation.error) return simulation;
+        if (simulation.spent <= 0) return { error: 'Allocation does not add any perk levels' };
+        playerState.perks = { ...(playerState.perks || {}), ...simulation.targetLevels };
+        playerState.prestigePoints = simulation.remaining;
+        return { success: true, ...simulation };
+    }
+
+    static ascendAndApplyAllocation(playerState, targetLevels) {
+        if (!this.canAscend(playerState)) return { error: 'Cannot ascend with the current rank and cash balance' };
+        const staged = JSON.parse(JSON.stringify(playerState));
+        const ascension = this.ascend(staged);
+        if (ascension.error) return ascension;
+        const allocation = this.applyPerkAllocation(staged, targetLevels);
+        if (allocation.error) return allocation;
+        Object.keys(playerState).forEach(key => delete playerState[key]);
+        Object.assign(playerState, staged);
+        return { success: true, ascension, allocation };
+    }
     /**
      * Gets discounted cost for next rank.
      * @param {Object} playerState

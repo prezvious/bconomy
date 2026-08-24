@@ -1,4 +1,7 @@
-import { doExecuteCrafting, doGetCraftingCatalog, doPreviewCrafting } from '../api.js';
+import {
+    doExecuteCrafting, doGetCraftingCatalog, doPreviewCrafting, doGetCraftingMax,
+    doGetWhereUsed, doPreviewIntermediate, doCraftIntermediate
+} from '../api.js';
 import { getState } from '../state.js';
 import {
     getStoredSettings,
@@ -47,6 +50,10 @@ let selectedQuantity = 1;
 let lastPreview = null;
 let controlsBound = false;
 let operationPending = false;
+let lastMaxSummary = null;
+let lastWhereUsed = null;
+let insightRequestId = 0;
+const recipeHistory = [];
 
 const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -200,9 +207,12 @@ const costLineHtml = (input, multiplier = 1) => {
     const owned = inventoryQuantity(input.itemId, input.definition);
     const locked = (getState()?.lockedItems || []).includes(input.itemId);
     const enough = !locked && owned >= required;
+    const intermediate = craftables.find(candidate => candidate.id === input.itemId);
+    const canOfferIntermediate = selectedMode === 'direct' && !enough && !locked && intermediate;
     return `<li class="crafting-cost-line ${enough ? 'enough' : 'short'}">
         <span>${escapeHtml(input.definition.name)}</span>
         <span><strong>${formatDisplayNumber(required)}</strong> / ${formatDisplayNumber(owned)}${locked ? ' · Locked' : ''}</span>
+        ${canOfferIntermediate ? `<button class="crafting-inline-intermediate" type="button" data-craft-intermediate="${escapeHtml(input.itemId)}" title="Craft the missing ${escapeHtml(input.definition.name)} directly from currently owned raw inputs"><iconify-icon icon="lucide:hammer" aria-hidden="true"></iconify-icon> Craft missing</button>` : ''}
     </li>`;
 };
 
@@ -243,8 +253,12 @@ const detailsHtml = (item, instance = 'inline') => {
     const billHeadingId = `crafting-bill-heading-${safeInstance}`;
     const quantityInputId = `crafting-quantity-input-${safeInstance}`;
     const modeName = `crafting-mode-${safeInstance}`;
+    const maxCount = lastMaxSummary?.recipeId === item.recipeId && lastMaxSummary.mode === selectedMode ? lastMaxSummary.resolvedCraftCount : null;
+    const blockers = maxCount === 0 ? (lastMaxSummary?.blockers || []) : [];
+    const whereUsed = lastWhereUsed?.itemId === item.id ? lastWhereUsed : null;
     return `<article class="crafting-details-card" data-recipe-id="${escapeHtml(item.recipeId)}">
         <header class="crafting-details-header">
+            ${recipeHistory.length ? '<button class="crafting-back-btn" type="button" data-crafting-back aria-label="Back to previous recipe"><iconify-icon icon="lucide:arrow-left" aria-hidden="true"></iconify-icon></button>' : ''}
             <span class="crafting-details-icon">${iconHtml(item.icon)}</span>
             <div><p class="crafting-eyebrow">${escapeHtml(item.domainName)} · ${escapeHtml(item.effortBand)}</p><h3>${escapeHtml(item.name)}</h3></div>
             ${statusBadge(item)}
@@ -269,8 +283,11 @@ const detailsHtml = (item, instance = 'inline') => {
             <div class="crafting-operation-actions">
                 <button class="action-btn secondary-btn" type="button" data-crafting-preview><iconify-icon icon="lucide:clipboard-check" aria-hidden="true"></iconify-icon> Preview</button>
                 <button class="action-btn primary-btn" type="button" data-crafting-execute><iconify-icon icon="lucide:hammer" aria-hidden="true"></iconify-icon> Craft</button>
+                <button class="action-btn accent-btn" type="button" data-crafting-max ${maxCount === null || maxCount < 1 ? 'disabled' : ''}><iconify-icon icon="lucide:gauge" aria-hidden="true"></iconify-icon> ${maxCount === null ? 'Calculating Max…' : `Craft Max (${formatDisplayNumber(maxCount)})`}</button>
             </div>
         </div>
+        ${blockers.length ? `<div class="crafting-max-blockers"><strong>Max blocked by:</strong> ${blockers.map(blocker => `${escapeHtml(blocker.name || blocker.itemId)} ${formatDisplayNumber(blocker.owned || 0)}/${formatDisplayNumber(blocker.required || blocker.quantity || 0)}${blocker.locked ? ' (locked)' : ''}`).join(' · ')}</div>` : ''}
+        <section class="crafting-where-used"><h4>Where Is This Used?</h4>${whereUsed ? (whereUsed.direct.length ? `<div class="where-used-direct">${whereUsed.direct.map(recipe => `<button type="button" class="where-used-chip" data-craft-navigate="${escapeHtml(recipe.recipeId)}">${escapeHtml(recipe.outputName)}</button>`).join('')}</div>${whereUsed.paths.length ? `<details><summary>Show ${whereUsed.paths.length} downstream path${whereUsed.paths.length === 1 ? '' : 's'}</summary><ul>${whereUsed.paths.slice(0, 40).map(path => `<li>${path.map(node => escapeHtml(node.outputName)).join(' → ')}</li>`).join('')}</ul></details>` : ''}` : '<p class="text-subtle">No downstream recipes use this output.</p>') : '<p class="text-subtle">Loading downstream recipes…</p>'}</section>
         <div class="crafting-preview" aria-live="polite">${previewHtml(lastPreview)}</div>
     </article>`;
 };
@@ -352,8 +369,29 @@ const rerenderDetails = () => {
     else renderWorkspace();
 };
 
-const handleSelection = recipeId => {
+const loadRecipeInsights = async (recipeId, mode) => {
+    const requestId = ++insightRequestId;
+    const item = craftables.find(candidate => candidate.recipeId === recipeId);
+    lastMaxSummary = null;
+    lastWhereUsed = null;
+    rerenderDetails();
+    try {
+        const [maximum, whereUsed] = await Promise.all([
+            doGetCraftingMax(recipeId, mode),
+            doGetWhereUsed(item.id)
+        ]);
+        if (requestId !== insightRequestId || selectedRecipeId !== recipeId || selectedMode !== mode) return;
+        lastMaxSummary = maximum;
+        lastWhereUsed = whereUsed;
+        rerenderDetails();
+    } catch (error) {
+        if (requestId === insightRequestId) showToast(error.message || 'Could not load recipe insights', 'error');
+    }
+};
+
+const handleSelection = (recipeId, { recordHistory = true } = {}) => {
     if (operationPending) return;
+    if (recordHistory && selectedRecipeId && selectedRecipeId !== recipeId) recipeHistory.push(selectedRecipeId);
     selectedRecipeId = recipeId;
     selectedMode = 'direct';
     selectedQuantity = 1;
@@ -363,6 +401,17 @@ const handleSelection = recipeId => {
     const narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches;
     if (settings.view === 'super-compact' || (settings.view === 'standard' && narrow)) showResponsiveDetails(item);
     else renderWorkspace();
+    void loadRecipeInsights(recipeId, selectedMode);
+};
+
+export const openCraftingRecipe = async recipeId => {
+    await ensureCatalog();
+    if (!craftables.some(item => item.recipeId === recipeId)) {
+        showToast('That crafting recipe is no longer available.', 'error');
+        return false;
+    }
+    handleSelection(recipeId);
+    return true;
 };
 
 const readQuantity = container => {
@@ -475,6 +524,48 @@ const handleDetailEvent = event => {
         selectedMode = event.target.value;
         lastPreview = null;
         rerenderDetails();
+        void loadRecipeInsights(selectedRecipeId, selectedMode);
+        return true;
+    }
+    if (event.target.closest('[data-crafting-max]')) {
+        const input = container.querySelector('[data-crafting-quantity]');
+        selectedQuantity = 'max';
+        if (input) input.dataset.craftingQuantity = 'max';
+        performExecute(container);
+        return true;
+    }
+    const navigate = event.target.closest('[data-craft-navigate]');
+    if (navigate) {
+        handleSelection(navigate.dataset.craftNavigate);
+        return true;
+    }
+    if (event.target.closest('[data-crafting-back]')) {
+        const prior = recipeHistory.pop();
+        if (prior) handleSelection(prior, { recordHistory: false });
+        return true;
+    }
+    const intermediate = event.target.closest('[data-craft-intermediate]');
+    if (intermediate) {
+        const parentCraftCount = selectedQuantity === 'max' ? (lastMaxSummary?.resolvedCraftCount || 1) : Number(selectedQuantity) || 1;
+        const inputItemId = intermediate.dataset.craftIntermediate;
+        void (async () => {
+            try {
+                const plan = await doPreviewIntermediate(selectedRecipeId, parentCraftCount, inputItemId);
+                if (!plan.craftRuns) {
+                    showToast('The intermediate is already available in the required quantity.', 'info');
+                    return;
+                }
+                if (!plan.canCraftImmediately) {
+                    showToast(`Cannot craft the missing intermediate directly; ${formatDisplayNumber(plan.shortage)} remain unavailable.`, 'error');
+                    return;
+                }
+                await doCraftIntermediate(selectedRecipeId, parentCraftCount, inputItemId);
+                showToast(`Crafted ${formatDisplayNumber(plan.producedQuantity)} ${plan.preview?.output?.name || inputItemId}; ${formatDisplayNumber(plan.surplus)} surplus retained.`, 'success');
+                lastPreview = null;
+                renderWorkspace();
+                void loadRecipeInsights(selectedRecipeId, selectedMode);
+            } catch (error) { showToast(error.message || 'Could not craft the intermediate', 'error'); }
+        })();
         return true;
     }
     if (event.target.closest('[data-crafting-preview]')) {

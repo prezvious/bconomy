@@ -211,6 +211,8 @@ export const showConfirmation = (...args) => {
 
         if (titleEl) titleEl.textContent = title;
         if (messageEl) messageEl.textContent = message;
+        if (confirmButton) confirmButton.textContent = options.confirmLabel || 'Confirm';
+        if (cancelButton) cancelButton.textContent = options.cancelLabel || 'Cancel';
         if (dontAskCheckbox) dontAskCheckbox.checked = false;
         if (dontAskLabel) dontAskLabel.textContent = options.ignoreLabel || "Don't ask me again for this action";
         dontAskContainer?.classList.toggle('hidden', options.allowIgnore === false);

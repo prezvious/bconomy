@@ -3,9 +3,69 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v3.2.0',
+        version: 'v3.2.0',
+        isLatest: true,
+        date: '2026-08-25',
+        title: 'v3.2.0 — Quality-of-Life Command Center',
+        sections: [
+            {
+                type: 'Features — Career & Tools',
+                items: [
+                    {
+                        title: 'Plan Progression Before Spending',
+                        bullets: [
+                            'Added a live next-rank cash deficit in the header and authoritative Next, Max Affordable, and Custom promotion previews.',
+                            'Added a staged Prestige & Perk Simulator for current points, the next ascension, and hypothetical future budgets, including weighted recommendations and exact perk-effect comparisons.',
+                            'Added exact Max Affordable tool upgrades with cumulative material costs and next-level blockers.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Features — Shop & Inventory',
+                items: [
+                    {
+                        title: 'Faster Market and Item Management',
+                        bullets: [
+                            'Added a persistent shop wishlist, restock highlighting, wishlist-only filtering, and configurable availability alerts.',
+                            'Added configurable sell-roll percentage badges and color progress bars based on each item’s authoritative price range.',
+                            'Added Extend All Active Boosters with a review plan, plus universal lock/favorite controls and checkbox, Shift-range, and lasso batch selection for inventory actions.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Features — Crafting',
+                items: [
+                    {
+                        title: 'Navigate and Build Dependency Chains',
+                        bullets: [
+                            'Added Where Is This Used reverse lookup with direct consumers and downstream dependency paths.',
+                            'Added inline exact Craft Max Affordable summaries for Direct and Recursive modes.',
+                            'Added one-click direct crafting for missing intermediate steps without losing the parent recipe context.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Integrity & Security',
+                items: [
+                    {
+                        title: 'Server-Authoritative Player Commands',
+                        bullets: [
+                            'Added versioned query and command gateways, canonical item metadata, normalized versioned player saves, and migration from legacy pinned items to favorites.',
+                            'Added authenticated revision checks, idempotent command receipts, token verification, explicit cloud/device reconciliation, and environment-only Supabase credentials.',
+                            'Removed unsafe email lookup and full-state synchronization paths; signed-in progress now commits one validated command at a time.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v3.1.1',
         version: 'v3.1.1',
-        isLatest: true,
         date: '2026-08-24',
         title: 'v3.1.1 — Small-Screen Layout & Navigation',
         sections: [
@@ -525,7 +585,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v3.1.1']); // Latest release expanded by default
+const expandedVersions = new Set(RELEASES.filter(release => release.isLatest).map(release => release.version));
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

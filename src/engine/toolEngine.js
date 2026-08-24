@@ -184,12 +184,34 @@ class ToolEngine {
             reachedLevel = nextLvl;
         }
 
+        const blockingLevel = reachedLevel < cap ? reachedLevel + 1 : null;
+        const blockingRequirements = blockingLevel ? (this.getUpgradeRequirements(toolType, blockingLevel) || []) : [];
+        const ownedInventory = playerState.inventory || {};
+        const locked = new Set(Array.isArray(playerState.lockedItems) ? playerState.lockedItems : []);
+        const blockers = blockingRequirements
+            .map(requirement => {
+                const owned = Math.max(0, Math.floor(Number(ownedInventory[requirement.item]) || 0));
+                const unlockedOwned = locked.has(requirement.item) ? 0 : owned;
+                return {
+                    item: requirement.item,
+                    required: requirement.quantity,
+                    owned,
+                    unlockedOwned,
+                    lockedOwned: locked.has(requirement.item) ? owned : 0,
+                    missing: Math.max(0, requirement.quantity - unlockedOwned)
+                };
+            })
+            .filter(blocker => blocker.missing > 0);
+
         return {
             currentLevel,
             maxAffordableLevel: reachedLevel,
             levelsGained: reachedLevel - currentLevel,
             cumulativeCost,
-            canUpgrade: reachedLevel > currentLevel
+            canUpgrade: reachedLevel > currentLevel,
+            atMaximum: reachedLevel >= MAX_TOOL_LEVEL,
+            blockingLevel,
+            blockers
         };
     }
 

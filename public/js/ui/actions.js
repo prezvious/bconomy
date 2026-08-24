@@ -1,10 +1,11 @@
 import { getState } from '../state.js';
-import { ACTIONS, BOOSTER_TIERS, BOOSTER_NAME_MAP, iconHtml, formatDurationMs, formatTimestampDate } from '../utils.js';
-import { doAction } from '../api.js';
+import { ACTIONS, BOOSTER_TIERS, BOOSTER_NAME_MAP, iconHtml, formatDurationMs, formatTimestampDate, formatDisplayNumber, displayItemName } from '../utils.js';
+import { doAction, doPreviewExtendActiveBoosters, doExtendActiveBoosters } from '../api.js';
 import { renderHeader } from './header.js';
 import { renderInventory } from './inventory.js';
 import { addLogEntry } from './log.js';
 import { showToast } from './toast.js';
+import { showConfirmation } from './modal.js';
 
 let expandedGroups = new Set(['mine', 'explore', 'hunt', 'fish']); // default expanded
 let isMenuOpen = false;
@@ -194,6 +195,7 @@ export const renderActiveBoosts = () => {
             <div class="boosts-header-title">
                 ${iconHtml('lucide:zap', 'boosts-zap-icon')}
                 <h3>Active Boosts</h3>
+                <button id="btn-actions-extend-active" class="action-btn primary-btn btn-sm" type="button">${iconHtml('lucide:timer-reset')} Extend All Active Boosters</button>
             </div>
             <div class="boosts-menu-wrapper">
                 <button class="boosts-menu-btn" id="btn-boosts-menu" type="button" aria-label="Active Boosts Menu" title="View Options">
@@ -299,6 +301,23 @@ export const renderActiveBoosts = () => {
 
     html += `</div>`;
     container.innerHTML = html;
+
+    container.querySelector('#btn-actions-extend-active')?.addEventListener('click', async event => {
+        try {
+            const plan = await doPreviewExtendActiveBoosters();
+            if (!plan.totalUnits) {
+                showToast('No unlocked owned boosters match the currently active slots.', 'error');
+                return;
+            }
+            const breakdown = (plan.breakdown || []).map(item => `${formatDisplayNumber(item.quantity)}× ${displayItemName(item.itemName)}`).join(', ');
+            const approved = await showConfirmation('extendAllBoosters', 'Extend every active booster?', `Consume ${breakdown} and append each duration from its active slot's current expiry. ${(plan.skipped || []).length} unmatched active slot${(plan.skipped || []).length === 1 ? '' : 's'} will be skipped.`, { allowIgnore: false, confirmLabel: 'Extend All Boosters' });
+            if (!approved) return;
+            await doExtendActiveBoosters(event.currentTarget);
+            showToast(`Extended all matching active boosters with ${formatDisplayNumber(plan.totalUnits)} unit${plan.totalUnits === 1 ? '' : 's'}.`, 'success');
+            renderActiveBoosts();
+            renderInventory();
+        } catch (error) { showToast(error.message || 'Could not extend active boosters', 'error'); }
+    });
 
     const btnMenu = container.querySelector('#btn-boosts-menu');
     if (btnMenu) {

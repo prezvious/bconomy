@@ -1,53 +1,79 @@
 # Bconomy Deployment Guide: Vercel & Supabase
 
-This guide walks you through deploying **Bconomy** publicly to **Vercel** with a **Supabase PostgreSQL** database for accounts, sequential Player IDs (starting from 1), and persistent cloud saves.
+This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed player saves, and server-authoritative game commands.
 
----
+## 1. Rotate Previously Exposed Credentials
 
-## 1. Setup Supabase Database
+Before deploying v3.2.0, rotate every Supabase credential that has ever appeared in repository history, especially the service-role key. Never put credential values in source files, documentation, client-side JavaScript, screenshots, or issue comments.
 
-1. Open your [Supabase Dashboard](https://supabase.com/dashboard/project/mlaivuzdwevmzuhxjraw).
-2. Click on the **SQL Editor** tab on the left sidebar.
-3. Click **New Query**.
-4. Open [supabase_schema.sql](supabase_schema.sql) in this repository, copy its entire contents, paste it into the SQL editor, and click **Run**.
+Use newly generated values only in the deployment provider’s encrypted environment-variable store. A service-role key is a server secret and must never be exposed to the browser.
 
-This script will:
-* Create the `player_state` table with sequential `player_id` starting from 1 (`player_id bigint generated always as identity (start with 1)`).
-* Set up Row Level Security (RLS) policies.
-* Create the trigger that automatically provisions a new `player_state` record whenever a user signs up.
+## 2. Apply the Supabase Schema
 
----
+1. Open the target project in the Supabase Dashboard.
+2. Open **SQL Editor** and create a new query.
+3. Run the complete [supabase_schema.sql](supabase_schema.sql) file.
 
-## 2. Deploy to Vercel
+The script is re-runnable. It creates or updates:
 
-### Option A: Via GitHub (Recommended)
-1. Push your latest code to your GitHub repository (`https://github.com/prezvious/bconomy.git`):
-   ```bash
-   git add .
-   git commit -m "Add Supabase Auth, Player IDs, and Vercel configuration"
-   git push origin main
-   ```
-2. Go to [Vercel Dashboard](https://vercel.com/new).
-3. Import your `bconomy` repository.
-4. In the **Environment Variables** section, add the following 3 variables:
-   * `SUPABASE_URL` = `https://mlaivuzdwevmzuhxjraw.supabase.co`
-   * `SUPABASE_ANON_KEY` = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0MTQ5NDUsImV4cCI6MjEwMjk5MDk0NX0.2FvGex8DNjpzUY7Yeh4DFd7RCBeV3PFlUQ0I8r71nfc`
-   * `SUPABASE_SERVICE_ROLE_KEY` = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWl2dXpkd2V2bXp1aHhqcmF3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzQxNDk0NSwiZXhwIjoyMTAyOTkwOTQ1fQ.9RZQyeIbOVoj0gTCn8o7OF0UV3iEZtCEn8YUdCg1uA4`
-5. Click **Deploy**.
+- `player_state`, including `state_revision` for optimistic concurrency.
+- Row Level Security that lets authenticated users read only their own profile while keeping state writes server-authoritative.
+- Automatic profile provisioning for new Auth users.
+- `player_command_receipts` and `commit_player_command(...)` for idempotent, revision-checked command commits.
 
-### Option B: Via Vercel CLI
+For an existing database, run the updated script before deploying the new application code. Do not deploy the v3.2.0 server against an older schema.
+
+## 3. Configure Server Environment Variables
+
+Set these values in Vercel Project Settings or the equivalent server environment:
+
+```text
+SUPABASE_URL=<project URL from Supabase API settings>
+SUPABASE_ANON_KEY=<new anonymous key>
+SUPABASE_SERVICE_ROLE_KEY=<new service-role key>
+```
+
+Do not prefix the service-role variable with `NEXT_PUBLIC_`, `VITE_`, or any other client-exposed prefix.
+
+## 4. Deploy
+
+### Git Integration
+
+1. Connect the repository to Vercel.
+2. Set the three environment variables for every intended environment.
+3. Deploy the verified `main` branch.
+
+### Vercel CLI
+
 ```bash
-npm i -g vercel
+npm install --global vercel
 vercel
 ```
 
----
+## 5. Verify the Release
 
-## 3. How Player Accounts & Authentication Work
+Run the local regression suite before deployment:
 
-* **Sign Up / Enlist**: Users register with a **Username** (minimum 3 characters), optional **Email**, and **Password**.
-* **Password Strength Meter**: Displays real-time evaluation with 4 color-coded progress bars (*Very weak* $\rightarrow$ *Weak* $\rightarrow$ *Good* $\rightarrow$ *Strong*), Caps Lock detection, and Show/Hide toggle.
-* **Sequential Player ID**: Every player is assigned a permanent sequential Player ID starting from 1 (e.g. `Player #1`, `Player #2`, etc.).
-* **Sign In**: Players can log in using either their **Username** or **Email** + Password.
-* **No Password Reset**: As requested, password reset is disabled.
-* **Automatic Cloud Sync**: Progress automatically syncs to Supabase on mutations and can be manually triggered in Settings.
+```bash
+npm test
+```
+
+After deployment, verify:
+
+- `GET /api/health` reports a healthy application.
+- Guest actions persist only in the device save.
+- A signed-in player can read their cloud profile and commit one command.
+- A repeated command with the same `commandId` does not apply twice.
+- A stale `expectedRevision` returns a conflict and does not overwrite newer progress.
+- Device/cloud divergence presents the explicit reconciliation choice.
+- `/api/auth/lookup-email` and `/api/auth/sync` return `410 Gone`.
+
+The versioned request contract is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.md).
+
+## 6. Authentication and Save Behavior
+
+- Players can register with a unique username, optional email, and password.
+- Sign-in accepts a username or email plus password; username resolution happens only on the trusted server.
+- Authenticated browser requests carry the player access token as a bearer token.
+- Game mutations are validated and executed on the server, then committed with an expected state revision and idempotency receipt.
+- Guest and authenticated saves use separate browser storage. Linking a device save to an account requires an explicit import choice.

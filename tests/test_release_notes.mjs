@@ -8,26 +8,27 @@ const packageJson = JSON.parse(await readFile(new URL('../package.json', import.
 const indexHtml = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const releaseNotesMarkdown = await readFile(new URL('../RELEASE_NOTES.md', import.meta.url), 'utf8');
 
-// 1. Verify v3.1.1 exists and is marked latest
+// 1. Verify v3.2.0 exists and is marked latest
 const latestRelease = RELEASES.find(r => r.isLatest);
 assert.ok(latestRelease, 'Latest release must exist');
 assert.strictEqual(RELEASES.filter(r => r.isLatest).length, 1, 'Exactly one release is marked latest');
-assert.strictEqual(latestRelease.version, 'v3.1.1');
-assert.strictEqual(latestRelease.date, '2026-08-24');
-assert.ok(latestRelease.title.includes('v3.1.1'));
-assert.ok(latestRelease.sections.length >= 2, 'v3.1.1 should describe improvements and fixes');
-console.log('✓ Latest release v3.1.1 verified with title, date, and sections');
+assert.strictEqual(latestRelease.version, 'v3.2.0');
+assert.strictEqual(latestRelease.date, '2026-08-25');
+assert.ok(latestRelease.title.includes('v3.2.0'));
+assert.ok(latestRelease.sections.length >= 4, 'v3.2.0 should describe each QOL and integrity workstream');
+console.log('✓ Latest release v3.2.0 verified with title, date, and sections');
 
-assert.strictEqual(packageJson.version, '3.1.1');
-assert.ok(indexHtml.includes('Bconomy v3.1.1'));
-assert.ok(indexHtml.includes('v3.1.1 Latest'));
-assert.ok(releaseNotesMarkdown.includes('## [v3.1.1] — 2026-08-24'));
+assert.strictEqual(packageJson.version, '3.2.0');
+assert.ok(indexHtml.includes('Bconomy v3.2.0'));
+assert.ok(indexHtml.includes('v3.2.0 Latest'));
+assert.ok(releaseNotesMarkdown.includes('## [v3.2.0] — 2026-08-25'));
+assert.ok((await readFile(new URL('../public/js/ui/releaseNotesModal.js', import.meta.url), 'utf8')).includes("new Set(RELEASES.filter(release => release.isLatest)"), 'Latest accordion expansion must follow release metadata');
 console.log('✓ Package, sidebar, in-game modal, and Markdown release versions are consistent');
 
 // 2. Verify all releases have required fields and no external blog URLs
-const expectedVersions = ['v3.1.1', 'v3.1.0', 'v3.0.0', 'v2.2.2', 'v2.2.1', 'v2.2', 'v2.1', 'v2.0', 'v1.4', 'v1.3', 'v1.2', 'v1.1', 'v1.0'];
+const expectedVersions = ['v3.2.0', 'v3.1.1', 'v3.1.0', 'v3.0.0', 'v2.2.2', 'v2.2.1', 'v2.2', 'v2.1', 'v2.0', 'v1.4', 'v1.3', 'v1.2', 'v1.1', 'v1.0'];
 const actualVersions = RELEASES.map(r => r.version);
-assert.deepStrictEqual(actualVersions, expectedVersions, 'Releases must be ordered chronologically descending (v3.1.1 -> v1.0)');
+assert.deepStrictEqual(actualVersions, expectedVersions, 'Releases must be ordered chronologically descending (v3.2.0 -> v1.0)');
 
 for (const release of RELEASES) {
     assert.ok(release.id, 'Release must have an id');
