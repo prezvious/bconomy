@@ -281,9 +281,11 @@ iconify-icon {
     padding: 0 0 20px 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
     user-select: none;
     height: 100vh;
+    min-height: 0;
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -298,6 +300,7 @@ iconify-icon {
     text-align: center;
     width: 100%;
     box-sizing: border-box;
+    flex: 0 0 auto;
 }
 
 .guild-crest {
@@ -339,8 +342,31 @@ iconify-icon {
 .nav-links {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 6px;
-    padding: 0 12px;
+    padding: 0 12px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+}
+
+.nav-links::-webkit-scrollbar {
+    width: 8px;
+}
+
+.nav-links::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.nav-links::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
 }
 
 .nav-btn {
@@ -389,6 +415,7 @@ iconify-icon {
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: center;
+    flex: 0 0 auto;
 }
 
 .guild-seal-tag {
@@ -3084,12 +3111,18 @@ dialog.modal.hidden {
 
     .nav-links {
         flex-direction: row;
+        flex: 0 0 auto;
         justify-content: flex-start;
         align-items: center;
         width: max-content;
         min-width: 100%;
+        min-height: auto;
         padding: 0;
         gap: 6px;
+        overflow: visible;
+        overscroll-behavior: auto;
+        scrollbar-gutter: auto;
+        scrollbar-width: auto;
     }
 
     .nav-btn {
@@ -9311,6 +9344,52 @@ details[open] .details-arrow {
     text-align: center;
 }
 
+.crafting-detail-pane > .crafting-details-empty {
+    min-height: 520px;
+    align-content: start;
+    padding-top: clamp(32px, 8vh, 72px);
+}
+
+.crafting-details-empty h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.crafting-selection-copy {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+}
+
+.crafting-workspace-stack {
+    display: grid;
+    gap: 12px;
+}
+
+.crafting-details-empty.crafting-selection-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    place-items: center start;
+    min-height: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-muted);
+    text-align: left;
+}
+
+.crafting-selection-banner .crafting-selection-copy {
+    justify-items: start;
+}
+
+.crafting-selection-banner iconify-icon {
+    color: var(--accent-brass);
+}
+
+.crafting-selection-narrow {
+    display: none;
+}
+
 .crafting-preview-placeholder iconify-icon,
 .crafting-details-empty iconify-icon {
     font-size: 30px;
@@ -9467,6 +9546,11 @@ details[open] .details-arrow {
 }
 
 @media (max-width: 900px) {
+    .crafting-selection-narrow {
+        display: block;
+        margin-bottom: 12px;
+    }
+
     .crafting-section-header {
         flex-direction: column;
     }

@@ -82,8 +82,7 @@ const DEFAULT_SETTINGS = Object.freeze({
         classification: 'all',
         recipeForm: 'all',
         availability: 'all',
-        sort: 'name',
-        selectedRecipeId: ''
+        sort: 'name'
     })
 });
 
@@ -238,8 +237,7 @@ export const normalizeSettings = (candidate = {}) => {
             classification: typeof crafting.classification === 'string' && crafting.classification.length <= 40 ? crafting.classification : defaults.crafting.classification,
             recipeForm: typeof crafting.recipeForm === 'string' && crafting.recipeForm.length <= 40 ? crafting.recipeForm : defaults.crafting.recipeForm,
             availability: typeof crafting.availability === 'string' && crafting.availability.length <= 40 ? crafting.availability : defaults.crafting.availability,
-            sort: VALID_CRAFTING_SORTS.has(crafting.sort) ? crafting.sort : defaults.crafting.sort,
-            selectedRecipeId: typeof crafting.selectedRecipeId === 'string' ? crafting.selectedRecipeId.slice(0, 220) : ''
+            sort: VALID_CRAFTING_SORTS.has(crafting.sort) ? crafting.sort : defaults.crafting.sort
         }
     };
 };

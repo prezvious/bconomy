@@ -60,6 +60,10 @@ assert(css.includes('.page-toolbar.search-collapsed') && css.includes('.page-too
 assert(css.includes('/* Mobile Tab Bar */'), 'Mobile navigation uses a dedicated tab bar treatment');
 assert(css.includes('env(safe-area-inset-bottom)'), 'Mobile navigation respects device safe areas');
 assert(css.includes('overscroll-behavior-x: contain'), 'Mobile navigation contains horizontal overscroll');
+assert(/\.nav-links\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0[^}]*overflow-y:\s*auto[^}]*overscroll-behavior-y:\s*contain/s.test(css), 'Desktop sidebar navigation owns a bounded vertical scroll region');
+assert(/\.logo-container\s*\{[^}]*flex:\s*0 0 auto/s.test(css), 'Desktop sidebar logo remains outside the scroll region');
+assert(/\.sidebar-footer\s*\{[^}]*flex:\s*0 0 auto/s.test(css), 'Desktop sidebar footer remains outside the scroll region');
+assert(/@media \(max-width: 640px\)[\s\S]*\.nav-links\s*\{[^}]*flex-direction:\s*row[^}]*overflow:\s*visible/s.test(css), 'Mobile navigation delegates horizontal scrolling to the tab bar');
 assert(css.includes('touch-action: manipulation'), 'Mobile navigation buttons are touch-optimized');
 assert(css.includes('.guild-sidebar .sidebar-footer'), 'Mobile navigation hides desktop sidebar chrome');
 assert(css.includes('@media (max-width: 380px)'), 'The UI includes a narrow 360px-safe breakpoint');

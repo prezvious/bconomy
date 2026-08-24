@@ -33,7 +33,7 @@ Preview never mutates player state. It reports the resolved craft count, ordered
 
 ## Client workspace
 
-Standard uses a virtualized master list and an adjacent details pane. Compact renders expandable cards. Super Compact uses a virtualized one-line list and opens details in a dialog. On narrow layouts, Standard also uses the dialog. Search, all filters, sort order, selected recipe, and view persist in browser-local settings.
+Standard uses a virtualized master list and an adjacent details pane. Compact renders expandable cards. Super Compact uses a virtualized one-line list and opens details in a dialog. On narrow layouts, Standard also uses the dialog. Search, all filters, sort order, and view persist in browser-local settings. The first Crafting visit after a full game load starts without a selection and shows one of 20 per-load workshop prompts; a player-selected recipe remains active only for the rest of that loaded session.
 
 Four editable quantity buttons plus immutable Max resolve through global → system → subject inheritance. Supported systems are crafting, shop purchases, shop sales, booster activation, socket-module crafting, tool upgrades, and perk upgrades. Preview policy resolves through the same scopes.
 

@@ -30,8 +30,18 @@ assert.ok(ui.includes('doExecuteCrafting'));
 assert.ok(ui.includes('shouldConfirmQuantityOperation'));
 assert.ok(ui.includes('lockedItems'));
 assert.ok(ui.includes('operationPending'));
+const promptPool = ui.match(/const CRAFTING_SELECTION_PROMPTS = Object\.freeze\(\[([\s\S]*?)\n\]\);/);
+assert.ok(promptPool, 'Crafting defines a frozen selection-prompt pool');
+assert.equal((promptPool[1].match(/Object\.freeze\(\{ title:/g) || []).length, 20, 'Crafting provides exactly twenty complete landing prompts');
+assert.ok(ui.includes('const sessionSelectionPrompt = CRAFTING_SELECTION_PROMPTS[Math.floor(Math.random() * CRAFTING_SELECTION_PROMPTS.length)]'));
+assert.ok(ui.includes('if (!item) return selectionPromptHtml();'));
+assert.ok(!ui.includes("settings.selectedRecipeId || craftables[0]?.recipeId"), 'Crafting never restores or auto-selects a recipe');
+assert.ok(!ui.includes('|| items[0]'), 'Filtered results never implicitly become the active recipe');
+assert.ok(!preferences.includes('selectedRecipeId'), 'Recipe selection is session-only rather than persisted');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.crafting-detail-pane/);
 assert.match(css, /\.crafting-list-row\.super-compact/);
+assert.match(css, /\.crafting-selection-narrow\s*\{\s*display:\s*none/);
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.crafting-selection-narrow\s*\{[^}]*display:\s*block/s);
 
 assert.ok(preferences.includes("'crafting', 'shop-buy', 'shop-sell', 'booster-activation'"));
 for (const scope of ['global', 'system', 'subject']) assert.ok(settings.includes(`data-save-quantity-scope="${scope}"`));

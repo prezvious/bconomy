@@ -14,6 +14,29 @@ import { addLogEntry } from './log.js';
 const EFFORT_ORDER = ['Basic', 'Workshop', 'Industrial', 'Advanced', 'Specialized', 'Frontier'];
 const VIEW_ROW_HEIGHT = Object.freeze({ standard: 76, 'super-compact': 46 });
 const VIEW_BUFFER = 8;
+const CRAFTING_SELECTION_PROMPTS = Object.freeze([
+    Object.freeze({ title: 'Choose your next build', description: 'Select a recipe from the catalog to review its materials, output, and crafting options.' }),
+    Object.freeze({ title: 'Start with a blueprint', description: 'Pick an item from the list to open its complete bill of materials.' }),
+    Object.freeze({ title: 'Select a workshop project', description: 'Choose any recipe to see what it produces and which inputs it requires.' }),
+    Object.freeze({ title: 'Find something to make', description: 'Browse or search the catalog, then select an item to inspect its recipe.' }),
+    Object.freeze({ title: 'Plan your next craft', description: 'Select a recipe to compare its requirements with the materials you own.' }),
+    Object.freeze({ title: 'Open a recipe', description: 'Choose a catalog entry to review its ingredients before crafting.' }),
+    Object.freeze({ title: 'Put the workshop to work', description: 'Select an item to inspect its recipe and available production modes.' }),
+    Object.freeze({ title: 'Build from your inventory', description: 'Choose a recipe to see whether your current materials are sufficient.' }),
+    Object.freeze({ title: 'Review a bill of materials', description: 'Select any craftable item to inspect every required component and quantity.' }),
+    Object.freeze({ title: 'Choose a production goal', description: 'Pick a finished item or intermediate component to begin planning.' }),
+    Object.freeze({ title: 'Begin a new assembly', description: 'Select a recipe to review its output, inputs, and crafting controls.' }),
+    Object.freeze({ title: 'Explore the catalog', description: 'Choose a recipe from the list to open its detailed production plan.' }),
+    Object.freeze({ title: 'Prepare the next job', description: 'Select an item to check its required stock before production.' }),
+    Object.freeze({ title: 'Turn materials into equipment', description: 'Pick a recipe to see how gathered resources become a finished product.' }),
+    Object.freeze({ title: 'Choose what to produce', description: 'Select a catalog item to inspect its exact recipe and expected output.' }),
+    Object.freeze({ title: 'Inspect a craftable item', description: 'Pick an item from the catalog to view its materials and availability.' }),
+    Object.freeze({ title: 'Set a workshop target', description: 'Choose a recipe to review the resources needed for direct or recursive crafting.' }),
+    Object.freeze({ title: 'Select a recipe to continue', description: 'Review an item’s requirements before previewing or executing the craft.' }),
+    Object.freeze({ title: 'Ready the workbench', description: 'Choose an item to load its blueprint and crafting controls.' }),
+    Object.freeze({ title: 'Decide what comes next', description: 'Browse the catalog and select the item you want the workshop to produce.' })
+]);
+const sessionSelectionPrompt = CRAFTING_SELECTION_PROMPTS[Math.floor(Math.random() * CRAFTING_SELECTION_PROMPTS.length)];
 
 let catalog = null;
 let catalogPromise = null;
@@ -205,8 +228,16 @@ const previewHtml = preview => {
     </div>`;
 };
 
+const selectionPromptHtml = (compact = false) => `<section class="crafting-details-empty${compact ? ' crafting-selection-banner' : ''}" aria-label="Recipe selection guidance">
+    <iconify-icon icon="lucide:mouse-pointer-click" aria-hidden="true"></iconify-icon>
+    <div class="crafting-selection-copy">
+        <h3>${escapeHtml(sessionSelectionPrompt.title)}</h3>
+        <p>${escapeHtml(sessionSelectionPrompt.description)}</p>
+    </div>
+</section>`;
+
 const detailsHtml = (item, instance = 'inline') => {
-    if (!item) return '<div class="crafting-details-empty"><iconify-icon icon="lucide:mouse-pointer-click" aria-hidden="true"></iconify-icon><h3>Select a recipe</h3><p>Choose a catalog entry to inspect its bill of materials.</p></div>';
+    if (!item) return selectionPromptHtml();
     const quantityMultiplier = selectedQuantity === 'max' ? 1 : selectedQuantity;
     const safeInstance = String(instance).replace(/[^a-z0-9-]/gi, '-').toLowerCase();
     const billHeadingId = `crafting-bill-heading-${safeInstance}`;
@@ -246,7 +277,6 @@ const detailsHtml = (item, instance = 'inline') => {
 
 const selectedItem = items => items.find(item => item.recipeId === selectedRecipeId)
     || craftables.map(item => ({ ...item, availability: recipeAvailability(item) })).find(item => item.recipeId === selectedRecipeId)
-    || items[0]
     || null;
 
 const renderVirtualWindow = (viewport, items, view) => {
@@ -266,7 +296,7 @@ const renderWorkspace = () => {
     const settings = getStoredSettings().crafting;
     const items = filteredCraftables();
     const current = selectedItem(items);
-    if (current && !selectedRecipeId) selectedRecipeId = current.recipeId;
+    const compactSelectionPrompt = selectedRecipeId ? '' : selectionPromptHtml(true);
 
     document.querySelectorAll('[data-crafting-view]').forEach(button => {
         const active = button.dataset.craftingView === settings.view;
@@ -281,15 +311,15 @@ const renderWorkspace = () => {
     if (!items.length) {
         workspace.innerHTML = '<div class="empty-state-card"><iconify-icon icon="lucide:search-x" class="empty-icon" aria-hidden="true"></iconify-icon><h3 class="empty-title">No matching recipes</h3><p class="empty-desc">Clear or broaden the crafting filters to see more results.</p></div>';
     } else if (settings.view === 'compact') {
-        workspace.innerHTML = `<div class="crafting-compact-grid">${items.map(item => `<article class="crafting-compact-card${item.recipeId === selectedRecipeId ? ' expanded' : ''}">
+        workspace.innerHTML = `<div class="crafting-workspace-stack">${compactSelectionPrompt}<div class="crafting-compact-grid">${items.map(item => `<article class="crafting-compact-card${item.recipeId === selectedRecipeId ? ' expanded' : ''}">
             <button type="button" class="crafting-compact-summary" data-craft-select="${escapeHtml(item.recipeId)}" aria-expanded="${item.recipeId === selectedRecipeId}">
                 <span class="crafting-row-icon">${iconHtml(item.icon)}</span><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.domainName)} · ${escapeHtml(item.effortBand)}</small></span>${statusBadge(item)}
             </button>${item.recipeId === selectedRecipeId ? `<div class="crafting-compact-details">${detailsHtml(item, 'compact')}</div>` : ''}
-        </article>`).join('')}</div>`;
+        </article>`).join('')}</div></div>`;
     } else if (settings.view === 'super-compact') {
-        workspace.innerHTML = virtualListHtml(items, 'super-compact');
+        workspace.innerHTML = `<div class="crafting-workspace-stack">${compactSelectionPrompt}${virtualListHtml(items, 'super-compact')}</div>`;
     } else {
-        workspace.innerHTML = `<div class="crafting-standard-layout"><div class="crafting-master-pane">${virtualListHtml(items, 'standard')}</div><div class="crafting-detail-pane">${detailsHtml(current, 'inline')}</div></div>`;
+        workspace.innerHTML = `${selectedRecipeId ? '' : `<div class="crafting-selection-narrow">${selectionPromptHtml(true)}</div>`}<div class="crafting-standard-layout"><div class="crafting-master-pane">${virtualListHtml(items, 'standard')}</div><div class="crafting-detail-pane" aria-label="Recipe details">${detailsHtml(current, 'inline')}</div></div>`;
     }
 
     workspace.setAttribute('aria-busy', 'false');
@@ -328,7 +358,6 @@ const handleSelection = recipeId => {
     selectedMode = 'direct';
     selectedQuantity = 1;
     lastPreview = null;
-    settingsPatch({ selectedRecipeId: recipeId });
     const settings = getStoredSettings().crafting;
     const item = craftables.map(candidate => ({ ...candidate, availability: recipeAvailability(candidate) })).find(candidate => candidate.recipeId === recipeId);
     const narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches;
@@ -512,8 +541,6 @@ export const renderCrafting = async () => {
     workspace.setAttribute('aria-busy', 'true');
     try {
         await ensureCatalog();
-        const settings = getStoredSettings().crafting;
-        selectedRecipeId = selectedRecipeId || settings.selectedRecipeId || craftables[0]?.recipeId || '';
         populateControls();
         bindControls();
         renderWorkspace();
