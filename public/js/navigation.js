@@ -4,6 +4,7 @@ import { formatDisplayNumber, formatMoney } from './utils.js';
 import { apiCall, doAddPlot, doClaim, doUseMelon, doRankUp, doWaterAll } from './api.js';
 import { renderAll, renderHeader } from './ui/header.js';
 import { renderInventory } from './ui/inventory.js';
+import { renderCrafting } from './ui/crafting.js';
 import { renderTools, updateAllToolRecipes } from './ui/tools.js';
 import { renderRankPrestige, setupAccordion, setupTargetedModal } from './ui/rankPrestigeCombined.js';
 import { renderFarm, renderManageModal } from './ui/farm.js';
@@ -34,6 +35,7 @@ export const setupNavigation = () => {
             if (targetPanel) targetPanel.classList.add('active');
 
             if (target === 'inventory') renderInventory();
+            if (target === 'crafting') renderCrafting();
             if (target === 'shop') renderShop({ resetControls: true });
             if (target === 'tools') renderTools();
             if (target === 'farm') renderFarm();

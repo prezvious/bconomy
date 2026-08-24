@@ -17,10 +17,59 @@ const BoosterEngine = require('./boosterEngine');
 const ToolEngine = require('./toolEngine');
 const { FactionEngine } = require('./factionEngine');
 const { FARM_UPGRADE_MATERIALS } = require('./farmPlotUpgrade');
+const { MATERIALS } = require('../data/craftingMaterials');
 
 const formatNumberCommas = (num) => new Intl.NumberFormat('en-US').format(num);
 
 class ActionEngine {
+    static drawCraftingMaterials(actionType, totalMultiplier, rareMultiplier = 1, rng = Math.random) {
+        const pool = MATERIALS.filter(material => material.sourceAction === actionType);
+        if (!pool.length) return [];
+        const random = () => {
+            const value = Number(rng());
+            if (!Number.isFinite(value)) return 0;
+            return Math.min(0.9999999999999999, Math.max(0, value));
+        };
+        const drawCount = Math.min(pool.length, 8 + Math.floor(random() * 8));
+        const remaining = pool.slice();
+        const rewards = [];
+        const rareTiers = new Set(['Rare', 'Very Rare', 'Ultra Rare', 'Exceptional']);
+
+        for (let drawIndex = 0; drawIndex < drawCount; drawIndex += 1) {
+            const weighted = remaining.map(material => ({
+                material,
+                weight: material.weight * (rareTiers.has(material.rarity) ? Math.max(1, rareMultiplier) : 1)
+            }));
+            const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+            let roll = random() * totalWeight;
+            let selectedIndex = weighted.length - 1;
+            for (let index = 0; index < weighted.length; index += 1) {
+                roll -= weighted[index].weight;
+                if (roll < 0) {
+                    selectedIndex = index;
+                    break;
+                }
+            }
+
+            const [material] = remaining.splice(selectedIndex, 1);
+            const stackRange = material.baseStack;
+            const baseStack = stackRange.min + Math.floor(random() * (stackRange.max - stackRange.min + 1));
+            const scaledQuantity = Math.round(baseStack * Math.max(1, totalMultiplier));
+            const quantity = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, scaledQuantity));
+            rewards.push({
+                item: material.id,
+                displayName: material.name,
+                quantity,
+                baseStack,
+                rarity: material.rarity,
+                sourceAction: material.sourceAction,
+                craftingMaterial: true,
+                isRare: rareTiers.has(material.rarity)
+            });
+        }
+        return rewards;
+    }
+
     /**
      * Gets tool display name for action type and level.
      */
@@ -36,7 +85,7 @@ class ActionEngine {
      * @param {number} [currentTime] - Optional timestamp (defaults to Date.now())
      * @returns {Object} Result of the action
      */
-    static performAction(playerState, actionType, currentTime = Date.now()) {
+    static performAction(playerState, actionType, currentTime = Date.now(), rng = Math.random) {
         const now = currentTime;
         playerState.inventory = playerState.inventory || {};
         playerState.cooldowns = playerState.cooldowns || { mine: 0, explore: 0, hunt: 0, fish: 0, work: 0 };
@@ -71,7 +120,7 @@ class ActionEngine {
 
         const checkAmnesiac = () => {
             const chance = getAmnesiacChance((playerState.perks && playerState.perks.amnesiac) || 0);
-            if (Math.random() < chance) {
+            if (rng() < chance) {
                 cooldownEnd = 0;
                 amnesiacTriggered = true;
             }
@@ -114,7 +163,7 @@ class ActionEngine {
 
             // Multistrike Matrix roll
             const multistrikeChance = (socketBonuses && socketBonuses.multistrikeChance) || 0;
-            const multistrikeTriggered = multistrikeChance > 0 && Math.random() < multistrikeChance;
+            const multistrikeTriggered = multistrikeChance > 0 && rng() < multistrikeChance;
             const rollMultiplier = multistrikeTriggered ? 2 : 1;
 
             const boosterInfo = calculateBoosterMultiplier(
@@ -137,11 +186,11 @@ class ActionEngine {
 
                 let quantity = 0;
                 if (expected > 0) {
-                    const variance = 0.96 + (Math.random() * 0.08); // +/- 4% roll variance
+                    const variance = 0.96 + (rng() * 0.08); // +/- 4% roll variance
                     const scaledVal = expected * variance;
                     const baseQty = Math.floor(scaledVal);
                     const frac = scaledVal - baseQty;
-                    quantity = baseQty + (Math.random() < frac ? 1 : 0);
+                    quantity = baseQty + (rng() < frac ? 1 : 0);
                 }
 
                 if (quantity > 0) {
@@ -171,13 +220,13 @@ class ActionEngine {
                     for (const commonItem of commonDrops) {
                         let transmutedQty = 0;
                         for (let i = 0; i < commonItem.quantity; i++) {
-                            if (Math.random() < transmutationRate) {
+                            if (rng() < transmutationRate) {
                                 transmutedQty++;
                             }
                         }
                         if (transmutedQty > 0) {
                             // Pick a random rare item as target
-                            const targetDrop = rareDropItems[Math.floor(Math.random() * rareDropItems.length)];
+                            const targetDrop = rareDropItems[Math.floor(rng() * rareDropItems.length)];
                             // Remove transmuted units from original
                             playerState.inventory[commonItem.item] = Math.max(0, (playerState.inventory[commonItem.item] || 0) - transmutedQty);
                             if (playerState.inventory[commonItem.item] <= 0) delete playerState.inventory[commonItem.item];
@@ -206,10 +255,10 @@ class ActionEngine {
                     ? serendipityMultiplier * rareProspectorBonus
                     : 1;
                 const effectiveChance = Math.min(100, material.dropChance * rareChanceMultiplier);
-                if (Math.random() >= effectiveChance / 100) continue;
+                if (rng() >= effectiveChance / 100) continue;
 
                 const [stackMin, stackMax] = material.dropStack;
-                const baseStack = stackMin + Math.floor(Math.random() * (stackMax - stackMin + 1));
+                const baseStack = stackMin + Math.floor(rng() * (stackMax - stackMin + 1));
                 const quantity = Math.max(1, Math.round(baseStack * totalMultiplier));
                 playerState.inventory[itemName] = (playerState.inventory[itemName] || 0) + quantity;
                 totalItems += quantity;
@@ -222,6 +271,22 @@ class ActionEngine {
                     isRare,
                     farmUpgradeMaterial: true
                 });
+            }
+
+            const craftingMaterialDrops = this.drawCraftingMaterials(
+                actionType,
+                totalMultiplier,
+                serendipityMultiplier * rareProspectorBonus,
+                rng
+            );
+            for (const materialDrop of craftingMaterialDrops) {
+                const currentQuantity = playerState.inventory[materialDrop.item] || 0;
+                playerState.inventory[materialDrop.item] = Math.min(
+                    Number.MAX_SAFE_INTEGER,
+                    currentQuantity + materialDrop.quantity
+                );
+                totalItems = Math.min(Number.MAX_SAFE_INTEGER, totalItems + materialDrop.quantity);
+                itemsList.push(materialDrop);
             }
 
             // Sort items descending by quantity
@@ -284,6 +349,7 @@ class ActionEngine {
                 serendipityMultiplier,
                 serendipityLevel,
                 multistrikeTriggered,
+                craftingMaterialDrops,
                 toolCooldownReductionSec,
                 socketCooldownReductionSec,
                 totalCooldownReductionSec,

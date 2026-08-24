@@ -17,6 +17,8 @@ import { renderInventory } from './inventory.js';
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { showConfirmation, openDialog, closeDialog } from './modal.js';
+import { getQuantityPresets, quantityPresetButtonsHtml } from './quantityPresets.js';
+import { getStoredSettings, shouldConfirmQuantityOperation } from '../preferences.js';
 
 const MAX_TOOL_LEVEL = 500;
 let cachedDefinitions = null;
@@ -146,17 +148,20 @@ export const openSocketsModal = async (toolType) => {
     for (const [mId, mod] of Object.entries(allDefs)) {
         const owned = myModules[mId] || 0;
         let canCraft = true;
+        let maxCraft = Number.MAX_SAFE_INTEGER;
         let reqsHtml = '';
 
         for (const req of (mod.recipe || [])) {
-            const have = (playerState.inventory && playerState.inventory[req.item]) || 0;
+            const locked = (playerState.lockedItems || []).includes(req.item);
+            const have = locked ? 0 : (playerState.inventory && playerState.inventory[req.item]) || 0;
             const sufficient = have >= req.quantity;
             if (!sufficient) canCraft = false;
+            maxCraft = Math.min(maxCraft, Math.floor(have / req.quantity));
 
             reqsHtml += `
                 <div class="req-item ${sufficient ? 'sufficient' : 'insufficient'}">
                     <span>${displayItemName(req.item)}</span>
-                    <span class="tabular-nums">${formatDisplayNumber(have)} / ${formatDisplayNumber(req.quantity)}</span>
+                    <span class="tabular-nums">${formatDisplayNumber(have)} / ${formatDisplayNumber(req.quantity)}${locked ? ' · Locked' : ''}</span>
                 </div>
             `;
         }
@@ -171,6 +176,8 @@ export const openSocketsModal = async (toolType) => {
                 <div class="reqs-list mt-2">
                     ${reqsHtml}
                 </div>
+                <div class="quantity-preset-row mt-2">${quantityPresetButtonsHtml({ systemId: 'socket-module-crafting', subjectId: mId, maxValue: Math.max(0, maxCraft), activeValue: 1, targetId: `module-craft-qty-${mId}` })}</div>
+                <input id="module-craft-qty-${mId}" name="module-craft-qty-${mId}" class="form-input module-craft-quantity" type="number" inputmode="numeric" autocomplete="off" min="1" max="${Math.max(1, maxCraft)}" step="1" value="1" aria-label="Quantity of ${mod.name} to craft" ${canCraft ? '' : 'disabled'}>
                 <button class="action-btn secondary-btn btn-sm btn-craft-mod mt-2" data-module-id="${mId}" ${!canCraft ? 'disabled' : ''} type="button">
                     ${iconHtml('lucide:hammer')} Craft Module
                 </button>
@@ -271,13 +278,32 @@ export const openSocketsModal = async (toolType) => {
     });
 
     // Craft Module handler
+    modalEl.querySelectorAll('[data-quantity-target]').forEach(preset => {
+        preset.onclick = () => {
+            const input = modalEl.querySelector(`#${preset.dataset.quantityTarget}`);
+            if (!input) return;
+            const value = preset.dataset.quantityPreset === 'max' ? Number(input.max) : Number(preset.dataset.quantityPreset);
+            if (Number.isSafeInteger(value) && value > 0) input.value = Math.min(value, Number(input.max));
+        };
+    });
     modalEl.querySelectorAll('.btn-craft-mod').forEach(btn => {
         btn.onclick = async (e) => {
             const triggerBtn = e.target.closest('button');
             const moduleId = triggerBtn.dataset.moduleId;
+            const quantityInput = modalEl.querySelector(`#module-craft-qty-${moduleId}`);
+            const quantity = Number(quantityInput?.value || 1);
+            if (!Number.isSafeInteger(quantity) || quantity < 1) {
+                showToast('Enter a positive whole-number module quantity.', 'error');
+                return;
+            }
+            const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'socket-module-crafting', subjectId: moduleId, quantity });
+            if (needsConfirmation) {
+                const confirmed = await showConfirmation('bulkModuleCraft', 'Craft socket modules?', `Craft ${quantity} module${quantity === 1 ? '' : 's'} and consume all required materials?`, { bulkAction: true, allowIgnore: false });
+                if (!confirmed) return;
+            }
             try {
-                await doCraftSocketModule(moduleId, 1, triggerBtn);
-                showToast(`Crafted module successfully!`, 'success');
+                await doCraftSocketModule(moduleId, quantity, triggerBtn);
+                showToast(`Crafted ${formatDisplayNumber(quantity)} module${quantity === 1 ? '' : 's'} successfully!`, 'success');
                 renderInventory();
                 renderTools();
                 openSocketsModal(toolType);
@@ -320,31 +346,23 @@ export const renderTools = () => {
             let isCount = false;
             let targetOrCount = level + 1;
 
-            if (action === 'bulk-10') {
-                count = 10;
-                targetOrCount = 10;
+            if (action?.startsWith('bulk-count-')) {
+                count = Number(action.slice('bulk-count-'.length));
+                targetOrCount = count;
                 isCount = true;
-                label = `+10 Levels (to Lv. ${Math.min(MAX_TOOL_LEVEL, level + 10)})`;
-            } else if (action === 'bulk-50') {
-                count = 50;
-                targetOrCount = 50;
-                isCount = true;
-                label = `+50 Levels (to Lv. ${Math.min(MAX_TOOL_LEVEL, level + 50)})`;
+                label = `+${count} Levels (to Lv. ${Math.min(MAX_TOOL_LEVEL, level + count)})`;
             } else if (action === 'bulk-max') {
                 targetOrCount = 'max';
                 isCount = false;
                 label = 'Max Affordable Levels';
             }
 
-            const isBulkUpgrade = action !== 'single';
-            const confirmAction = await showConfirmation(
-                isBulkUpgrade ? 'bulkToolUpgrade' : 'toolUpgrade',
-                'Upgrade Tool?',
+            const requestedQuantity = action === 'bulk-max' ? 'max' : count;
+            const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'tool-upgrades', subjectId: type, quantity: requestedQuantity });
+            const confirmAction = !needsConfirmation || await showConfirmation(
+                'bulkToolUpgrade', 'Upgrade Tool?',
                 `Are you sure you want to upgrade your ${actionInfo.name} tool by ${label}? Required materials will be consumed.`,
-                isBulkUpgrade ? {
-                    bulkAction: true,
-                    ignoreLabel: "Don't show this preview again"
-                } : {}
+                { bulkAction: true, ignoreLabel: "Don't show this preview again" }
             );
             if (!confirmAction) return;
 
@@ -415,6 +433,13 @@ export const renderTools = () => {
         }
 
         const actionInfo = ACTIONS.find(a => a.id === type) || { name: type, icon: 'lucide:wrench' };
+        const toolPresetConfig = getQuantityPresets('tool-upgrades', type, MAX_TOOL_LEVEL - level);
+        const toolPresetButtons = toolPresetConfig.presets.map(preset => {
+            const action = preset.max ? 'bulk-max' : `bulk-count-${preset.value}`;
+            const label = preset.max ? 'Max Affordable' : `+${preset.label}`;
+            const disabled = !preset.enabled || (preset.value === 1 && !canUpgrade);
+            return `<button class="action-btn ${preset.max ? 'primary-btn' : 'secondary-btn'} tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="${action}" ${disabled ? 'disabled' : ''} type="button">${label}</button>`;
+        }).join('');
 
         let card = grid.querySelector(`[data-tool-type="${type}"]`);
         if (!card) {
@@ -461,23 +486,7 @@ export const renderTools = () => {
             </div>
 
             <div class="flex flex-col gap-2">
-                <button class="action-btn secondary-btn btn-large" id="btn-upg-${type}" data-tool-type="${type}" data-upgrade-action="single" ${!canUpgrade ? 'disabled' : ''} type="button">
-                    Upgrade (+1)
-                </button>
-
-                ${!isMax ? `
-                    <div class="tool-bulk-controls">
-                        <button class="action-btn secondary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-10" type="button">
-                            +10 Lvls
-                        </button>
-                        <button class="action-btn secondary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-50" type="button">
-                            +50 Lvls
-                        </button>
-                        <button class="action-btn primary-btn tool-bulk-btn" data-tool-type="${type}" data-upgrade-action="bulk-max" type="button">
-                            Max Affordable
-                        </button>
-                    </div>
-                ` : ''}
+                ${!isMax ? `<div class="tool-bulk-controls" aria-label="${actionInfo.name} tool upgrade quantities">${toolPresetButtons}</div>` : '<button class="action-btn secondary-btn btn-large" disabled>MAX LEVEL</button>'}
             </div>
         `;
     });

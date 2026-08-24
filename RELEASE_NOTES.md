@@ -4,6 +4,36 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v3.0.0] — 2026-08-24
+
+### New Features
+- **Large-scale realistic crafting catalog**:
+  - Added 450 general-purpose raw materials and 216 craftable products across 18 practical domains.
+  - Added 130 intermediate components, 86 finished products, 10 legacy derived components, and 15 socket modules.
+  - Every entry includes an explicit unit, acquisition route, rarity, practical description, and bill of materials.
+- **Direct and recursive crafting**:
+  - Direct mode consumes only the listed inputs.
+  - Recursive mode expands missing crafted inputs into an authoritative dependency plan, consuming owned intermediates before making more.
+  - Preview and execution share one planner, with atomic execution, shortage reporting, surplus accounting, maximum-run calculation, and locked-item protection.
+- **Three crafting interfaces**:
+  - Standard master/detail, Compact expandable cards, and Super Compact virtualized rows.
+  - Added search, filters, sorting, persistent view preferences, responsive details dialogs, and accessible operation feedback.
+- **Shared quantity presets**:
+  - Added editable `1 / 10 / 100 / 1000 / Max` defaults with global, system, and item-level inheritance.
+  - Integrated the same controls and confirmation policies into crafting, shop buying, shop selling, booster activation, socket-module crafting, tool upgrades, and perk upgrades.
+
+### Improvements
+- Successful Mine, Explore, Hunt, and Fish actions now award 8–15 distinct new material stacks using weighted sampling without replacement.
+- New crafting materials remain separate from shop inventory and transmutation while remaining available to facilities, tools, buildings, and future systems through the shared inventory model.
+- Added generated catalog and implementation documentation, API coverage, catalog invariant tests, planner tests, drop-distribution tests, preset tests, and UI contract tests.
+
+### Safety and Integrity
+- Crafting previews never mutate state, and failed executions cannot consume partial inputs.
+- Locked inventory entries are never counted as available and cannot be consumed by direct or recursive crafting.
+- Catalog validation rejects duplicate IDs, unresolved inputs, cycles, quota drift, unreachable materials, and intermediates with no downstream consumer.
+
+---
+
 ## [v2.0] — 2026-08-23
 
 ### New Features

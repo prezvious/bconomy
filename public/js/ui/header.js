@@ -37,6 +37,7 @@ export const renderAll = () => {
     switch (tab) {
         case 'actions': renderActions(); break;
         case 'inventory': renderInventory(); break;
+        case 'crafting': import('./crafting.js').then(m => m.renderCrafting()); break;
         case 'tools': renderTools(); break;
         case 'farm': renderFarm(); break;
         case 'rank-prestige':

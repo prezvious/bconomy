@@ -17,6 +17,19 @@ const {
 } = require('./src/db/supabase');
 const ActionEngine = require('./src/engine/actionEngine');
 const ToolEngine = require('./src/engine/toolEngine');
+const CraftingEngine = require('./src/engine/craftingEngine');
+const {
+    CATALOG_VERSION,
+    DOMAIN_ORDER,
+    DOMAIN_NAMES,
+    EFFORT_BANDS,
+    RARITY_STACKS,
+    MATERIALS,
+    CRAFTABLES,
+    RECIPES,
+    recipeForm,
+    VALIDATION_SUMMARY
+} = require('./src/data/craftingCatalog');
 const RankPrestigeEngine = require('./src/engine/rankPrestigeEngine');
 const { FarmEngine, CROP_DEFINITIONS } = require('./src/engine/farmEngine');
 const { FARM_UPGRADE_MATERIALS } = require('./src/engine/farmPlotUpgrade');
@@ -222,12 +235,61 @@ app.post('/api/tool/module/craft', (req, res) => {
     if (!isObjectState(playerState) || !moduleId) {
         return res.status(400).json({ error: 'Missing or invalid playerState or moduleId' });
     }
-    FarmEngine.ensureFarmState(playerState);
-    const result = ToolEngine.craftModule(playerState, moduleId, quantity || 1);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
+    const craftQuantity = quantity === undefined ? 1 : quantity;
+    const execution = CraftingEngine.execute(playerState, `recipe_${moduleId}`, craftQuantity, 'direct');
+    if (!execution.ok) {
+        return res.status(execution.code === 'UNKNOWN_RECIPE' ? 404 : 400).json({
+            error: execution.error,
+            code: execution.code,
+            state: playerState,
+            result: execution.preview || execution
+        });
     }
-    res.json({ state: playerState, result });
+    const moduleDefinition = CRAFTABLES.find(item => item.id === moduleId);
+    const currentModuleCount = execution.playerState.toolModules && execution.playerState.toolModules[moduleId] || 0;
+    res.json({
+        state: execution.playerState,
+        result: {
+            success: true,
+            moduleId,
+            moduleName: moduleDefinition ? moduleDefinition.name : moduleId,
+            quantityCrafted: execution.result.output.quantity,
+            currentModuleCount,
+            crafting: execution.result
+        }
+    });
+});
+
+app.get('/api/crafting/catalog', (req, res) => {
+    res.json({
+        catalogVersion: CATALOG_VERSION,
+        domains: DOMAIN_ORDER.map(id => ({ id, name: DOMAIN_NAMES[id] })),
+        materials: MATERIALS,
+        craftables: CRAFTABLES,
+        recipes: RECIPES.map(recipe => ({ ...recipe, form: recipeForm(recipe) })),
+        rarityBands: RARITY_STACKS,
+        effortBands: EFFORT_BANDS,
+        validation: VALIDATION_SUMMARY
+    });
+});
+
+app.post('/api/crafting/preview', (req, res) => {
+    const { playerState, recipeId, craftCount, mode } = req.body;
+    const result = CraftingEngine.preview(playerState, recipeId, craftCount, mode);
+    if (!result.ok) {
+        return res.status(result.code === 'UNKNOWN_RECIPE' ? 404 : 400).json(result);
+    }
+    const { stagedState, ...preview } = result;
+    res.json(preview);
+});
+
+app.post('/api/crafting/execute', (req, res) => {
+    const { playerState, recipeId, craftCount, mode } = req.body;
+    const execution = CraftingEngine.execute(playerState, recipeId, craftCount, mode);
+    if (!execution.ok) {
+        return res.status(execution.code === 'UNKNOWN_RECIPE' ? 404 : 400).json(execution);
+    }
+    res.json(execution);
 });
 
 app.get('/api/tool/definitions', (req, res) => {
@@ -663,7 +725,10 @@ app.get('/api/data/boosters', (req, res) => {
 
 app.get('/api/data/item-descriptions', (req, res) => {
     const { ITEM_DESCRIPTIONS } = require('./src/data/itemDescriptions');
-    res.json(ITEM_DESCRIPTIONS);
+    const craftingDescriptions = Object.fromEntries(
+        [...MATERIALS, ...CRAFTABLES].flatMap(item => [[item.id, item.description], [item.name, item.description]])
+    );
+    res.json({ ...ITEM_DESCRIPTIONS, ...craftingDescriptions });
 });
 
 app.get('/api/data/farm/crops', (req, res) => {

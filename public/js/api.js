@@ -47,8 +47,9 @@ const _apiCallInternal = async (endpoint, method = 'GET', body = null, triggerEl
             throw new Error(errorMsg);
         }
 
-        if (data.state) {
-            setState(data.state);
+        const returnedState = data.state || data.playerState;
+        if (returnedState) {
+            setState(returnedState);
             saveState();
         }
 
@@ -89,6 +90,9 @@ export const doInstallSocketModule = (toolType, socketIndex, moduleId, el) => ap
 export const doUninstallSocketModule = (toolType, socketIndex, el) => apiCall('/api/tool/socket/uninstall', 'POST', { toolType, socketIndex }, el);
 export const doCraftSocketModule = (moduleId, quantity = 1, el) => apiCall('/api/tool/module/craft', 'POST', { moduleId, quantity }, el);
 export const doGetToolDefinitions = () => apiCall('/api/tool/definitions', 'GET');
+export const doGetCraftingCatalog = () => apiCall('/api/crafting/catalog', 'GET');
+export const doPreviewCrafting = (recipeId, craftCount = 1, mode = 'direct') => apiCall('/api/crafting/preview', 'POST', { recipeId, craftCount, mode });
+export const doExecuteCrafting = (recipeId, craftCount = 1, mode = 'direct') => apiCall('/api/crafting/execute', 'POST', { recipeId, craftCount, mode });
 export const doPlant = (plotId, cropName, el) => apiCall('/api/farm/plant', 'POST', { plotId, cropName }, el);
 export const doPlantAll = (cropName, el) => apiCall('/api/farm/plant-all', 'POST', { cropName }, el);
 export const doUproot = (plotId, el) => apiCall('/api/farm/uproot', 'POST', { plotId }, el);

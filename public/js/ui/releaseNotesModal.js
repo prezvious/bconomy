@@ -3,9 +3,56 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v3.0.0',
+        version: 'v3.0.0',
+        isLatest: true,
+        date: '2026-08-24',
+        title: 'v3.0.0 — Realistic Crafting & Shared Quantity Controls',
+        sections: [
+            {
+                type: 'Features',
+                items: [
+                    {
+                        title: 'Complete Real-World Crafting Catalog',
+                        bullets: [
+                            'Added 450 named raw materials and 216 new craftable products across 18 real-world production domains, plus canonical recipes for 10 legacy components and 15 socket modules.',
+                            'Added direct and recursive atomic crafting with locked-item protection, exact maximum calculation, dependency steps, aggregate raw costs, shortages, and surplus reporting.',
+                            'Successful Mine, Explore, Hunt, and Fish actions now award 8–15 distinct weighted crafting-material stacks without placing the new catalog in the shop or transmutation pool.'
+                        ]
+                    },
+                    {
+                        title: 'Three Crafting Workspaces',
+                        bullets: [
+                            'Added Standard master-detail, Compact expandable-card, and Super Compact virtual-list views with persistent search, domain, effort, type, recipe-form, availability, and sort controls.',
+                            'Added responsive crafting details, quantity presets, direct/recursive mode selection, authoritative preview, and server-validated execution.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Inherited Quantity Presets',
+                        bullets: [
+                            'Added four configurable presets plus Max with global, system, and individual-item inheritance.',
+                            'Connected the shared values and preview policies to crafting, shop purchases and sales, booster activation, socket-module crafting, tool upgrades, and perk upgrades.'
+                        ]
+                    },
+                    {
+                        title: 'Catalog Integrity & Documentation',
+                        bullets: [
+                            'Added startup validation for exact catalog quotas, metadata, recipe forms, material reuse, downstream intermediate use, cross-domain dependencies, and acyclic depth.',
+                            'Added generated catalog documentation and cross-layer engine, API, drop, preference, responsive UI, and regression tests.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v2.2.2',
         version: 'v2.2.2',
-        isLatest: true,
         date: '2026-08-23',
         title: 'v2.2.2 — Scroll Stability & SVG Icon Rendering Reliability',
         sections: [
@@ -385,7 +432,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v2.2.2']); // v2.2.2 expanded by default
+const expandedVersions = new Set(['v3.0.0']); // Latest release expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

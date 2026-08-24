@@ -8,8 +8,10 @@ import { doGetShopState, doForceRestock, doBuyShopItem, doSellShopItem, doBuyBoo
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { renderAll } from './header.js';
-import { openDialog, closeDialog, replaceDialog, setConfirmationIgnored, shouldSkipBulkPreview } from './modal.js';
+import { openDialog, closeDialog, replaceDialog, setConfirmationIgnored, shouldSkipBulkPreview, showConfirmation } from './modal.js';
 import { setupCollapsibleSearch } from './collapsibleSearch.js';
+import { quantityPresetButtonsHtml } from './quantityPresets.js';
+import { getStoredSettings, shouldConfirmQuantityOperation } from '../preferences.js';
 
 let currentSubTab = 'buy'; // 'buy' or 'sell'
 const defaultShopViewState = () => ({
@@ -368,9 +370,7 @@ const renderBuyItemsGrid = (buyListings) => {
                     ${isOutOfStock ? '<button class="action-btn secondary-btn btn-full" disabled type="button">Out of Stock</button>' : `
                     <div class="qty-input-group">
                         <input type="number" class="qty-input buy-qty-input" id="${inputId}" name="${inputId}" aria-label="Quantity of ${displayName} to buy" inputmode="numeric" min="1" max="${listing.stock}" value="1">
-                        <button class="btn-qty-preset" data-preset="1" data-target="${inputId}" type="button">1</button>
-                        <button class="btn-qty-preset" data-preset="10" data-target="${inputId}" type="button">10</button>
-                        <button class="btn-qty-preset" data-preset="${listing.stock}" data-target="${inputId}" type="button">Max</button>
+                        ${quantityPresetButtonsHtml({ systemId: 'shop-buy', subjectId: itemName, maxValue: listing.stock, activeValue: 1, targetId: inputId })}
                     </div>
                     <button class="action-btn primary-btn btn-buy-item" data-item="${escapeHtml(itemName)}" type="button">Buy Item</button>`}
                 </div>
@@ -410,9 +410,7 @@ const renderSellItemsGrid = (inventory, sellPrices) => {
                 <div class="market-card-action">
                     <div class="qty-input-group">
                         <input type="number" class="qty-input sell-qty-input" id="${inputId}" name="${inputId}" aria-label="Quantity of ${displayName} to sell" inputmode="numeric" min="1" max="${ownedQty}" value="1">
-                        <button class="btn-qty-preset" data-preset="1" data-target="${inputId}" type="button">1</button>
-                        <button class="btn-qty-preset" data-preset="10" data-target="${inputId}" type="button">10</button>
-                        <button class="btn-qty-preset" data-preset="${ownedQty}" data-target="${inputId}" type="button">All</button>
+                        ${quantityPresetButtonsHtml({ systemId: 'shop-sell', subjectId: itemName, maxValue: ownedQty, activeValue: 1, targetId: inputId })}
                     </div>
                     <button class="action-btn success-btn btn-sell-item" data-item="${escapeHtml(itemName)}" type="button">Sell Item</button>
                 </div>
@@ -1131,11 +1129,12 @@ const setupShopEventListeners = () => {
     bindCatalogControls('sell');
 
     // Preset buttons
-    document.querySelectorAll('.btn-qty-preset').forEach(btn => {
+    document.querySelectorAll('.btn-qty-preset, .quantity-preset-btn[data-quantity-target]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const targetId = btn.dataset.target;
-            const presetVal = parseInt(btn.dataset.preset, 10);
+            const targetId = btn.dataset.target || btn.dataset.quantityTarget;
             const input = document.getElementById(targetId);
+            const rawPreset = btn.dataset.preset ?? btn.dataset.quantityPreset;
+            const presetVal = rawPreset === 'max' ? parseInt(input?.max, 10) : parseInt(rawPreset, 10);
             if (input && !isNaN(presetVal)) {
                 const max = parseInt(input.max, 10);
                 input.value = Math.min(presetVal, isNaN(max) ? presetVal : max);
@@ -1151,6 +1150,12 @@ const setupShopEventListeners = () => {
             const qty = input ? parseInt(input.value, 10) : 1;
 
             try {
+                const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'shop-buy', subjectId: itemName, quantity: qty });
+                if (needsConfirmation) {
+                    const listing = getState().shop?.buyListings?.[itemName];
+                    const confirmed = await showConfirmation('shopBuyQuantity', 'Confirm purchase', `Buy ${formatDisplayNumber(qty)}× ${displayItemName(itemName)} for ${formatMoney((listing?.buyPrice || 0) * qty)}?`, { allowIgnore: false });
+                    if (!confirmed) return;
+                }
                 const res = await doBuyShopItem(itemName, qty, e.currentTarget);
                 if (res && res.result) {
                     showToast(`Purchased ${formatDisplayNumber(res.result.quantity)}× ${displayItemName(itemName)} for ${formatMoney(res.result.totalCost)}!`, 'success');
@@ -1171,6 +1176,12 @@ const setupShopEventListeners = () => {
             const qty = input ? parseInt(input.value, 10) : 1;
 
             try {
+                const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'shop-sell', subjectId: itemName, quantity: qty });
+                if (needsConfirmation) {
+                    const price = getState().shop?.sellPrices?.[itemName] || 0;
+                    const confirmed = await showConfirmation('shopSellQuantity', 'Confirm sale', `Sell ${formatDisplayNumber(qty)}× ${displayItemName(itemName)} for ${formatMoney(price * qty)}?`, { allowIgnore: false });
+                    if (!confirmed) return;
+                }
                 const res = await doSellShopItem(itemName, qty, e.currentTarget);
                 if (res && res.result) {
                     showToast(`Sold ${formatDisplayNumber(res.result.quantity)}× ${displayItemName(itemName)} for +${formatMoney(res.result.totalReceived)}!`, 'success');

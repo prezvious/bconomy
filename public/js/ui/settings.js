@@ -8,7 +8,8 @@ import {
     getDefaultSettings,
     getStoredSettings,
     saveStoredSettings,
-    resetDisplaySettings
+    resetDisplaySettings,
+    QUANTITY_PRESET_SYSTEMS
 } from '../preferences.js';
 import { getAuthProfile, getAuthSession, signOutUser } from '../auth.js';
 import { openAuthModal } from './authModal.js';
@@ -31,6 +32,45 @@ export const NOTIFICATION_DENSITIES = [
     { id: 'minimal', label: 'Minimal', desc: 'Only display critical alerts, errors, and major milestones' },
     { id: 'muted', label: 'Muted', desc: 'Silence all on-screen toasts (directs output straight to Action Ledger)' }
 ];
+
+const QUANTITY_SYSTEM_LABELS = Object.freeze({
+    crafting: 'Crafting',
+    'shop-buy': 'Shop purchases',
+    'shop-sell': 'Shop sales',
+    'booster-activation': 'Booster activation',
+    'socket-module-crafting': 'Socket-module crafting',
+    'tool-upgrades': 'Tool upgrades',
+    'perk-upgrades': 'Perk upgrades'
+});
+
+let selectedQuantitySystem = 'crafting';
+let selectedQuantitySubject = '';
+
+const escapeAttribute = value => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
+const presetFieldsHtml = (prefix, scope, inherited, disabled = false) => {
+    const effective = { ...inherited, ...(scope || {}) };
+    const values = Array.isArray(effective.values) ? effective.values : [1, 10, 100, 1000];
+    return `
+        <div class="quantity-settings-values" role="group" aria-label="${prefix} quantity values">
+            ${[0, 1, 2, 3].map(index => `<label><span>Preset ${index + 1}</span><input class="form-input" id="${prefix}-preset-${index}" name="${prefix}-preset-${index}" type="number" inputmode="numeric" autocomplete="off" min="1" step="1" value="${Number.isFinite(values[index]) ? values[index] : ''}" ${disabled ? 'disabled' : ''}></label>`).join('')}
+        </div>
+        <div class="quantity-settings-policy">
+            <label class="form-group"><span class="form-label">Preview policy</span><select id="${prefix}-preview-mode" name="${prefix}-preview-mode" class="form-select" ${disabled ? 'disabled' : ''}>
+                <option value="every" ${effective.previewMode === 'every' ? 'selected' : ''}>Every operation</option>
+                <option value="recursive-only" ${effective.previewMode === 'recursive-only' ? 'selected' : ''}>Recursive only</option>
+                <option value="large-only" ${effective.previewMode === 'large-only' ? 'selected' : ''}>Large quantities only</option>
+                <option value="never" ${effective.previewMode === 'never' ? 'selected' : ''}>Never</option>
+            </select></label>
+            <label class="form-group"><span class="form-label">Large threshold</span><input id="${prefix}-large-threshold" name="${prefix}-large-threshold" class="form-input" type="number" inputmode="numeric" autocomplete="off" min="1" step="1" value="${effective.largeThreshold}" ${disabled ? 'disabled' : ''}></label>
+        </div>
+    `;
+};
 
 export const renderSettings = () => {
     const container = document.getElementById('panel-settings');
@@ -69,6 +109,13 @@ export const renderSettings = () => {
 
     const profile = getAuthProfile();
     const session = getAuthSession();
+    const quantitySettings = settings.quantityPresets;
+    const globalQuantity = quantitySettings.global;
+    const systemQuantity = quantitySettings.systems[selectedQuantitySystem] || null;
+    const systemEffective = { ...globalQuantity, ...(systemQuantity || {}) };
+    const subjectQuantity = selectedQuantitySubject
+        ? quantitySettings.subjects[selectedQuantitySystem]?.[selectedQuantitySubject] || null
+        : null;
 
     container.innerHTML = `
         <div class="section-header">
@@ -237,6 +284,44 @@ export const renderSettings = () => {
                             ${iconHtml('lucide:rotate-ccw')} Reset Display Settings
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div class="card settings-card settings-card-quantity">
+                <div class="card-header-styled">
+                    <div class="flex items-center gap-2">
+                        <iconify-icon icon="lucide:list-filter" class="text-accent" aria-hidden="true"></iconify-icon>
+                        <h3 class="card-title-sm">Shared Quantity Presets</h3>
+                    </div>
+                    <span class="charter-badge">Global → System → Item</span>
+                </div>
+                <div class="settings-card-body quantity-settings-body">
+                    <p class="text-xs text-subtle">Set four reusable quantities plus the permanent Max action. A system or individual item inherits every value it does not override.</p>
+
+                    <section class="quantity-settings-scope" aria-labelledby="quantity-global-heading">
+                        <div class="quantity-settings-scope-header"><div><h4 id="quantity-global-heading">Global defaults</h4><p>Used by every supported quantity control unless a narrower scope overrides it.</p></div></div>
+                        ${presetFieldsHtml('quantity-global', globalQuantity, globalQuantity)}
+                        <button class="action-btn secondary-btn btn-sm" type="button" data-save-quantity-scope="global">Save global defaults</button>
+                    </section>
+
+                    <section class="quantity-settings-scope" aria-labelledby="quantity-system-heading">
+                        <div class="quantity-settings-scope-header">
+                            <div><h4 id="quantity-system-heading">System override</h4><p>Choose one workflow and optionally replace its inherited settings.</p></div>
+                            <label class="toggle-switch" title="Enable system override"><span class="sr-only">Enable system quantity override</span><input id="quantity-system-override" name="quantity-system-override" type="checkbox" ${systemQuantity ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                        </div>
+                        <label class="form-group"><span class="form-label">System</span><select id="quantity-system-select" name="quantity-system-select" class="form-select">${QUANTITY_PRESET_SYSTEMS.map(id => `<option value="${id}" ${id === selectedQuantitySystem ? 'selected' : ''}>${QUANTITY_SYSTEM_LABELS[id]}</option>`).join('')}</select></label>
+                        ${presetFieldsHtml('quantity-system', systemQuantity, globalQuantity, !systemQuantity)}
+                        <button class="action-btn secondary-btn btn-sm" type="button" data-save-quantity-scope="system" ${systemQuantity ? '' : 'disabled'}>Save system override</button>
+                    </section>
+
+                    <section class="quantity-settings-scope" aria-labelledby="quantity-subject-heading">
+                        <div class="quantity-settings-scope-header">
+                            <div><h4 id="quantity-subject-heading">Item override</h4><p>Use a recipe, item, tool, module, or perk ID for a precise final override.</p></div>
+                            ${selectedQuantitySubject ? `<label class="toggle-switch" title="Enable item override"><span class="sr-only">Enable item quantity override</span><input id="quantity-subject-override" name="quantity-subject-override" type="checkbox" ${subjectQuantity ? 'checked' : ''}><span class="toggle-slider"></span></label>` : ''}
+                        </div>
+                        <div class="quantity-subject-loader"><label class="form-group"><span class="form-label">Subject ID</span><input id="quantity-subject-id" name="quantity-subject-id" class="form-input" type="text" autocomplete="off" spellcheck="false" maxlength="200" value="${escapeAttribute(selectedQuantitySubject)}" placeholder="WholeGrainFlourBlend…"></label><button id="btn-load-quantity-subject" class="action-btn secondary-btn btn-sm" type="button">Load item</button></div>
+                        ${selectedQuantitySubject ? `${presetFieldsHtml('quantity-subject', subjectQuantity, systemEffective, !subjectQuantity)}<button class="action-btn secondary-btn btn-sm" type="button" data-save-quantity-scope="subject" ${subjectQuantity ? '' : 'disabled'}>Save item override</button>` : '<p class="text-xs text-subtle">Enter an ID and load it to inspect or configure its inherited values.</p>'}
+                    </section>
                 </div>
             </div>
 
@@ -496,6 +581,88 @@ export const setupSettingsEvents = (container) => {
         renderSettings();
         showToast('Display settings reset to defaults', 'info');
     });
+
+    const readPresetScope = prefix => {
+        const values = [0, 1, 2, 3].map(index => Number(document.getElementById(`${prefix}-preset-${index}`)?.value));
+        const threshold = Number(document.getElementById(`${prefix}-large-threshold`)?.value);
+        if (!values.every(value => Number.isSafeInteger(value) && value > 0)) {
+            showToast('Every quantity preset must be a positive whole number.', 'error');
+            return null;
+        }
+        if (new Set(values).size !== values.length) {
+            showToast('Quantity presets must be distinct within a scope.', 'error');
+            return null;
+        }
+        if (!Number.isSafeInteger(threshold) || threshold < 1) {
+            showToast('The large-operation threshold must be a positive whole number.', 'error');
+            return null;
+        }
+        return {
+            values,
+            previewMode: document.getElementById(`${prefix}-preview-mode`)?.value || 'recursive-only',
+            largeThreshold: threshold
+        };
+    };
+
+    document.getElementById('quantity-system-select')?.addEventListener('change', event => {
+        selectedQuantitySystem = event.currentTarget.value;
+        selectedQuantitySubject = '';
+        renderSettings();
+    });
+
+    document.getElementById('btn-load-quantity-subject')?.addEventListener('click', () => {
+        const value = document.getElementById('quantity-subject-id')?.value.trim() || '';
+        if (!value) {
+            showToast('Enter an item or operation ID to load.', 'error');
+            return;
+        }
+        selectedQuantitySubject = value.slice(0, 200);
+        renderSettings();
+    });
+
+    document.getElementById('quantity-system-override')?.addEventListener('change', event => {
+        const current = getStoredSettings();
+        if (event.currentTarget.checked) {
+            current.quantityPresets.systems[selectedQuantitySystem] = { ...current.quantityPresets.global, values: [...current.quantityPresets.global.values] };
+        } else {
+            delete current.quantityPresets.systems[selectedQuantitySystem];
+            delete current.quantityPresets.subjects[selectedQuantitySystem];
+        }
+        saveStoredSettings(current);
+        renderSettings();
+    });
+
+    document.getElementById('quantity-subject-override')?.addEventListener('change', event => {
+        if (!selectedQuantitySubject) return;
+        const current = getStoredSettings();
+        current.quantityPresets.subjects[selectedQuantitySystem] ||= {};
+        if (event.currentTarget.checked) {
+            const inherited = { ...current.quantityPresets.global, ...(current.quantityPresets.systems[selectedQuantitySystem] || {}) };
+            current.quantityPresets.subjects[selectedQuantitySystem][selectedQuantitySubject] = { ...inherited, values: [...inherited.values] };
+        } else {
+            delete current.quantityPresets.subjects[selectedQuantitySystem][selectedQuantitySubject];
+            if (!Object.keys(current.quantityPresets.subjects[selectedQuantitySystem]).length) delete current.quantityPresets.subjects[selectedQuantitySystem];
+        }
+        saveStoredSettings(current);
+        renderSettings();
+    });
+
+    container.querySelectorAll('[data-save-quantity-scope]').forEach(button => button.addEventListener('click', () => {
+        const scopeName = button.dataset.saveQuantityScope;
+        const prefix = `quantity-${scopeName}`;
+        const scope = readPresetScope(prefix);
+        if (!scope) return;
+        const current = getStoredSettings();
+        if (scopeName === 'global') current.quantityPresets.global = scope;
+        if (scopeName === 'system') current.quantityPresets.systems[selectedQuantitySystem] = scope;
+        if (scopeName === 'subject' && selectedQuantitySubject) {
+            current.quantityPresets.subjects[selectedQuantitySystem] ||= {};
+            current.quantityPresets.subjects[selectedQuantitySystem][selectedQuantitySubject] = scope;
+        }
+        saveStoredSettings(current);
+        renderSettings();
+        showToast(`${scopeName === 'subject' ? 'Item' : scopeName[0].toUpperCase() + scopeName.slice(1)} quantity presets saved.`, 'success');
+    }));
 
     const skipBulkPreviews = document.getElementById('setting-skip-all-bulk-previews');
     skipBulkPreviews?.addEventListener('change', () => {

@@ -68,7 +68,7 @@ const init = async () => {
 
 document.addEventListener(SETTINGS_CHANGE_EVENT, (event) => {
     const changedKeys = event.detail?.changedKeys || [];
-    if (changedKeys.some(key => ['numberDisplay', 'inventory'].includes(key))) {
+    if (changedKeys.some(key => ['numberDisplay', 'inventory', 'crafting', 'quantityPresets'].includes(key))) {
         renderAll();
     }
 });

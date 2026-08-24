@@ -17,7 +17,7 @@ assert.deepEqual(duplicateIds, [], `HTML IDs must be unique: ${duplicateIds.join
 const dialogOpenCount = (html.match(/<dialog\b/g) || []).length;
 const dialogCloseCount = (html.match(/<\/dialog>/g) || []).length;
 assert.equal(dialogOpenCount, dialogCloseCount, 'Every dialog opening tag must be closed');
-assert.equal(dialogOpenCount, 18, 'All eighteen app dialogs use the shared native pattern');
+assert.equal(dialogOpenCount, 19, 'All nineteen app dialogs use the shared native pattern');
 
 for (const match of html.matchAll(/<dialog\b([^>]*)>/g)) {
     const attributes = match[1];

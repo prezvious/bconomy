@@ -44,6 +44,10 @@
                     <iconify-icon icon="lucide:backpack" class="nav-icon" aria-hidden="true"></iconify-icon>
                     <span class="nav-text">Inventory</span>
                 </button>
+                <button class="nav-btn" data-tab="crafting" type="button" aria-controls="panel-crafting" aria-label="Crafting" title="Crafting">
+                    <iconify-icon icon="lucide:hammer" class="nav-icon" aria-hidden="true"></iconify-icon>
+                    <span class="nav-text">Crafting</span>
+                </button>
                 <button class="nav-btn" data-tab="shop" type="button" aria-controls="panel-shop" aria-label="Shop" title="Shop">
                     <iconify-icon icon="lucide:store" class="nav-icon" aria-hidden="true"></iconify-icon>
                     <span class="nav-text">Shop</span>
@@ -71,7 +75,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v2.2.2" title="Click to view release notes">Bconomy v2.2.2</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.0.0" title="Click to view release notes">Bconomy v3.0.0</button>
             </div>
         </nav>
 
@@ -273,6 +277,51 @@
                         </div>
                     </section>
 
+                    <!-- Crafting Panel -->
+                    <section id="panel-crafting" class="panel" aria-labelledby="panel-crafting-heading">
+                        <div class="section-header crafting-section-header">
+                            <div>
+                                <h2 id="panel-crafting-heading">Crafting Workshop</h2>
+                                <p class="section-desc">Turn gathered stock and completed components into realistic equipment, structures, and production assemblies.</p>
+                            </div>
+                            <div class="view-toggle crafting-view-toggle" role="group" aria-label="Crafting view density">
+                                <button class="view-toggle-btn" type="button" data-crafting-view="standard" aria-pressed="true" title="Standard master-detail view">
+                                    <iconify-icon icon="lucide:panels-top-left" aria-hidden="true"></iconify-icon><span>Standard</span>
+                                </button>
+                                <button class="view-toggle-btn" type="button" data-crafting-view="compact" aria-pressed="false" title="Compact expandable cards">
+                                    <iconify-icon icon="lucide:rows-3" aria-hidden="true"></iconify-icon><span>Compact</span>
+                                </button>
+                                <button class="view-toggle-btn" type="button" data-crafting-view="super-compact" aria-pressed="false" title="Super compact virtual list">
+                                    <iconify-icon icon="lucide:list" aria-hidden="true"></iconify-icon><span>Super Compact</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="summary-rail crafting-summary-rail" aria-label="Crafting catalog summary">
+                            <div class="summary-metric"><span class="summary-label">Showing</span><strong id="crafting-visible-count" class="summary-value">0</strong></div>
+                            <div class="summary-metric"><span class="summary-label">Craftable Now</span><strong id="crafting-ready-count" class="summary-value">0</strong></div>
+                            <div class="summary-metric"><span class="summary-label">Catalog</span><strong id="crafting-catalog-count" class="summary-value">0</strong></div>
+                            <div class="summary-metric"><span class="summary-label">Raw Materials</span><strong id="crafting-material-count" class="summary-value">0</strong></div>
+                        </div>
+
+                        <div class="page-toolbar crafting-toolbar" aria-label="Crafting filters">
+                            <label class="toolbar-search" for="crafting-search">
+                                <span class="sr-only">Search recipes</span>
+                                <iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon>
+                                <input type="search" id="crafting-search" name="crafting-search" placeholder="Search recipes or ingredients…" class="search-input" autocomplete="off">
+                            </label>
+                            <label class="toolbar-field" for="crafting-domain"><span>Domain</span><select id="crafting-domain" name="crafting-domain" class="form-select"><option value="all">All domains</option></select></label>
+                            <label class="toolbar-field" for="crafting-effort"><span>Effort</span><select id="crafting-effort" name="crafting-effort" class="form-select"><option value="all">All effort bands</option></select></label>
+                            <label class="toolbar-field" for="crafting-classification"><span>Type</span><select id="crafting-classification" name="crafting-classification" class="form-select"><option value="all">All types</option></select></label>
+                            <label class="toolbar-field" for="crafting-form"><span>Recipe</span><select id="crafting-form" name="crafting-form" class="form-select"><option value="all">All recipe forms</option></select></label>
+                            <label class="toolbar-field" for="crafting-availability"><span>Availability</span><select id="crafting-availability" name="crafting-availability" class="form-select"><option value="all">All availability</option></select></label>
+                            <label class="toolbar-field" for="crafting-sort"><span>Sort</span><select id="crafting-sort" name="crafting-sort" class="form-select"><option value="name">Name</option></select></label>
+                        </div>
+
+                        <div id="crafting-status" class="crafting-status" role="status" aria-live="polite">Loading crafting catalog…</div>
+                        <div id="crafting-workspace" class="crafting-workspace" aria-busy="true"></div>
+                    </section>
+
                     <!-- Tools Workshop Panel -->
                     <section id="panel-tools" class="panel" aria-labelledby="panel-tools-heading">
                         <div class="section-header">
@@ -450,6 +499,20 @@
             </div>
         </aside>
     </div>
+
+    <!-- Responsive Crafting Details Modal -->
+    <dialog id="crafting-details-dialog" class="modal hidden crafting-details-dialog" data-app-dialog aria-labelledby="crafting-details-dialog-title">
+        <div class="modal-content card charter-modal modal-dialog modal-wide crafting-details-dialog-content">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:hammer" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <h3 id="crafting-details-dialog-title">Crafting Details</h3>
+                </div>
+                <button class="modal-close-btn" type="button" aria-label="Close crafting details" data-dialog-close><iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon></button>
+            </div>
+            <div id="crafting-details-dialog-body" class="modal-body crafting-dialog-body"></div>
+        </div>
+    </dialog>
 
     <!-- General Farm Management Modal -->
     <dialog id="farm-manage-modal" class="modal hidden" data-app-dialog aria-labelledby="farm-manage-title">
@@ -895,12 +958,7 @@
                         <iconify-icon icon="lucide:coins" aria-hidden="true"></iconify-icon> Sell to System Shop
                     </h4>
 
-                    <div class="preset-chips-row mb-3">
-                        <button type="button" class="preset-chip" data-qty="1">Sell 1</button>
-                        <button type="button" class="preset-chip" data-qty="10">Sell 10</button>
-                        <button type="button" class="preset-chip" data-qty="100">Sell 100</button>
-                        <button type="button" class="preset-chip" data-qty="max">Sell Max</button>
-                    </div>
+                    <div id="item-modal-sell-presets" class="preset-chips-row quantity-preset-row mb-3" aria-label="Sell quantity presets"></div>
 
                     <div class="form-group mb-3">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1188,7 +1246,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v2.2.2 Latest</span>
+                            <span class="badge release-latest-tag">v3.0.0 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>

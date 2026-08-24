@@ -17,6 +17,8 @@ import {
     setConfirmationIgnored,
     shouldSkipBulkPreview
 } from './modal.js';
+import { getQuantityPresets } from './quantityPresets.js';
+import { getStoredSettings, shouldConfirmQuantityOperation } from '../preferences.js';
 
 const PREVIEW_KEY = 'bulkBoosterActivation';
 const ACTION_ORDER = ['mine', 'explore', 'hunt', 'fish'];
@@ -85,6 +87,7 @@ const updateSelectionSummary = () => {
 
     const actionButton = document.getElementById('btn-bulk-booster-preview');
     if (actionButton) actionButton.disabled = totalUnits === 0;
+    updatePrimaryAction();
 };
 
 const applyMode = (mode, previousMode = currentMode) => {
@@ -93,6 +96,10 @@ const applyMode = (mode, previousMode = currentMode) => {
         const active = button.dataset.mode === mode;
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
+    });
+    document.querySelectorAll('.bulk-booster-quantity-preset').forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-pressed', 'false');
     });
 
     document.querySelectorAll('.bulk-booster-qty').forEach(input => {
@@ -105,10 +112,31 @@ const applyMode = (mode, previousMode = currentMode) => {
     updateSelectionSummary();
 };
 
+const applyQuantityPreset = value => {
+    currentMode = 'custom';
+    document.querySelectorAll('.bulk-booster-mode').forEach(button => {
+        button.classList.toggle('active', false);
+        button.setAttribute('aria-pressed', 'false');
+    });
+    document.querySelectorAll('.bulk-booster-quantity-preset').forEach(button => {
+        const active = button.dataset.quantityPreset === String(value);
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+    });
+    document.querySelectorAll('.bulk-booster-qty').forEach(input => {
+        const owned = Number(input.max);
+        input.value = value === 'max' ? owned : Math.min(owned, Number(value));
+        input.disabled = false;
+    });
+    updateSelectionSummary();
+};
+
 const updatePrimaryAction = () => {
     const button = document.getElementById('btn-bulk-booster-preview');
     if (!button) return;
-    button.innerHTML = shouldSkipBulkPreview(PREVIEW_KEY)
+    const total = [...document.querySelectorAll('.bulk-booster-qty')].reduce((sum, input) => sum + (getSelectedQuantity(input) || 0), 0);
+    const needsPreview = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'booster-activation', quantity: total });
+    button.innerHTML = shouldSkipBulkPreview(PREVIEW_KEY) || !needsPreview
         ? '<iconify-icon icon="lucide:zap" aria-hidden="true"></iconify-icon> Activate Selected Boosters'
         : '<iconify-icon icon="lucide:calculator" aria-hidden="true"></iconify-icon> Preview Activation';
 };
@@ -118,11 +146,13 @@ const renderConfig = entries => {
     if (!body) return;
     const state = getState();
     const now = Date.now();
+    const quantityPresets = getQuantityPresets('booster-activation');
 
     body.innerHTML = `
         <div class="bulk-presets-bar" role="group" aria-label="Booster activation quantity preset">
             <span class="bulk-presets-label">Quantity preset:</span>
-            <button type="button" class="preset-chip bulk-booster-mode active" data-mode="allOwned" aria-pressed="true">All Owned</button>
+            ${quantityPresets.presets.map(preset => `<button type="button" class="preset-chip bulk-booster-quantity-preset" data-quantity-preset="${preset.value}" aria-pressed="false" ${preset.enabled ? '' : 'disabled'}>${preset.label}</button>`).join('')}
+            <button type="button" class="preset-chip bulk-booster-mode" data-mode="allOwned" aria-pressed="false">All Owned</button>
             <button type="button" class="preset-chip bulk-booster-mode" data-mode="oneEach" aria-pressed="false">One Each</button>
             <button type="button" class="preset-chip bulk-booster-mode" data-mode="custom" aria-pressed="false">Custom</button>
             <span id="bulk-booster-selection-summary" class="bulk-selection-summary" aria-live="polite"></span>
@@ -152,7 +182,7 @@ const renderConfig = entries => {
                                 <td><span class="charter-badge badge-purple">${escapeHtml(entry.action.toUpperCase())} ${escapeHtml(entry.tier)}</span></td>
                                 <td title="${formatNumberCommas(entry.quantity)} owned">${formatDisplayNumber(entry.quantity)}</td>
                                 <td>
-                                    <input type="number" class="qty-input bulk-booster-qty" data-item="${escapeHtml(entry.itemName)}" data-duration-ms="${entry.durationMs}" aria-label="Quantity of ${escapeHtml(displayItemName(entry.itemName))} to activate" inputmode="numeric" min="0" max="${entry.quantity}" value="${entry.quantity}" disabled>
+                                    <input type="number" name="bulk-booster-quantity" class="qty-input bulk-booster-qty" data-item="${escapeHtml(entry.itemName)}" data-duration-ms="${entry.durationMs}" aria-label="Quantity of ${escapeHtml(displayItemName(entry.itemName))} to activate" inputmode="numeric" autocomplete="off" min="0" max="${entry.quantity}" value="${entry.quantity}" disabled>
                                 </td>
                                 <td>${activeText}</td>
                                 <td class="bulk-booster-duration-add">+${formatDuration(entry.durationMs * entry.quantity)}</td>
@@ -166,6 +196,9 @@ const renderConfig = entries => {
     body.querySelectorAll?.('.bulk-booster-mode').forEach(button => {
         button.addEventListener('click', () => applyMode(button.dataset.mode, currentMode));
     });
+    body.querySelectorAll?.('.bulk-booster-quantity-preset').forEach(button => {
+        button.addEventListener('click', () => applyQuantityPreset(button.dataset.quantityPreset));
+    });
     body.querySelectorAll?.('.bulk-booster-qty').forEach(input => {
         input.addEventListener('input', updateSelectionSummary);
         input.addEventListener('change', () => {
@@ -176,8 +209,7 @@ const renderConfig = entries => {
         });
     });
 
-    currentMode = 'allOwned';
-    applyMode('allOwned');
+    applyQuantityPreset('max');
     updatePrimaryAction();
 };
 
@@ -301,7 +333,9 @@ const handlePrimaryAction = async triggerButton => {
     lastOptions = options;
 
     try {
-        if (shouldSkipBulkPreview(PREVIEW_KEY)) {
+        const total = Object.values(options.quantities || {}).reduce((sum, quantity) => sum + quantity, 0);
+        const needsPreview = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'booster-activation', quantity: total });
+        if (shouldSkipBulkPreview(PREVIEW_KEY) || !needsPreview) {
             await executeSelection(options, triggerButton);
             return;
         }

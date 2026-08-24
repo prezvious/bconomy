@@ -18,10 +18,11 @@ A persistent text-based economy and incremental game engine built with Node.js, 
 - **Prestige System** — Reset progression to earn prestige points and unlock permanent perks.
 - **Farming** — Plant crops on expandable plots, mark reusable plot selections, bulk-upgrade all, typed, or marked plots through Level 16, accelerate every active plot with global watering, and manage harvests through Crop Storage & Logistics.
 - **Inventory & Item Details** — Search, filter, sort, switch between regular and compact item-card grids, and activate owned boosters in one atomic bulk action.
+- **Realistic Crafting** — Gather 450 general-purpose raw materials and build 216 new products across 18 production domains using direct or recursive atomic recipes.
 - **System Shop** — Buy rotating stock, sell inventory, activate boosters, and preview atomic bulk trades.
 - **Factions** — Create a faction, fund its treasury, and configure duration or continuous action multipliers.
 - **Gambling** — Play coinflip and slots modes with server-validated wagers.
-- **Display Preferences** — Choose no number prefix (the default) or named values, plus dense, balanced, or comfortable interface sizing.
+- **Display Preferences** — Choose number formatting and interface density, then configure shared quantity presets globally, per system, or for an individual item.
 - **REST API** — Modular API layer enabling front-end interactions and state synchronization.
 
 ---
@@ -71,13 +72,19 @@ The test runner discovers CommonJS and ES-module suites in `tests/`, including e
 
 Display, notification, and bulk-action preferences are stored locally under `bconomy_user_settings`; they do not mutate the player economy state. The Number Prefix setting defaults to **No prefix**, which displays complete comma-separated values. **Value names** renders `thousand` through `quintillion` with two decimal places while exact values remain available in editable fields and contextual tooltips.
 
-Bulk Buy, Bulk Sell, bulk Tool upgrades, bulk Perk upgrades, and Bulk Booster Activation show an itemized preview by default. The global `bulkActions.skipAllPreviews` preference or an action-specific “Don’t show this preview again” choice can suppress those previews without hiding required configuration dialogs. Resetting ignored confirmations clears action-specific suppressions. `inventory.showUnavailableBoosterAction` controls whether the disabled Inventory booster action remains visible when no usable boosters are owned.
+Quantity-enabled systems resolve four editable values plus an immutable **Max** action through global → system → item inheritance. The default values are 1, 10, 100, and 1000. Preview policy can be set to every operation, recursive only, large quantities only, or never; the global `bulkActions.skipAllPreviews` option remains the final override. `inventory.showUnavailableBoosterAction` controls whether the disabled Inventory booster action remains visible when no usable boosters are owned.
 
 All application pop-ups use the shared native `<dialog>` controller. Transactional dialogs require an explicit action or cancellation, while passive item details may close from the backdrop. Escape and focus restoration are handled consistently.
 
 ### Farm management
 
 The Farm **Manage** dialog keeps free Plant All controls on its default **Plant Seeds** tab and provides mandatory-preview bulk upgrades on **Upgrade Plots**. Bulk targets can include every plot, a typed expression such as `1, 3, 5-8`, or the persistent marked set. Marks are stored with player farm state until cleared. Material allocation repeatedly favors the lowest projected plot level and then the lowest plot number, while unaffordable targets do not block other affordable upgrades.
+
+### Crafting
+
+Successful Mine, Explore, Hunt, and Fish actions award 8–15 distinct material stacks selected without replacement from that action's source pool. New crafting stock is excluded from shop listings and transmutation. The Crafting workspace provides Standard, Compact, and Super Compact views with persisted filters and sorting.
+
+Direct mode consumes only owned recipe inputs. Recursive mode plans and produces missing craftable prerequisites from atomic raw stock, consumes owned intermediates before newly produced ones, and commits the entire plan only when every dependency is available. Locked item types are never consumed. See `docs/crafting-system.md` for the operational guide and `docs/crafting-catalog.md` for the complete generated catalog.
 
 ---
 

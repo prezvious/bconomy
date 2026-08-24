@@ -16,7 +16,9 @@ import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { renderHeader, renderAll } from './header.js';
 import { renderInventory } from './inventory.js';
-import { openDialog, closeDialog } from './modal.js';
+import { openDialog, closeDialog, showConfirmation } from './modal.js';
+import { quantityPresetButtonsHtml } from './quantityPresets.js';
+import { getStoredSettings, shouldConfirmQuantityOperation } from '../preferences.js';
 
 let cachedDescriptions = null;
 let cachedFarmMaterials = null;
@@ -326,6 +328,8 @@ export const openItemModal = async (rawName) => {
         if (sellQtyInput) {
             sellQtyInput.value = 1;
         }
+        const sellPresets = document.getElementById('item-modal-sell-presets');
+        if (sellPresets) sellPresets.innerHTML = quantityPresetButtonsHtml({ systemId: 'shop-sell', subjectId: rawName, maxValue: qty, activeValue: 1, targetId: 'item-modal-sell-qty' });
 
         const getParsedQty = () => {
             const rawVal = sellQtyInput ? sellQtyInput.value.trim() : '1';
@@ -355,10 +359,10 @@ export const openItemModal = async (rawName) => {
         updatePayout();
 
         // Preset Chips
-        const presetChips = sellSection.querySelectorAll('.preset-chip');
+        const presetChips = sellSection.querySelectorAll('[data-quantity-preset]');
         presetChips.forEach(chip => {
             chip.onclick = () => {
-                const type = chip.dataset.qty;
+                const type = chip.dataset.quantityPreset;
                 if (type === 'max') {
                     sellQtyInput.value = qty;
                 } else {
@@ -373,6 +377,11 @@ export const openItemModal = async (rawName) => {
             btnConfirmSell.onclick = async () => {
                 const requestedQty = getParsedQty();
                 try {
+                    const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'shop-sell', subjectId: rawName, quantity: requestedQty });
+                    if (needsConfirmation) {
+                        const confirmed = await showConfirmation('itemSellQuantity', 'Confirm sale', `Sell ${formatDisplayNumber(requestedQty)}× ${displayName} for ${formatMoney(requestedQty * unitSellPrice)}?`, { allowIgnore: false });
+                        if (!confirmed) return;
+                    }
                     btnConfirmSell.disabled = true;
                     const res = await apiCall('/api/shop/sell', 'POST', {
                         itemName: rawName,

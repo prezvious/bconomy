@@ -413,7 +413,45 @@ Bulk booster results report `itemsAffectedCount`, `totalUnits`, an inventory-key
 
 ---
 
-## 8. Verification & Operational Status
+## 8. Crafting System Architecture (v3.0.0)
+
+The crafting subsystem is a data-driven dependency planner spanning 450 new raw materials and 216 new craftables across 18 practical domains. The authoritative catalog is defined in `src/data/craftingMaterials.js`, `src/data/craftingBlueprints.js`, and `src/data/craftingCatalog.js`; a generated human-readable reference is maintained in `docs/crafting-catalog.md`.
+
+### Catalog composition and acquisition
+
+| Catalog property | Contract |
+| :--- | :--- |
+| New raw materials | 450: 25 in each of 18 domains |
+| New craftables | 216: 12 in each domain |
+| Craftable roles | 130 intermediates and 86 finished products |
+| New recipe forms | 60 raw-only, 96 mixed, and 60 crafted-only |
+| Material sources | 200 Mine, 160 Explore, 50 Hunt, and 40 Fish |
+| Successful action award | 8–15 distinct stacks, weighted without replacement |
+| Integrated recipes | 10 legacy derived components and 15 socket modules |
+
+Material drops use the existing shared inventory and action multipliers. New catalog entries are intentionally excluded from shop stock and transmutation. This preserves gathering as their acquisition path while letting the same material IDs support crafting, tool improvements, farm facilities, buildings, and later systems.
+
+### Planning and transaction model
+
+`src/engine/craftingEngine.js` exposes one planner to both preview and execution:
+
+1. **Direct mode** verifies and consumes only the selected recipe's immediate ingredients.
+2. **Recursive mode** reserves owned crafted inputs first, recursively creates only missing intermediates, detects cycles, aggregates atomic raw costs, and reports surplus intermediate output caused by batch sizes.
+3. **Maximum mode** uses bounded binary search over the same planner, so the displayed maximum and executable maximum cannot drift apart.
+4. **Atomic execution** plans against a cloned inventory, rejects any shortage without mutation, and commits the clone only after the entire plan succeeds.
+5. **Locked-item protection** removes locked quantities from availability at every dependency level and prevents their consumption.
+
+The server provides `GET /api/data/crafting-catalog`, `POST /api/crafting/preview`, and `POST /api/crafting/execute`. Preview is non-mutating; successful execution returns the updated player state, the full dependency plan, costs, steps, surplus, and output.
+
+### Client and preferences
+
+The Crafting panel supports Standard master/detail, Compact expandable-card, and Super Compact virtualized-row views. Search, domain, classification, effort, recipe-form, craftability, and sort controls persist locally. On narrow layouts the detail workflow moves into a native accessible dialog.
+
+Quantity controls share a single preference resolver with the precedence `subject override → system override → global default`. Default buttons are `1`, `10`, `100`, `1000`, and `Max`; values, maximum visibility, preview policy, and large-operation threshold can be configured in Settings. The resolver is used by crafting, shop purchases, shop sales, booster activation, socket-module crafting, tool upgrades, and perk upgrades.
+
+---
+
+## 9. Verification & Operational Status
 
 All core game engine logic, state persistence models, mathematical calculations, and API contracts have been thoroughly verified against the test suite (`node tests/run_all_tests.js`):
 *   `test_all_engines.js`: **PASSING**

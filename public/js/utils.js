@@ -145,6 +145,9 @@ export const getItemCategory = (itemName) => {
     if (FARM_UPGRADE_ITEM_ICONS[normalized]) return 'Farm Upgrade Material';
     const spaced = displayItemName(itemName).toLowerCase();
 
+    if (/\b(assembly|module|station|workstation|cabinet|enclosure|workbench|lathe|press|skid|aircraft|airframe|habitat|laboratory|harness|tool chest|storage rack|field shelter|motor|pump|separator|sieve|divider|crusher)\b/.test(spaced)) return 'crafted';
+    if (/\b(sheet|plate|rod|tube|pipe|spool|pellet|powder|granule|fabric|fiber|membrane|blank|ingot|resin|aggregate|bale|lumber|acid|solution|oil)\b/.test(spaced)) return 'material';
+
     if (/\b(fish|fishes|salmon|tuna|bass|trout|shrimp|shrimps|crab|crabs|lobster|lobsters|eel|eels|sardine|sardines|prawn|prawns|octopus|octopuses|squid|squids|blowfish|ray|rays|coelacanth|oyster|oysters|clamshell|clamshells|bottle|coral|seaweed|algae|jellyfish|greatwhite|great white|pearl)\b/.test(spaced)) return 'fish';
     if (/\b(meat|meats|steak|steaks|beef)\b/.test(spaced)) return 'meat';
     if (/\b(ore|ores|coal|iron|gold|silver|copper|gem|gems|diamond|diamonds|ruby|rubies|emerald|emeralds|sapphire|sapphires|alexandrite|stone|stones|rock|rocks|crystal|crystals|quartz|titanium|uranium|platinum|cobalt|lithium|aluminum|tin|flint|obsidian|neodymium|iridium|tungsten|petroleum|clay|meteorite|scale)\b/.test(spaced)) return 'ore';

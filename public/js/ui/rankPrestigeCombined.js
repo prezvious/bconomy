@@ -6,6 +6,8 @@ import { renderHeader, renderAll } from './header.js';
 import { showToast } from './toast.js';
 import { showConfirmation, openDialog, closeDialog } from './modal.js';
 import { addLogEntry } from './log.js';
+import { getQuantityPresets } from './quantityPresets.js';
+import { getStoredSettings, shouldConfirmQuantityOperation } from '../preferences.js';
 
 export const renderRankPrestige = () => {
     const playerState = getState();
@@ -134,10 +136,8 @@ const renderPerksGrid = () => {
             let countToBuy = 1;
             if (mode === 'max') {
                 countToBuy = Math.min(points, remaining);
-            } else if (mode === '5') {
-                countToBuy = Math.min(5, points, remaining);
             } else {
-                countToBuy = 1;
+                countToBuy = Math.min(Number(mode) || 1, points, remaining);
             }
 
             if (countToBuy < 1) return;
@@ -145,15 +145,12 @@ const renderPerksGrid = () => {
             const targetLevel = level + countToBuy;
             const costStr = `${countToBuy} Prestige Point${countToBuy > 1 ? 's' : ''}`;
 
-            const isBulkUpgrade = mode === '5' || mode === 'max';
-            const confirmed = await showConfirmation(
-                isBulkUpgrade ? 'bulkPerkUpgrade' : 'perkUpgrade',
-                'Upgrade Perk?',
+            const quantity = mode === 'max' ? 'max' : countToBuy;
+            const needsConfirmation = shouldConfirmQuantityOperation({ settings: getStoredSettings(), systemId: 'perk-upgrades', subjectId: id, quantity });
+            const confirmed = !needsConfirmation || await showConfirmation(
+                'bulkPerkUpgrade', 'Upgrade Perk?',
                 `Spend ${costStr} to upgrade ${data.name} to Level ${targetLevel}?`,
-                isBulkUpgrade ? {
-                    bulkAction: true,
-                    ignoreLabel: "Don't show this preview again"
-                } : {}
+                { bulkAction: true, ignoreLabel: "Don't show this preview again" }
             );
             if (!confirmed) return;
 
@@ -184,11 +181,8 @@ const renderPerksGrid = () => {
         const remaining = Math.max(0, maxLevel - level);
         const isComingSoon = ['backchannel'].includes(id);
 
-        const canAfford1 = points >= 1 && !isMax;
-        const cost5 = Math.min(5, remaining);
-        const canAfford5 = points >= 1 && remaining > 1 && !isMax;
-        const costMax = Math.min(points > 0 ? points : remaining, remaining);
-        const canAffordMax = points >= 1 && remaining > 1 && !isMax;
+        const affordableLevels = Math.min(points, remaining);
+        const perkPresets = getQuantityPresets('perk-upgrades', id, affordableLevels);
 
         let card = grid.querySelector(`[data-perk-id="${id}"]`);
 
@@ -203,15 +197,11 @@ const renderPerksGrid = () => {
         } else {
             actionsHtml = `
                 <div class="perk-btn-group">
-                    <button class="action-btn primary-btn btn-perk-buy" data-perk-id="${id}" data-buy-mode="1" ${!canAfford1 ? 'disabled' : ''}>
-                        +1 <span class="btn-cost-tag">(1 Pt)</span>
-                    </button>
-                    <button class="action-btn secondary-btn btn-perk-buy" data-perk-id="${id}" data-buy-mode="5" ${!canAfford5 ? 'disabled' : ''}>
-                        +5 <span class="btn-cost-tag">(${cost5} Pts)</span>
-                    </button>
-                    <button class="action-btn accent-btn btn-perk-buy" data-perk-id="${id}" data-buy-mode="max" ${!canAffordMax ? 'disabled' : ''}>
-                        Max <span class="btn-cost-tag">(${costMax} Pts)</span>
-                    </button>
+                    ${perkPresets.presets.map((preset, index) => {
+                        const cost = preset.max ? affordableLevels : Math.min(Number(preset.value) || 0, affordableLevels);
+                        const disabled = !preset.enabled || affordableLevels < 1;
+                        return `<button class="action-btn ${preset.max ? 'accent-btn' : index === 0 ? 'primary-btn' : 'secondary-btn'} btn-perk-buy" data-perk-id="${id}" data-buy-mode="${preset.value}" ${disabled ? 'disabled' : ''}>${preset.max ? 'Max' : `+${preset.label}`} <span class="btn-cost-tag">(${cost} Pt${cost === 1 ? '' : 's'})</span></button>`;
+                    }).join('')}
                 </div>
             `;
         }
