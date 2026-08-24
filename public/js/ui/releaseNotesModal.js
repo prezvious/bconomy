@@ -3,9 +3,41 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v3.1.1',
+        version: 'v3.1.1',
+        isLatest: true,
+        date: '2026-08-24',
+        title: 'v3.1.1 — Small-Screen Layout & Navigation',
+        sections: [
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Fixed Mobile Navigation',
+                        bullets: [
+                            'Replaced the oversized, horizontally scrolling phone navigation with five equal destinations for Actions, Farm, Inventory, Crafting, and More.',
+                            'Added an accessible More sheet for Shop, Tools, Rank & Ascension, Gambling, Faction, and Settings while preserving the full desktop sidebar.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'Narrow-Screen Content Containment',
+                        bullets: [
+                            'Reflowed gathering cards so action buttons, cooldown progress, Ready states, and Work streak details remain inside their cards.',
+                            'Stacked Crop Storage claim controls when needed and constrained narrow layout children to prevent page-level horizontal overflow.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v3.1.0',
         version: 'v3.1.0',
-        isLatest: true,
         date: '2026-08-24',
         title: 'v3.1.0 — Keyboard Controls, Custom Commands & Contextual Help',
         sections: [
@@ -493,7 +525,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v3.1.0']); // Latest release expanded by default
+const expandedVersions = new Set(['v3.1.1']); // Latest release expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

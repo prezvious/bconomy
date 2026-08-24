@@ -16,6 +16,28 @@ import { showToast } from './ui/toast.js';
 import { addLogEntry } from './ui/log.js';
 import { showConfirmation, openDialog, closeDialog } from './ui/modal.js';
 
+const MOBILE_PRIMARY_SECTIONS = new Set(['actions', 'farm', 'inventory', 'crafting']);
+
+const syncMobileNavigation = (target, directTab) => {
+    const moreButton = document.getElementById('btn-mobile-more');
+    if (!moreButton) return;
+
+    const isSecondary = Boolean(target) && !MOBILE_PRIMARY_SECTIONS.has(target);
+    const currentLabel = directTab?.getAttribute('aria-label') || directTab?.textContent?.trim() || target;
+
+    moreButton.classList.toggle('active', isSecondary);
+    moreButton.setAttribute('aria-label', isSecondary ? `More sections, current section: ${currentLabel}` : 'More sections');
+    if (isSecondary) moreButton.setAttribute('aria-current', 'page');
+    else moreButton.removeAttribute('aria-current');
+
+    document.querySelectorAll('[data-mobile-tab]').forEach(item => {
+        const active = item.dataset.mobileTab === target;
+        item.classList.toggle('active', active);
+        if (active) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+    });
+};
+
 export const activateSection = (target, { focus = false } = {}) => {
     const tabs = document.querySelectorAll('.nav-btn');
     const panels = document.querySelectorAll('.panel');
@@ -29,6 +51,7 @@ export const activateSection = (target, { focus = false } = {}) => {
         if (active) item.setAttribute('aria-current', 'page');
         else item.removeAttribute('aria-current');
     });
+    syncMobileNavigation(target, tab);
     panels.forEach(panel => panel.classList.toggle('active', panel === targetPanel));
     document.title = `Bconomy — ${tab.getAttribute('aria-label') || tab.textContent.trim()}`;
     if (focus) tab.focus?.({ preventScroll: true });
@@ -55,12 +78,38 @@ export const setupNavigation = () => {
     setupAccordion();
     setupTargetedModal();
 
-    const tabs = document.querySelectorAll('.nav-btn');
+    const tabs = document.querySelectorAll('.nav-btn[data-tab]');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             activateSection(tab.dataset.tab);
         });
     });
+
+    const mobileMoreButton = document.getElementById('btn-mobile-more');
+    const mobileMoreDialog = document.getElementById('mobile-more-dialog');
+    if (mobileMoreButton && mobileMoreDialog && mobileMoreButton.dataset.navigationBound !== 'true') {
+        mobileMoreButton.dataset.navigationBound = 'true';
+        mobileMoreButton.addEventListener('click', () => {
+            mobileMoreButton.setAttribute('aria-expanded', 'true');
+            openDialog(mobileMoreDialog, {
+                initialFocus: '.mobile-more-destination.active, .mobile-more-destination',
+                closeOnBackdrop: true,
+                returnFocus: mobileMoreButton,
+                onClose: () => mobileMoreButton.setAttribute('aria-expanded', 'false')
+            });
+        });
+
+        mobileMoreDialog.addEventListener('click', event => {
+            const destination = event.target.closest?.('[data-mobile-tab]');
+            if (!destination || !mobileMoreDialog.contains(destination)) return;
+            if (activateSection(destination.dataset.mobileTab)) {
+                closeDialog(mobileMoreDialog, { reason: 'navigate' });
+            }
+        });
+    }
+
+    const activeTab = document.querySelector('.nav-btn[data-tab].active');
+    syncMobileNavigation(activeTab?.dataset.tab, activeTab);
 
     // Farm Action Listeners
     const btnGlobalWater = document.getElementById('btn-global-water');

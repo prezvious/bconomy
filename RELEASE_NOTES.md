@@ -4,6 +4,18 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v3.1.1] — 2026-08-24
+
+### Changed
+- Replaced the oversized, horizontally scrolling phone navigation with a fixed five-destination bar for Actions, Farm, Inventory, Crafting, and More.
+- Added a compact, accessible More sheet for Shop, Tools, Rank & Ascension, Gambling, Faction, and Settings while preserving the full desktop sidebar.
+
+### Fixed
+- Reflowed narrow gathering cards so action buttons, cooldown progress, Ready states, and Work streak details stay within their cards.
+- Stacked Crop Storage claim controls when necessary and constrained narrow flex and grid children to prevent page-level horizontal overflow.
+
+---
+
 ## [v3.1.0] — 2026-08-24
 
 ### Added

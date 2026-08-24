@@ -17,7 +17,7 @@ assert.deepEqual(duplicateIds, [], `HTML IDs must be unique: ${duplicateIds.join
 const dialogOpenCount = (html.match(/<dialog\b/g) || []).length;
 const dialogCloseCount = (html.match(/<\/dialog>/g) || []).length;
 assert.equal(dialogOpenCount, dialogCloseCount, 'Every dialog opening tag must be closed');
-assert.equal(dialogOpenCount, 20, 'All twenty app dialogs use the shared native pattern');
+assert.equal(dialogOpenCount, 21, 'All twenty-one app dialogs use the shared native pattern');
 
 for (const match of html.matchAll(/<dialog\b([^>]*)>/g)) {
     const attributes = match[1];
@@ -52,7 +52,9 @@ for (const requiredId of [
     'help-handbook-dialog',
     'btn-help-utility',
     'btn-console-utility',
-    'utility-rail'
+    'utility-rail',
+    'btn-mobile-more',
+    'mobile-more-dialog'
 ]) {
     assert(ids.includes(requiredId), `Required redesigned control #${requiredId} is present`);
 }
@@ -63,11 +65,13 @@ assert(css.includes('.toolbar-search.is-collapsed') && css.includes('.toolbar-se
 assert(css.includes('.page-toolbar.search-collapsed') && css.includes('.page-toolbar.search-expanded'), 'Toolbar grid responds to search state');
 assert(css.includes('/* Mobile Tab Bar */'), 'Mobile navigation uses a dedicated tab bar treatment');
 assert(css.includes('env(safe-area-inset-bottom)'), 'Mobile navigation respects device safe areas');
-assert(css.includes('overscroll-behavior-x: contain'), 'Mobile navigation contains horizontal overscroll');
 assert(/\.nav-links\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0[^}]*overflow-y:\s*auto[^}]*overscroll-behavior-y:\s*contain/s.test(css), 'Desktop sidebar navigation owns a bounded vertical scroll region');
 assert(/\.logo-container\s*\{[^}]*flex:\s*0 0 auto/s.test(css), 'Desktop sidebar logo remains outside the scroll region');
 assert(/\.sidebar-footer\s*\{[^}]*flex:\s*0 0 auto/s.test(css), 'Desktop sidebar footer remains outside the scroll region');
-assert(/@media \(max-width: 640px\)[\s\S]*\.nav-links\s*\{[^}]*flex-direction:\s*row[^}]*overflow:\s*visible/s.test(css), 'Mobile navigation delegates horizontal scrolling to the tab bar');
+assert(/@media \(max-width: 640px\)[\s\S]*\.nav-links\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)[^}]*overflow:\s*hidden/s.test(css), 'Mobile navigation uses five fixed, non-scrolling destinations');
+assert(/\.nav-btn\.nav-secondary\s*\{[^}]*display:\s*none/s.test(css), 'Secondary mobile destinations move into the More sheet');
+assert.equal((html.match(/class="nav-btn nav-primary/g) || []).length, 4, 'Four primary destinations remain directly available on phones');
+assert.equal((html.match(/data-mobile-tab=/g) || []).length, 6, 'The More sheet exposes all six secondary destinations');
 assert(css.includes('touch-action: manipulation'), 'Mobile navigation buttons are touch-optimized');
 assert(css.includes('.guild-sidebar .sidebar-footer'), 'Mobile navigation hides desktop sidebar chrome');
 assert(css.includes('@media (max-width: 380px)'), 'The UI includes a narrow 360px-safe breakpoint');
