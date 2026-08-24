@@ -1,6 +1,9 @@
 // Activity Log & Console Chat Stream Manager
 import { showToast } from './toast.js';
 import { evaluateMathExpression, isPureMathExpression, renderLaTeXPreview } from '../utils/calculator.js';
+import { COMMAND_DEFINITIONS, getCommandNames, resolveCommand } from '../controlRegistry.js';
+import { getStoredSettings } from '../preferences.js';
+import { openFullHelp } from './utilityRail.js';
 
 let isErrorFilterActive = false;
 const consoleHandlerBindings = new WeakMap();
@@ -312,6 +315,70 @@ export const setupConsoleHandlers = () => {
     // Console command input bar
     const cmdInput = document.getElementById('console-cmd-input');
     const sendBtn = document.getElementById('btn-console-send');
+    const suggestions = document.getElementById('console-command-suggestions');
+    let suggestionItems = [];
+    let selectedSuggestionIndex = 0;
+
+    const closeSuggestions = () => {
+        suggestionItems = [];
+        selectedSuggestionIndex = 0;
+        suggestions?.classList.add('hidden');
+        suggestions?.replaceChildren();
+        cmdInput?.setAttribute('aria-expanded', 'false');
+        cmdInput?.removeAttribute('aria-activedescendant');
+    };
+
+    const currentCommandSuggestions = rawValue => {
+        const match = String(rawValue || '').match(/^\/([^\s/]*)$/);
+        if (!match) return [];
+        const query = match[1].toLowerCase();
+        const controls = getStoredSettings().controls;
+        return COMMAND_DEFINITIONS.map(definition => {
+            const names = getCommandNames(definition, controls);
+            const primary = controls.commands[definition.id]?.primary || definition.defaultName;
+            const matchedAliases = names.filter(name => name !== primary && name.startsWith(query));
+            return { definition, primary, names, matchedAliases };
+        }).filter(entry => entry.primary.startsWith(query) || entry.matchedAliases.length)
+            .sort((a, b) => {
+                const aPrimary = a.primary.startsWith(query) ? 0 : 1;
+                const bPrimary = b.primary.startsWith(query) ? 0 : 1;
+                return aPrimary - bPrimary || a.primary.localeCompare(b.primary);
+            });
+    };
+
+    const renderSuggestions = () => {
+        if (!cmdInput || !suggestions) return;
+        suggestionItems = currentCommandSuggestions(cmdInput.value);
+        if (!suggestionItems.length) {
+            closeSuggestions();
+            return;
+        }
+        selectedSuggestionIndex = Math.min(selectedSuggestionIndex, suggestionItems.length - 1);
+        suggestions.innerHTML = suggestionItems.map((entry, index) => `
+            <button id="console-command-option-${index}" class="console-command-option ${index === selectedSuggestionIndex ? 'active' : ''}" type="button" role="option" aria-selected="${index === selectedSuggestionIndex}" data-command-index="${index}">
+                <code>/${escapeHtml(entry.primary)}${entry.definition.usage ? ` ${escapeHtml(entry.definition.usage)}` : ''}</code>
+                ${entry.matchedAliases.length ? `<small>Alias: /${escapeHtml(entry.matchedAliases[0])}</small>` : ''}
+                <span>${escapeHtml(entry.definition.description)}</span>
+            </button>
+        `).join('');
+        suggestions.classList.remove('hidden');
+        cmdInput.setAttribute('aria-expanded', 'true');
+        cmdInput.setAttribute('aria-activedescendant', `console-command-option-${selectedSuggestionIndex}`);
+        suggestions.querySelectorAll('[data-command-index]').forEach(button => {
+            button.addEventListener('mousedown', event => event.preventDefault());
+            button.addEventListener('click', () => completeSuggestion(Number(button.dataset.commandIndex)));
+        });
+    };
+
+    const completeSuggestion = index => {
+        const entry = suggestionItems[index];
+        if (!entry || !cmdInput) return false;
+        cmdInput.value = `/${entry.primary}${entry.definition.usage ? ' ' : ''}`;
+        closeSuggestions();
+        cmdInput.focus();
+        cmdInput.setSelectionRange?.(cmdInput.value.length, cmdInput.value.length);
+        return true;
+    };
 
     const handleExecuteCmd = async () => {
         if (!cmdInput) return;
@@ -319,13 +386,17 @@ export const setupConsoleHandlers = () => {
         if (!rawVal) return;
 
         cmdInput.value = '';
+        closeSuggestions();
 
-        // 1. Check for /calc or /math or /c slash command
-        const isCalcCommand = /^\/(?:calc|math|c)(?:\s+|$)/i.test(rawVal);
-        if (isCalcCommand) {
-            const expr = rawVal.replace(/^\/(?:calc|math|c)\s*/i, '').trim();
+        const slashMatch = rawVal.match(/^\/([^\s/]+)(?:\s+([\s\S]*))?$/);
+        const resolved = slashMatch ? resolveCommand(slashMatch[1], getStoredSettings().controls) : null;
+        const commandId = resolved?.definition.id || '';
+        const commandArgs = slashMatch?.[2] || '';
+
+        if (commandId === 'calc') {
+            const expr = commandArgs.trim();
             if (!expr) {
-                addLogEntry('Usage: /calc <expression> or /math <expression> (e.g. /calc 1.5m + 500k)', 'error');
+                addLogEntry(`Usage: /${resolved.primary} <expression> (e.g. /${resolved.primary} 1.5m + 500k)`, 'error');
                 return;
             }
             const calcResult = evaluateMathExpression(expr);
@@ -337,8 +408,7 @@ export const setupConsoleHandlers = () => {
             return;
         }
 
-        // 2. Check for pure standalone math expressions (e.g., "8 * 8", "9/3 * (39 + 3)", "500k + 2m")
-        if (isPureMathExpression(rawVal)) {
+        if (!slashMatch && isPureMathExpression(rawVal)) {
             const calcResult = evaluateMathExpression(rawVal);
             if (calcResult.success) {
                 addLogEntry(calcResult, 'calculator');
@@ -346,9 +416,12 @@ export const setupConsoleHandlers = () => {
             }
         }
 
-        const cmd = rawVal.toLowerCase().replace('/', '');
+        if (slashMatch && !resolved) {
+            addLogEntry(`Unknown command '${rawVal}'. Type / to browse commands or use /help for the handbook.`, 'error');
+            return;
+        }
 
-        if (cmd === 'clear') {
+        if (commandId === 'clear') {
             if (log) log.innerHTML = '';
             isErrorFilterActive = false;
             if (statusBtn) statusBtn.classList.remove('filter-active');
@@ -356,64 +429,67 @@ export const setupConsoleHandlers = () => {
             return;
         }
 
-        if (cmd === 'help') {
-            addLogEntry('Available Console Commands:\n• /mine, /explore, /hunt, /fish, /work - Execute actions\n• /calc <expr>, /math <expr> - Evaluate mathematical calculations (also supports raw math e.g. 8 * 8, 1.5m + 500k)\n• /boost <action> <tier> - Activate booster (e.g. /boost mine T1, /boost explore all, /boost all)\n• /use <item> - Activate booster item from inventory\n• /clear - Clear log feed', 'system');
+        if (commandId === 'help') {
+            openFullHelp({ returnFocus: cmdInput });
             return;
         }
 
-        if (cmd.startsWith('boost ') || cmd.startsWith('use ')) {
-            const parts = rawVal.trim().split(/\s+/);
-            const subCmd = parts[0].toLowerCase().replace('/', '');
+        if (commandId === 'boost' || commandId === 'use') {
+            const parts = commandArgs.trim().split(/\s+/).filter(Boolean);
 
-            if (subCmd === 'boost') {
-                const targetAction = (parts[1] || '').toLowerCase();
-                const targetTier = (parts[2] || 'T1').toUpperCase();
+            if (commandId === 'boost') {
+                const targetAction = (parts[0] || '').toLowerCase();
+                const targetTier = (parts[1] || 'T1').toUpperCase();
 
                 const { doActivateBoosterDirect } = await import('../api.js');
-                const { renderActions } = await import('./actions.js');
                 const { renderAll } = await import('./header.js');
 
-                if (targetAction === 'all') {
-                    // Activate all tiers for all actions
-                    const actionsList = ['mine', 'explore', 'hunt', 'fish'];
-                    const tiersList = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
-                    for (const a of actionsList) {
-                        for (const t of tiersList) {
-                            await doActivateBoosterDirect(a, t);
-                        }
-                    }
-                    showToast('Activated 64× Loot Boosters for all actions!', 'success');
-                    addLogEntry('Activated all T1–T6 loot boosters (64× multiplier) across all gathering actions!', 'rare');
-                    renderAll();
-                    return;
-                }
-
-                if (['mine', 'explore', 'hunt', 'fish'].includes(targetAction)) {
-                    if (targetTier === 'ALL') {
+                try {
+                    if (targetAction === 'all') {
+                        const actionsList = ['mine', 'explore', 'hunt', 'fish'];
                         const tiersList = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
-                        for (const t of tiersList) {
-                            await doActivateBoosterDirect(targetAction, t);
+                        for (const action of actionsList) {
+                            for (const tier of tiersList) await doActivateBoosterDirect(action, tier);
                         }
-                        showToast(`Activated 64× Loot Boosters for ${targetAction}!`, 'success');
-                        addLogEntry(`Activated all T1–T6 loot boosters (64× multiplier) for ${targetAction.toUpperCase()}!`, 'rare');
-                    } else {
-                        const res = await doActivateBoosterDirect(targetAction, targetTier);
-                        if (res.result && res.result.message) {
-                            showToast(res.result.message, 'success');
-                            addLogEntry(res.result.message, 'bonus');
-                        }
+                        showToast('Activated owned loot boosters for all actions!', 'success');
+                        addLogEntry('Activated all available T1–T6 loot boosters across all gathering actions.', 'rare');
+                        renderAll();
+                        return;
                     }
-                    renderAll();
+
+                    if (['mine', 'explore', 'hunt', 'fish'].includes(targetAction)) {
+                        if (targetTier === 'ALL') {
+                            const tiersList = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
+                            for (const tier of tiersList) await doActivateBoosterDirect(targetAction, tier);
+                            showToast(`Activated owned loot boosters for ${targetAction}!`, 'success');
+                            addLogEntry(`Activated available T1–T6 loot boosters for ${targetAction.toUpperCase()}!`, 'rare');
+                        } else {
+                            const res = await doActivateBoosterDirect(targetAction, targetTier);
+                            if (res.result?.message) {
+                                showToast(res.result.message, 'success');
+                                addLogEntry(res.result.message, 'bonus');
+                            }
+                        }
+                        renderAll();
+                        return;
+                    }
+                    addLogEntry(`Usage: /${resolved.primary} <mine|explore|hunt|fish|all> <T1–T6|all>`, 'error');
+                    return;
+                } catch (error) {
+                    showToast(error.message || 'Failed to activate boosters', 'error');
+                    addLogEntry(`Booster activation failed: ${error.message}`, 'error');
                     return;
                 }
             }
 
-            if (subCmd === 'use') {
-                const itemName = parts.slice(1).join(' ');
+            if (commandId === 'use') {
+                const itemName = commandArgs.trim();
+                if (!itemName) {
+                    addLogEntry(`Usage: /${resolved.primary} <item>`, 'error');
+                    return;
+                }
                 const { doUseBooster } = await import('../api.js');
-                const { renderActions } = await import('./actions.js');
                 const { renderAll } = await import('./header.js');
-                const { renderInventory } = await import('./inventory.js');
 
                 try {
                     const res = await doUseBooster(itemName);
@@ -431,23 +507,42 @@ export const setupConsoleHandlers = () => {
             }
         }
 
-        if (['mine', 'explore', 'hunt', 'fish', 'work'].includes(cmd)) {
-            const btnEl = document.getElementById(`btn-act-${cmd}`);
-            if (btnEl) {
-                btnEl.click();
-            } else {
-                addLogEntry(`Executing ${cmd} action...`, 'system');
-            }
-        } else {
-            addLogEntry(`Unknown command '${rawVal}'. Type /help for available commands or use /calc for math.`, 'error');
+        if (['mine', 'explore', 'hunt', 'fish', 'work'].includes(commandId)) {
+            const { executeCoreAction } = await import('./actions.js');
+            await executeCoreAction(commandId);
+            return;
         }
+
+        addLogEntry(`Unknown command '${rawVal}'. Type / to browse commands.`, 'error');
     };
 
     if (sendBtn) {
         bindConsoleEvent(sendBtn, 'click', handleExecuteCmd);
     }
     if (cmdInput) {
+        bindConsoleEvent(cmdInput, 'input', () => {
+            selectedSuggestionIndex = 0;
+            renderSuggestions();
+        });
         bindConsoleEvent(cmdInput, 'keydown', (e) => {
+            const menuOpen = Boolean(suggestions && !suggestions.classList.contains('hidden') && suggestionItems.length);
+            if (menuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                e.preventDefault();
+                selectedSuggestionIndex = (selectedSuggestionIndex + (e.key === 'ArrowDown' ? 1 : -1) + suggestionItems.length) % suggestionItems.length;
+                renderSuggestions();
+                suggestions.querySelector(`[data-command-index="${selectedSuggestionIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+                return;
+            }
+            if (menuOpen && (e.key === 'Tab' || e.key === 'Enter')) {
+                e.preventDefault();
+                completeSuggestion(selectedSuggestionIndex);
+                return;
+            }
+            if (menuOpen && e.key === 'Escape') {
+                e.preventDefault();
+                closeSuggestions();
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
                 handleExecuteCmd();

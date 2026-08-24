@@ -3,9 +3,70 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v3.1.0',
+        version: 'v3.1.0',
+        isLatest: true,
+        date: '2026-08-24',
+        title: 'v3.1.0 — Keyboard Controls, Custom Commands & Contextual Help',
+        sections: [
+            {
+                type: 'Features',
+                items: [
+                    {
+                        title: 'Customizable Keyboard Controls',
+                        bullets: [
+                            'Added 18 remappable shortcuts for all main sections, the five core actions, contextual Help, Console command entry, and theme switching.',
+                            'Added searchable Controls & Commands settings with chord capture, conflict swapping, individual clearing and reset controls, full reset, and browser-local persistence.',
+                            'Shortcuts pause while typing, composing text, or using a dialog, and assigned controls expose accessible shortcut annotations.'
+                        ]
+                    },
+                    {
+                        title: 'Customizable Slash Commands',
+                        bullets: [
+                            'Added editable primary names and up to five custom aliases for all existing Console commands.',
+                            'Canonical names and built-in aliases always remain available as recovery commands.',
+                            'Added keyboard-operated autocomplete where Enter or Tab completes a suggestion before a second Enter executes it.'
+                        ]
+                    },
+                    {
+                        title: 'Contextual Help Handbook',
+                        bullets: [
+                            'Added a Help control immediately before Console in the bottom-right utility dock.',
+                            'Contextual Help follows the active section and subfeature, while Browse all topics and /help open a searchable 49-topic handbook.',
+                            'Help content explains visible player controls and outcomes without publishing internal formulas, odds, drop tables, or hidden rewards.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Responsive Help & Console Rail',
+                        bullets: [
+                            'Unified Help and Console into a switchable desktop rail and compact-screen drawer with remembered open state, safe-area-aware controls, focus restoration, and mobile-sized touch targets.',
+                            'Added context-aware page titles, handbook search status, accessible command suggestions, and current hotkey and command references inside Help.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'Crafting Workspace Scrolling',
+                        bullets: [
+                            'Improved the Crafting landing layout and bounded sidebar overflow so navigation remains usable on shorter displays.',
+                            'Made crafting detail views vertically scrollable so long recipes and previews remain reachable.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v3.0.0',
         version: 'v3.0.0',
-        isLatest: true,
         date: '2026-08-24',
         title: 'v3.0.0 — Realistic Crafting & Shared Quantity Controls',
         sections: [
@@ -432,7 +493,7 @@ export const RELEASES = [
 
 let activeCategoryFilter = 'all';
 let searchQuery = '';
-const expandedVersions = new Set(['v3.0.0']); // Latest release expanded by default
+const expandedVersions = new Set(['v3.1.0']); // Latest release expanded by default
 
 const escapeHtml = value => String(value ?? '')
     .replace(/&/g, '&amp;')

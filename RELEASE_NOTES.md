@@ -4,6 +4,32 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v3.1.0] — 2026-08-24
+
+### Added
+- **Customizable keyboard controls**:
+  - Added 18 remappable shortcuts covering all main sections, Mine, Explore, Hunt, Fish, Work, contextual Help, Console command entry, and theme switching.
+  - Added searchable Controls & Commands settings with key-chord capture, conflict swapping, unbinding, individual resets, full resets, and browser-local persistence.
+  - Added accessible shortcut annotations while suppressing global shortcuts during text entry, IME composition, key repeat, and open dialogs.
+- **Customizable slash commands**:
+  - Added editable primary names and up to five aliases for every existing Console command.
+  - Preserved canonical commands and built-in aliases as permanent recovery names.
+  - Added keyboard-operated autocomplete; Enter or Tab completes the selected command before a second Enter runs it.
+- **Contextual and full Help**:
+  - Added Help immediately before Console in the bottom-right utility dock.
+  - Added section- and subfeature-aware Help that follows the player's current workflow.
+  - Added a searchable, categorized 49-topic handbook opened through Browse all topics or `/help`.
+
+### Changed
+- Unified Help and Console into a switchable desktop rail and responsive drawer that remembers its open state while starting in Console mode.
+- Added mobile safe-area placement, 44-pixel compact touch targets, focus restoration, current hotkey and command references, contextual page titles, and spoiler-safe player-facing Help copy.
+
+### Fixed
+- Improved the Crafting landing layout and bounded sidebar scrolling on shorter displays.
+- Made long Crafting detail views vertically scrollable so recipes, plans, and controls remain reachable.
+
+---
+
 ## [v3.0.0] — 2026-08-24
 
 ### New Features

@@ -13,10 +13,13 @@ import { setupReleaseNotesModal } from './js/ui/releaseNotesModal.js';
 import { cooldownLoop } from './js/ui/cooldowns.js';
 import { addLogEntry, setupConsoleHandlers } from './js/ui/log.js';
 import { applyInterfaceSettings, SETTINGS_CHANGE_EVENT } from './js/preferences.js';
+import { setupHotkeys } from './js/controls.js';
+import { setupUtilityRail } from './js/ui/utilityRail.js';
 
 const init = async () => {
     setupThemeToggle();
     applyInterfaceSettings();
+    setupUtilityRail();
     setupConsoleHandlers();
 
     try {
@@ -56,6 +59,7 @@ const init = async () => {
         setupItemModalListeners();
         setupReleaseNotesModal();
         renderAll();
+        setupHotkeys();
 
         requestAnimationFrame(cooldownLoop);
 

@@ -19,14 +19,16 @@ export const loadTheme = () => {
     return 'light';
 };
 
+export const toggleTheme = () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    applyTheme(current === 'light' ? 'dark' : 'light');
+};
+
 export const setupThemeToggle = () => {
     applyTheme(loadTheme());
 
     const toggle = document.getElementById('theme-toggle');
     if (!toggle) return;
 
-    toggle.addEventListener('click', () => {
-        const current = document.documentElement.getAttribute('data-theme') || 'light';
-        applyTheme(current === 'light' ? 'dark' : 'light');
-    });
+    toggle.addEventListener('click', toggleTheme);
 };

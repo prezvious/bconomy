@@ -17,7 +17,7 @@ assert.deepEqual(duplicateIds, [], `HTML IDs must be unique: ${duplicateIds.join
 const dialogOpenCount = (html.match(/<dialog\b/g) || []).length;
 const dialogCloseCount = (html.match(/<\/dialog>/g) || []).length;
 assert.equal(dialogOpenCount, dialogCloseCount, 'Every dialog opening tag must be closed');
-assert.equal(dialogOpenCount, 19, 'All nineteen app dialogs use the shared native pattern');
+assert.equal(dialogOpenCount, 20, 'All twenty app dialogs use the shared native pattern');
 
 for (const match of html.matchAll(/<dialog\b([^>]*)>/g)) {
     const attributes = match[1];
@@ -48,7 +48,11 @@ for (const requiredId of [
     'release-notes-modal',
     'btn-release-notes',
     'btn-release-expand-all',
-    'btn-release-collapse-all'
+    'btn-release-collapse-all',
+    'help-handbook-dialog',
+    'btn-help-utility',
+    'btn-console-utility',
+    'utility-rail'
 ]) {
     assert(ids.includes(requiredId), `Required redesigned control #${requiredId} is present`);
 }

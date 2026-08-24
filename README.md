@@ -23,6 +23,8 @@ A persistent text-based economy and incremental game engine built with Node.js, 
 - **Factions** — Create a faction, fund its treasury, and configure duration or continuous action multipliers.
 - **Gambling** — Play coinflip and slots modes with server-validated wagers.
 - **Display Preferences** — Choose number formatting and interface density, then configure shared quantity presets globally, per system, or for an individual item.
+- **Keyboard Controls** — Use or remap 18 shortcuts for navigation, core actions, contextual Help, Console entry, and theme switching.
+- **Contextual Help & Commands** — Follow section-aware Help, search the full 49-topic handbook, and personalize every existing Console slash command with aliases and autocomplete.
 - **REST API** — Modular API layer enabling front-end interactions and state synchronization.
 
 ---
@@ -70,11 +72,19 @@ The test runner discovers CommonJS and ES-module suites in `tests/`, including e
 
 ### Client preferences
 
-Display, notification, and bulk-action preferences are stored locally under `bconomy_user_settings`; they do not mutate the player economy state. The Number Prefix setting defaults to **No prefix**, which displays complete comma-separated values. **Value names** renders `thousand` through `quintillion` with two decimal places while exact values remain available in editable fields and contextual tooltips.
+Display, notification, control, command, utility-rail, and bulk-action preferences are stored locally under `bconomy_user_settings`; they do not mutate the player economy state. The Number Prefix setting defaults to **No prefix**, which displays complete comma-separated values. **Value names** renders `thousand` through `quintillion` with two decimal places while exact values remain available in editable fields and contextual tooltips.
 
 Quantity-enabled systems resolve four editable values plus an immutable **Max** action through global → system → item inheritance. The default values are 1, 10, 100, and 1000. Preview policy can be set to every operation, recursive only, large quantities only, or never; the global `bulkActions.skipAllPreviews` option remains the final override. `inventory.showUnavailableBoosterAction` controls whether the disabled Inventory booster action remains visible when no usable boosters are owned.
 
 All application pop-ups use the shared native `<dialog>` controller. Transactional dialogs require an explicit action or cancellation, while passive item details may close from the backdrop. Escape and focus restoration are handled consistently.
+
+### Controls, commands, and Help
+
+The default navigation shortcuts are `1` through `0` in sidebar order. Mine, Explore, Hunt, Fish, and Work use `M`, `E`, `H`, `F`, and `W`; contextual Help uses `?`, Console command entry uses `/`, and theme switching uses `T`. Every shortcut can be rebound to a unique key or chord, cleared, swapped on conflict, or reset from **Settings → Controls & Commands**. Global shortcuts pause while typing or while a dialog is open.
+
+Every existing Console command can have a custom primary name and up to five aliases. Canonical names always continue to work. Type `/` to browse autocomplete suggestions; Enter or Tab completes a selection, and a following Enter executes it. `/help` opens the full handbook.
+
+The bottom-right utility dock places **Help** before **Console**. Help follows the active section and supported subfeature. **Browse all topics** opens a searchable, categorized handbook while preserving the previous rail, scroll, and focus state when returning to the game.
 
 ### Farm management
 

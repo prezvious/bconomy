@@ -91,7 +91,7 @@ export const renderActions = () => {
         const btn = strip.querySelector(`#btn-act-${act.id}`);
         if (btn) {
             btn.addEventListener('click', async (e) => {
-                await handleAction(act.id, e.currentTarget);
+                await executeCoreAction(act.id, e.currentTarget);
             });
         }
     });
@@ -99,9 +99,19 @@ export const renderActions = () => {
     renderActiveBoosts();
 };
 
-const handleAction = async (type, btnEl) => {
+export const executeCoreAction = async (type, btnEl = null) => {
+    const renderedButton = btnEl || document.getElementById(`btn-act-${type}`);
+    if (renderedButton?.disabled) {
+        showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} is not ready yet.`, 'info');
+        return false;
+    }
     try {
-        const res = await doAction(type, btnEl);
+        if (typeof CustomEvent !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('bconomy:help-context-change', {
+                detail: { section: 'actions', subfeature: type }
+            }));
+        }
+        const res = await doAction(type, renderedButton);
         const formattedText = res.result ? (res.result.formattedText || '') : '';
 
         if (res.result) {
@@ -111,9 +121,11 @@ const handleAction = async (type, btnEl) => {
         renderHeader();
         renderInventory();
         renderActions();
+        return true;
     } catch (e) {
         addLogEntry(`[${type.toUpperCase()}] Failed: ${e.message}`, "error");
         showToast(`[${type.toUpperCase()}] Action failed: ${e.message}`, 'error');
+        return false;
     }
 };
 

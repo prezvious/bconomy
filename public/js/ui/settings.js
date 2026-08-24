@@ -1,7 +1,7 @@
 // Settings UI & Notification Filter Manager
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
-import { clearIgnoredConfirmations } from './modal.js';
+import { clearIgnoredConfirmations, showConfirmation } from './modal.js';
 import { iconHtml, formatDisplayNumber, formatMoney, formatDurationMs, formatTimestampDate } from '../utils.js';
 import {
     SETTINGS_STORAGE_KEY,
@@ -14,6 +14,16 @@ import {
 import { getAuthProfile, getAuthSession, signOutUser } from '../auth.js';
 import { openAuthModal } from './authModal.js';
 import { syncStateToCloud } from '../state.js';
+import {
+    CONTROL_DEFINITIONS,
+    COMMAND_DEFINITIONS,
+    bindingFromKeyboardEvent,
+    commandNameError,
+    formatBinding,
+    getCommandNameOwner,
+    isReservedBinding,
+    normalizeCommandName
+} from '../controlRegistry.js';
 
 export { SETTINGS_STORAGE_KEY, getDefaultSettings, getStoredSettings, saveStoredSettings };
 
@@ -45,6 +55,7 @@ const QUANTITY_SYSTEM_LABELS = Object.freeze({
 
 let selectedQuantitySystem = 'crafting';
 let selectedQuantitySubject = '';
+let cancelActiveHotkeyCapture = null;
 
 const escapeAttribute = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -72,7 +83,85 @@ const presetFieldsHtml = (prefix, scope, inherited, disabled = false) => {
     `;
 };
 
+const controlsSettingsCardHtml = settings => {
+    const controlGroups = ['Navigation', 'Actions', 'Global'].map(category => `
+        <section class="controls-settings-group" aria-labelledby="controls-group-${category.toLowerCase()}">
+            <h4 id="controls-group-${category.toLowerCase()}">${category}</h4>
+            <div class="controls-settings-rows">
+                ${CONTROL_DEFINITIONS.filter(definition => definition.category === category).map(definition => {
+                    const binding = settings.controls.hotkeys[definition.id] || '';
+                    const isDefault = binding === definition.defaultBinding;
+                    return `
+                        <div class="control-setting-row" data-controls-search="${escapeAttribute(`${definition.label} ${category} ${formatBinding(binding)}`.toLowerCase())}">
+                            <div class="control-setting-copy">
+                                <strong>${escapeAttribute(definition.label)}</strong>
+                                <span>${isDefault ? 'Default binding' : binding ? 'Custom binding' : 'No hotkey assigned'}</span>
+                            </div>
+                            <button class="hotkey-capture-btn" type="button" data-capture-control="${definition.id}" aria-label="Change hotkey for ${escapeAttribute(definition.label)}">
+                                <kbd>${escapeAttribute(formatBinding(binding))}</kbd>
+                            </button>
+                            <div class="control-setting-actions">
+                                <button class="icon-btn-sm" type="button" data-clear-control="${definition.id}" title="Clear ${escapeAttribute(definition.label)} hotkey" aria-label="Clear ${escapeAttribute(definition.label)} hotkey"><iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon></button>
+                                <button class="icon-btn-sm" type="button" data-reset-control="${definition.id}" title="Reset ${escapeAttribute(definition.label)} hotkey" aria-label="Reset ${escapeAttribute(definition.label)} hotkey"><iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon></button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </section>
+    `).join('');
+
+    const commandRows = COMMAND_DEFINITIONS.map(definition => {
+        const custom = settings.controls.commands[definition.id];
+        const canonical = [definition.defaultName, ...definition.defaultAliases];
+        return `
+            <div class="command-setting-row" data-controls-search="${escapeAttribute(`${definition.defaultName} ${custom.primary} ${custom.aliases.join(' ')} ${definition.description}`.toLowerCase())}">
+                <div class="command-setting-header">
+                    <div>
+                        <strong>/${escapeAttribute(custom.primary)}</strong>
+                        <span>${escapeAttribute(definition.description)}</span>
+                    </div>
+                    <button class="icon-btn-sm" type="button" data-reset-command="${definition.id}" title="Reset /${escapeAttribute(definition.defaultName)}" aria-label="Reset ${escapeAttribute(definition.defaultName)} command"><iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon></button>
+                </div>
+                <label class="command-name-field"><span>Primary name</span><span class="command-input-wrap"><b>/</b><input class="form-input command-primary-input" type="text" value="${escapeAttribute(custom.primary)}" maxlength="24" spellcheck="false" autocomplete="off" data-command-primary="${definition.id}"></span></label>
+                <div class="command-alias-section">
+                    <span class="command-field-label">Always available</span>
+                    <div class="command-alias-list canonical">${canonical.map(name => `<span class="command-alias-chip locked" title="Canonical recovery name">/${escapeAttribute(name)} <iconify-icon icon="lucide:lock" aria-hidden="true"></iconify-icon></span>`).join('')}</div>
+                </div>
+                <div class="command-alias-section">
+                    <span class="command-field-label">Custom aliases (${custom.aliases.length}/5)</span>
+                    <div class="command-alias-list">${custom.aliases.length ? custom.aliases.map(alias => `<span class="command-alias-chip">/${escapeAttribute(alias)}<button type="button" data-remove-command-alias="${definition.id}" data-alias="${escapeAttribute(alias)}" aria-label="Remove /${escapeAttribute(alias)} alias"><iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon></button></span>`).join('') : '<span class="command-alias-empty">No custom aliases</span>'}</div>
+                    <div class="command-alias-add"><span class="command-input-wrap"><b>/</b><input class="form-input" type="text" maxlength="24" spellcheck="false" autocomplete="off" placeholder="Add alias" data-command-alias-input="${definition.id}"></span><button class="action-btn secondary-btn btn-sm" type="button" data-add-command-alias="${definition.id}" ${custom.aliases.length >= 5 ? 'disabled' : ''}>Add</button></div>
+                </div>
+                <code class="command-usage">/${escapeAttribute(custom.primary)}${definition.usage ? ` ${escapeAttribute(definition.usage)}` : ''}</code>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="card settings-card settings-card-controls" data-help-subfeature="controls">
+            <div class="card-header-styled controls-card-header">
+                <div class="flex items-center gap-2">
+                    <iconify-icon icon="lucide:keyboard" class="text-accent" aria-hidden="true"></iconify-icon>
+                    <div><h3 class="card-title-sm">Controls & Commands</h3><p>Remap shortcuts and personalize Console command names in this browser.</p></div>
+                </div>
+            </div>
+            <div class="settings-card-body">
+                <label class="controls-settings-search" for="controls-settings-search"><iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon><span class="sr-only">Search controls and commands</span><input id="controls-settings-search" type="search" autocomplete="off" placeholder="Search controls or commands…"></label>
+                <div class="controls-settings-section-heading"><div><h4>Hotkeys</h4><p>Shortcuts pause while typing and while dialogs are open.</p></div><button id="btn-reset-all-hotkeys" class="action-btn secondary-btn btn-sm" type="button"><iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon> Reset hotkeys</button></div>
+                <div id="hotkey-settings-groups">${controlGroups}</div>
+                <div class="divider-line my-4"></div>
+                <div class="controls-settings-section-heading"><div><h4>Slash commands</h4><p>Canonical recovery names always work and do not count toward the five custom aliases.</p></div><button id="btn-reset-all-commands" class="action-btn secondary-btn btn-sm" type="button"><iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon> Reset commands</button></div>
+                <div id="command-settings-rows" class="command-settings-rows">${commandRows}</div>
+                <p id="controls-settings-empty" class="controls-settings-empty hidden">No controls or commands match that search.</p>
+            </div>
+        </div>
+    `;
+};
+
 export const renderSettings = () => {
+    cancelActiveHotkeyCapture?.();
+    cancelActiveHotkeyCapture = null;
     const container = document.getElementById('panel-settings');
     if (!container) return;
 
@@ -165,7 +254,9 @@ export const renderSettings = () => {
                 </div>
             </div>
 
-            <div class="card settings-card settings-card-display">
+            ${controlsSettingsCardHtml(settings)}
+
+            <div class="card settings-card settings-card-display" data-help-subfeature="display">
                 <div class="card-header-styled">
                     <div class="flex items-center gap-2">
                         <iconify-icon icon="lucide:monitor-cog" class="text-accent" aria-hidden="true"></iconify-icon>
@@ -287,7 +378,7 @@ export const renderSettings = () => {
                 </div>
             </div>
 
-            <div class="card settings-card settings-card-quantity">
+            <div class="card settings-card settings-card-quantity" data-help-subfeature="quantities">
                 <div class="card-header-styled">
                     <div class="flex items-center gap-2">
                         <iconify-icon icon="lucide:list-filter" class="text-accent" aria-hidden="true"></iconify-icon>
@@ -477,6 +568,193 @@ export const renderSettings = () => {
 
 export const setupSettingsEvents = (container) => {
     if (!container) return;
+
+    const saveHotkey = async (controlId, binding, { reset = false } = {}) => {
+        const definition = CONTROL_DEFINITIONS.find(entry => entry.id === controlId);
+        if (!definition) return;
+        const settings = getStoredSettings();
+        const nextBinding = reset ? definition.defaultBinding : binding;
+        const priorBinding = settings.controls.hotkeys[controlId] || '';
+        const conflict = CONTROL_DEFINITIONS.find(entry => entry.id !== controlId && settings.controls.hotkeys[entry.id] === nextBinding);
+        if (conflict && nextBinding) {
+            const confirmed = await showConfirmation(
+                'swapHotkey',
+                'Swap hotkeys?',
+                `${formatBinding(nextBinding)} is assigned to ${conflict.label}. Swap the two bindings?`,
+                { allowIgnore: false }
+            );
+            if (!confirmed) {
+                renderSettings();
+                return;
+            }
+            settings.controls.hotkeys[conflict.id] = priorBinding;
+        }
+        settings.controls.hotkeys[controlId] = nextBinding;
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`${definition.label} set to ${formatBinding(nextBinding)}.`, 'success');
+    };
+
+    const controlsSearch = document.getElementById('controls-settings-search');
+    controlsSearch?.addEventListener('input', () => {
+        const query = controlsSearch.value.trim().toLowerCase();
+        let visibleCount = 0;
+        container.querySelectorAll('[data-controls-search]').forEach(row => {
+            const visible = !query || row.dataset.controlsSearch.includes(query);
+            row.classList.toggle('hidden', !visible);
+            if (visible) visibleCount += 1;
+        });
+        container.querySelectorAll('.controls-settings-group').forEach(group => {
+            group.classList.toggle('hidden', !group.querySelector('[data-controls-search]:not(.hidden)'));
+        });
+        document.getElementById('controls-settings-empty')?.classList.toggle('hidden', visibleCount !== 0);
+    });
+
+    container.querySelectorAll('[data-capture-control]').forEach(button => button.addEventListener('click', () => {
+        cancelActiveHotkeyCapture?.();
+        const controlId = button.dataset.captureControl;
+        button.classList.add('capturing');
+        button.innerHTML = '<span>Press a key…</span>';
+        const capture = async event => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+            cancelActiveHotkeyCapture?.();
+            cancelActiveHotkeyCapture = null;
+            if (event.key === 'Escape') {
+                renderSettings();
+                return;
+            }
+            const binding = bindingFromKeyboardEvent(event);
+            if (!binding) {
+                showToast('Use one non-modifier key, with optional Ctrl, Alt, Shift, or Meta.', 'error');
+                renderSettings();
+                return;
+            }
+            if (isReservedBinding(binding)) {
+                showToast(`${formatBinding(binding)} is reserved by the browser and cannot be assigned.`, 'error');
+                renderSettings();
+                return;
+            }
+            await saveHotkey(controlId, binding);
+        };
+        const captureTimer = setTimeout(() => document.addEventListener('keydown', capture, { capture: true }), 0);
+        cancelActiveHotkeyCapture = () => {
+            clearTimeout(captureTimer);
+            document.removeEventListener('keydown', capture, { capture: true });
+        };
+    }));
+
+    container.querySelectorAll('[data-clear-control]').forEach(button => button.addEventListener('click', async () => {
+        await saveHotkey(button.dataset.clearControl, '');
+    }));
+    container.querySelectorAll('[data-reset-control]').forEach(button => button.addEventListener('click', async () => {
+        await saveHotkey(button.dataset.resetControl, '', { reset: true });
+    }));
+
+    document.getElementById('btn-reset-all-hotkeys')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmation('resetHotkeys', 'Reset all hotkeys?', 'Restore every navigation, action, and global shortcut to its default binding?', { allowIgnore: false });
+        if (!confirmed) return;
+        const settings = getStoredSettings();
+        settings.controls.hotkeys = { ...getDefaultSettings().controls.hotkeys };
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast('All hotkeys reset to defaults.', 'info');
+    });
+
+    const saveCommandPrimary = (commandId, rawName) => {
+        const name = normalizeCommandName(rawName);
+        const error = commandNameError(name);
+        if (error) {
+            showToast(error, 'error');
+            renderSettings();
+            return;
+        }
+        const settings = getStoredSettings();
+        const owner = getCommandNameOwner(name, settings.controls);
+        if (owner && owner !== commandId) {
+            showToast(`/${name} already belongs to another command.`, 'error');
+            renderSettings();
+            return;
+        }
+        settings.controls.commands[commandId].primary = name;
+        settings.controls.commands[commandId].aliases = settings.controls.commands[commandId].aliases.filter(alias => alias !== name);
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Primary command changed to /${name}.`, 'success');
+    };
+
+    container.querySelectorAll('[data-command-primary]').forEach(input => {
+        const commit = () => saveCommandPrimary(input.dataset.commandPrimary, input.value);
+        input.addEventListener('change', commit);
+        input.addEventListener('keydown', event => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            commit();
+        });
+    });
+
+    const addCommandAlias = commandId => {
+        const input = container.querySelector(`[data-command-alias-input="${commandId}"]`);
+        const alias = normalizeCommandName(input?.value);
+        const error = commandNameError(alias);
+        if (error) {
+            showToast(error, 'error');
+            return;
+        }
+        const settings = getStoredSettings();
+        const command = settings.controls.commands[commandId];
+        if (command.aliases.length >= 5) {
+            showToast('Each command supports up to five custom aliases.', 'error');
+            return;
+        }
+        const owner = getCommandNameOwner(alias, settings.controls);
+        if (owner) {
+            showToast(owner === commandId ? `/${alias} already works for this command.` : `/${alias} already belongs to another command.`, 'error');
+            return;
+        }
+        command.aliases.push(alias);
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Added /${alias} alias.`, 'success');
+    };
+
+    container.querySelectorAll('[data-add-command-alias]').forEach(button => button.addEventListener('click', () => addCommandAlias(button.dataset.addCommandAlias)));
+    container.querySelectorAll('[data-command-alias-input]').forEach(input => input.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        addCommandAlias(input.dataset.commandAliasInput);
+    }));
+    container.querySelectorAll('[data-remove-command-alias]').forEach(button => button.addEventListener('click', () => {
+        const settings = getStoredSettings();
+        const command = settings.controls.commands[button.dataset.removeCommandAlias];
+        command.aliases = command.aliases.filter(alias => alias !== button.dataset.alias);
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`Removed /${button.dataset.alias} alias.`, 'info');
+    }));
+    container.querySelectorAll('[data-reset-command]').forEach(button => button.addEventListener('click', () => {
+        const definition = COMMAND_DEFINITIONS.find(entry => entry.id === button.dataset.resetCommand);
+        if (!definition) return;
+        const settings = getStoredSettings();
+        settings.controls.commands[definition.id] = { primary: definition.defaultName, aliases: [] };
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast(`/${definition.defaultName} reset to defaults.`, 'info');
+    }));
+
+    document.getElementById('btn-reset-all-commands')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmation('resetCommands', 'Reset all slash commands?', 'Restore every primary command name and remove all custom aliases?', { allowIgnore: false });
+        if (!confirmed) return;
+        const settings = getStoredSettings();
+        settings.controls.commands = Object.fromEntries(
+            Object.entries(getDefaultSettings().controls.commands)
+                .map(([id, command]) => [id, { primary: command.primary, aliases: [...command.aliases] }])
+        );
+        saveStoredSettings(settings);
+        renderSettings();
+        showToast('All slash commands reset to defaults.', 'info');
+    });
 
     // Account & Auth buttons
     document.getElementById('btn-settings-signin')?.addEventListener('click', () => {

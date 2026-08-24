@@ -16,33 +16,49 @@ import { showToast } from './ui/toast.js';
 import { addLogEntry } from './ui/log.js';
 import { showConfirmation, openDialog, closeDialog } from './ui/modal.js';
 
+export const activateSection = (target, { focus = false } = {}) => {
+    const tabs = document.querySelectorAll('.nav-btn');
+    const panels = document.querySelectorAll('.panel');
+    const tab = document.querySelector(`.nav-btn[data-tab="${target}"]`);
+    const targetPanel = document.getElementById(`panel-${target}`);
+    if (!tab || !targetPanel) return false;
+
+    tabs.forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        if (active) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+    });
+    panels.forEach(panel => panel.classList.toggle('active', panel === targetPanel));
+    document.title = `Bconomy — ${tab.getAttribute('aria-label') || tab.textContent.trim()}`;
+    if (focus) tab.focus?.({ preventScroll: true });
+
+    if (target === 'inventory') renderInventory();
+    if (target === 'crafting') renderCrafting();
+    if (target === 'shop') renderShop({ resetControls: true });
+    if (target === 'tools') renderTools();
+    if (target === 'farm') renderFarm();
+    if (target === 'gambling') renderGambling();
+    if (target === 'faction') renderFaction({ resetTab: true });
+    if (target === 'rank-prestige' || target === 'rank' || target === 'prestige') renderRankPrestige();
+    if (target === 'settings') renderSettings();
+
+    if (typeof CustomEvent !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('bconomy:help-context-change', {
+            detail: { section: target, subfeature: 'overview' }
+        }));
+    }
+    return true;
+};
+
 export const setupNavigation = () => {
     setupAccordion();
     setupTargetedModal();
 
     const tabs = document.querySelectorAll('.nav-btn');
-    const panels = document.querySelectorAll('.panel');
-
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            const target = tab.dataset.tab;
-
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-
-            panels.forEach(p => p.classList.remove('active'));
-            const targetPanel = document.getElementById(`panel-${target}`);
-            if (targetPanel) targetPanel.classList.add('active');
-
-            if (target === 'inventory') renderInventory();
-            if (target === 'crafting') renderCrafting();
-            if (target === 'shop') renderShop({ resetControls: true });
-            if (target === 'tools') renderTools();
-            if (target === 'farm') renderFarm();
-            if (target === 'gambling') renderGambling();
-            if (target === 'faction') renderFaction({ resetTab: true });
-            if (target === 'rank-prestige' || target === 'rank' || target === 'prestige') renderRankPrestige();
-            if (target === 'settings') renderSettings();
+            activateSection(tab.dataset.tab);
         });
     });
 
@@ -199,21 +215,4 @@ export const setupNavigation = () => {
         });
     }
 
-    // Console Rail Drawer Toggle Handling
-    const btnToggleConsole = document.getElementById('btn-toggle-console');
-    const consoleRail = document.querySelector('.activity-ledger-rail');
-    if (btnToggleConsole && consoleRail) {
-        btnToggleConsole.addEventListener('click', (e) => {
-            e.stopPropagation();
-            consoleRail.classList.toggle('drawer-open');
-        });
-
-        document.addEventListener('click', (e) => {
-            if (consoleRail.classList.contains('drawer-open')) {
-                if (!consoleRail.contains(e.target) && e.target !== btnToggleConsole && !btnToggleConsole.contains(e.target)) {
-                    consoleRail.classList.remove('drawer-open');
-                }
-            }
-        });
-    }
 };

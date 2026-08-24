@@ -1,5 +1,6 @@
 // Centralized, browser-local UI preferences.
 // Game state remains independent so display choices never affect economy data.
+import { getDefaultControls, normalizeControls } from './controlRegistry.js';
 
 export const SETTINGS_STORAGE_KEY = 'bconomy_user_settings';
 export const SETTINGS_CHANGE_EVENT = 'bconomy:settings-change';
@@ -83,7 +84,9 @@ const DEFAULT_SETTINGS = Object.freeze({
         recipeForm: 'all',
         availability: 'all',
         sort: 'name'
-    })
+    }),
+    controls: Object.freeze(getDefaultControls()),
+    utilityRail: Object.freeze({ open: true })
 });
 
 const cloneDefaults = () => ({
@@ -97,7 +100,9 @@ const cloneDefaults = () => ({
         subjects: {}
     },
     inventory: { ...DEFAULT_SETTINGS.inventory },
-    crafting: { ...DEFAULT_SETTINGS.crafting }
+    crafting: { ...DEFAULT_SETTINGS.crafting },
+    controls: normalizeControls(DEFAULT_SETTINGS.controls),
+    utilityRail: { ...DEFAULT_SETTINGS.utilityRail }
 });
 
 export const getDefaultSettings = cloneDefaults;
@@ -195,6 +200,7 @@ export const normalizeSettings = (candidate = {}) => {
     const bulkActions = value.bulkActions && typeof value.bulkActions === 'object' ? value.bulkActions : {};
     const inventory = value.inventory && typeof value.inventory === 'object' ? value.inventory : {};
     const crafting = value.crafting && typeof value.crafting === 'object' ? value.crafting : {};
+    const utilityRail = value.utilityRail && typeof value.utilityRail === 'object' ? value.utilityRail : {};
     const maxVisible = Number.parseInt(value.maxVisible, 10);
 
     return {
@@ -238,6 +244,10 @@ export const normalizeSettings = (candidate = {}) => {
             recipeForm: typeof crafting.recipeForm === 'string' && crafting.recipeForm.length <= 40 ? crafting.recipeForm : defaults.crafting.recipeForm,
             availability: typeof crafting.availability === 'string' && crafting.availability.length <= 40 ? crafting.availability : defaults.crafting.availability,
             sort: VALID_CRAFTING_SORTS.has(crafting.sort) ? crafting.sort : defaults.crafting.sort
+        },
+        controls: normalizeControls(value.controls),
+        utilityRail: {
+            open: normalizeBoolean(utilityRail.open, defaults.utilityRail.open)
         }
     };
 };

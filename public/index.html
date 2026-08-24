@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bconomy — Console</title>
+    <title>Bconomy — Actions</title>
     <meta name="description" content="Manage operations, execute gathering actions, upgrade tools, and ascend ranks in Bconomy.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -75,7 +75,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.0.0" title="Click to view release notes">Bconomy v3.0.0</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.1.0" title="Click to view release notes">Bconomy v3.1.0</button>
             </div>
         </nav>
 
@@ -104,9 +104,6 @@
                     <div id="header-account-status" class="header-account-status"></div>
 
                     <div class="header-action-btns">
-                        <button id="btn-toggle-console" class="theme-toggle console-toggle-btn" type="button" aria-label="Toggle Console Feed" title="Toggle Console Feed">
-                            <iconify-icon icon="lucide:terminal" class="theme-icon" aria-hidden="true"></iconify-icon>
-                        </button>
                         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark theme" title="Toggle Dark/Light Mode">
                             <iconify-icon icon="lucide:moon" class="theme-icon theme-icon-light" aria-hidden="true"></iconify-icon>
                             <iconify-icon icon="lucide:sun" class="theme-icon theme-icon-dark" aria-hidden="true"></iconify-icon>
@@ -463,42 +460,98 @@
             </main>
         </div>
 
-        <!-- Activity Ledger Rail (Console Chat Stream) -->
-        <aside class="activity-ledger-rail" aria-label="Console">
-            <div class="log-header">
-                <div class="log-header-title">
-                    <iconify-icon icon="lucide:terminal" class="log-header-icon" aria-hidden="true"></iconify-icon>
-                    <h3>Console</h3>
+        <!-- Shared Help / Console Utility Rail -->
+        <aside id="utility-rail" class="activity-ledger-rail" data-mode="console" aria-label="Console">
+            <section id="console-rail-view" class="utility-rail-view console-rail-view" aria-labelledby="console-rail-heading">
+                <div class="log-header">
+                    <div class="log-header-title">
+                        <iconify-icon icon="lucide:terminal" class="log-header-icon" aria-hidden="true"></iconify-icon>
+                        <h3 id="console-rail-heading">Console</h3>
+                    </div>
+                    <div class="log-header-status">
+                        <button id="btn-status-dot" class="live-dot-btn status-ok" type="button" title="No errors detected (0 errors). Click to check status." aria-label="System status: No errors">
+                            <span class="live-dot"></span>
+                        </button>
+                        <span id="log-count" class="log-count-badge">0</span>
+                        <button id="btn-clear-log" class="icon-btn-sm" type="button" title="Clear Console Feed" aria-label="Clear Console Feed">
+                            <iconify-icon icon="lucide:trash-2" aria-hidden="true"></iconify-icon>
+                        </button>
+                    </div>
                 </div>
-                <div class="log-header-status">
-                    <button id="btn-status-dot" class="live-dot-btn status-ok" type="button" title="No errors detected (0 errors). Click to check status." aria-label="System status: No errors">
-                        <span class="live-dot"></span>
-                    </button>
-                    <span id="log-count" class="log-count-badge">0</span>
-                    <button id="btn-clear-log" class="icon-btn-sm" type="button" title="Clear Console Feed">
-                        <iconify-icon icon="lucide:trash-2" aria-hidden="true"></iconify-icon>
+
+                <div class="log-feed" id="activity-log" aria-live="polite" aria-atomic="false"></div>
+
+                <div class="console-command-shell">
+                    <div id="console-command-suggestions" class="console-command-suggestions hidden" role="listbox" aria-label="Console command suggestions"></div>
+                    <div class="log-prompt-bar">
+                        <span class="prompt-icon"><iconify-icon icon="lucide:chevron-right" aria-hidden="true"></iconify-icon></span>
+                        <input type="text" id="console-cmd-input" name="console-cmd-input" autocomplete="off" spellcheck="false" class="console-cmd-input" placeholder="Type /mine, /explore, /work, /help…" aria-label="Console command input" aria-autocomplete="list" aria-controls="console-command-suggestions" aria-expanded="false" />
+                        <button id="btn-console-send" class="btn-console-send" type="button" title="Send Command" aria-label="Send Console command">
+                            <iconify-icon icon="lucide:send" aria-hidden="true"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="log-footer">
+                    <button id="btn-reset-confirmations" class="reset-confirmations-btn" type="button" title="Re-enable all ignored confirmation dialogs">
+                        <iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon> Reset Ignored Confirmations
                     </button>
                 </div>
-            </div>
+            </section>
 
-            <div class="log-feed" id="activity-log" aria-live="polite" aria-atomic="false"></div>
-
-            <!-- Interactive Console Input Bar -->
-            <div class="log-prompt-bar">
-                <span class="prompt-icon"><iconify-icon icon="lucide:chevron-right" aria-hidden="true"></iconify-icon></span>
-                <input type="text" id="console-cmd-input" name="console-cmd-input" autocomplete="off" class="console-cmd-input" placeholder="Type /mine, /explore, /work, /help..." aria-label="Console command input" />
-                <button id="btn-console-send" class="btn-console-send" type="button" title="Send Command">
-                    <iconify-icon icon="lucide:send" aria-hidden="true"></iconify-icon>
-                </button>
-            </div>
-
-            <div class="log-footer">
-                <button id="btn-reset-confirmations" class="reset-confirmations-btn" type="button" title="Re-enable all ignored confirmation dialogs">
-                    <iconify-icon icon="lucide:rotate-ccw" aria-hidden="true"></iconify-icon> Reset Ignored Confirmations
-                </button>
-            </div>
+            <section id="help-rail-view" class="utility-rail-view help-rail-view hidden" aria-labelledby="help-rail-heading">
+                <div class="help-rail-header">
+                    <div>
+                        <span class="help-rail-eyebrow">Contextual Help</span>
+                        <h3 id="help-rail-heading">Help</h3>
+                    </div>
+                    <iconify-icon icon="lucide:circle-help" class="help-rail-icon" aria-hidden="true"></iconify-icon>
+                </div>
+                <div id="help-context-content" class="help-context-content" aria-live="polite"></div>
+            </section>
         </aside>
+
+        <button id="utility-rail-backdrop" class="utility-rail-backdrop hidden" type="button" aria-label="Close Help or Console panel"></button>
+
+        <div class="utility-dock" role="group" aria-label="Help and Console">
+            <button id="btn-help-utility" class="utility-dock-btn" type="button" aria-label="Open contextual Help" aria-pressed="false" title="Open contextual Help">
+                <iconify-icon icon="lucide:circle-help" aria-hidden="true"></iconify-icon>
+                <span>Help</span>
+            </button>
+            <button id="btn-console-utility" class="utility-dock-btn" type="button" aria-label="Open Console" aria-pressed="true" title="Open Console">
+                <iconify-icon icon="lucide:terminal" aria-hidden="true"></iconify-icon>
+                <span>Console</span>
+            </button>
+        </div>
     </div>
+
+    <!-- Full-screen Help Handbook -->
+    <dialog id="help-handbook-dialog" class="help-handbook-dialog hidden" data-app-dialog aria-labelledby="help-handbook-title">
+        <div class="help-handbook-shell">
+            <header class="help-handbook-header">
+                <div class="help-handbook-brand">
+                    <iconify-icon icon="lucide:book-open-text" aria-hidden="true"></iconify-icon>
+                    <div>
+                        <span class="help-handbook-eyebrow">Bconomy handbook</span>
+                        <h2 id="help-handbook-title">How can we help?</h2>
+                    </div>
+                </div>
+                <button id="btn-help-back" class="action-btn secondary-btn" type="button">
+                    <iconify-icon icon="lucide:arrow-left" aria-hidden="true"></iconify-icon> Back to game
+                </button>
+            </header>
+            <div class="help-handbook-search-wrap">
+                <label class="help-handbook-search" for="help-handbook-search">
+                    <iconify-icon icon="lucide:search" aria-hidden="true"></iconify-icon>
+                    <span class="sr-only">Search all Help topics</span>
+                    <input id="help-handbook-search" type="search" autocomplete="off" placeholder="Search actions, farming, crafting, commands…">
+                    <kbd>/</kbd>
+                </label>
+                <p id="help-search-status" class="help-search-status" role="status"></p>
+            </div>
+            <div id="help-handbook-content" class="help-handbook-content"></div>
+        </div>
+    </dialog>
 
     <!-- Responsive Crafting Details Modal -->
     <dialog id="crafting-details-dialog" class="modal hidden crafting-details-dialog" data-app-dialog aria-labelledby="crafting-details-dialog-title">
@@ -1246,7 +1299,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v3.0.0 Latest</span>
+                            <span class="badge release-latest-tag">v3.1.0 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>
