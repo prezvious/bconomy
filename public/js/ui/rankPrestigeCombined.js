@@ -126,12 +126,13 @@ let simulatorTargets = null;
 let simulatorRequestId = 0;
 
 const simulatorBudget = (state, settings, horizon, mode, value) => {
-    const current = Math.max(0, Math.floor(Number(state.prestigePoints) || 0));
+    const s = state || getState() || {};
+    const current = Math.max(0, Math.floor(Number(s.prestigePoints) || 0));
     if (horizon === 'current') return current;
     if (horizon === 'next') return current + 5;
-    if (mode === 'targetTier') return current + (Math.max(0, Math.floor(value) - (state.prestigeCount || 0)) * 5);
+    if (mode === 'targetTier') return current + (Math.max(0, Math.floor(Number(value) || 0) - (s.prestigeCount || 0)) * 5);
     if (mode === 'custom') return Math.max(current, Math.floor(Number(value) || current));
-    return current + (Math.max(0, Math.floor(Number(value) || settings.futureAscensions || 5)) * 5);
+    return current + (Math.max(0, Math.floor(Number(value) || settings?.futureAscensions || 5)) * 5);
 };
 
 const formatEffect = (perkId, value) => {
@@ -142,12 +143,16 @@ const formatEffect = (perkId, value) => {
 
 const updateSimulatorPreview = async () => {
     const root = document.getElementById('prestige-simulator');
-    if (!root || !simulatorTargets) return;
-    const settings = getStoredSettings().prestigeSimulator;
-    const horizon = root.querySelector('#sim-horizon')?.value || settings.defaultHorizon;
-    const futureMode = root.querySelector('#sim-future-mode')?.value || settings.futureBudgetMode;
+    if (!root) return;
+    const playerState = getState() || {};
+    if (!simulatorTargets) {
+        simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(playerState.perks?.[id]) || 0]));
+    }
+    const settings = getStoredSettings()?.prestigeSimulator || {};
+    const horizon = root.querySelector('#sim-horizon')?.value || settings.defaultHorizon || 'current';
+    const futureMode = root.querySelector('#sim-future-mode')?.value || settings.futureBudgetMode || 'ascensions';
     const futureValue = root.querySelector('#sim-future-value')?.value;
-    const budget = simulatorBudget(getState(), settings, horizon, futureMode, futureValue);
+    const budget = simulatorBudget(playerState, settings, horizon, futureMode, futureValue);
     const goalWeights = Object.fromEntries(['career', 'actions', 'farming', 'gambling'].map(goal => [goal, Number(root.querySelector(`[data-sim-goal="${goal}"]`)?.value) || 0]));
     const requestId = ++simulatorRequestId;
     const summary = root.querySelector('#sim-summary');
@@ -169,14 +174,23 @@ const updateSimulatorPreview = async () => {
 
 const renderPerkSimulator = () => {
     const root = document.getElementById('prestige-simulator');
-    const state = getState();
-    if (!root || !state) return;
-    const perkData = getPerkData();
-    const settings = getStoredSettings().prestigeSimulator;
+    const state = getState() || {};
+    if (!root) return;
+    const perks = state.perks || {};
+    if (!simulatorTargets) {
+        simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(perks[id]) || 0]));
+    }
+    const perkData = getPerkData() || {};
+    const settings = getStoredSettings()?.prestigeSimulator || {
+        defaultHorizon: 'current',
+        futureBudgetMode: 'ascensions',
+        futureAscensions: 5,
+        goalWeights: { career: 25, actions: 25, farming: 25, gambling: 25 }
+    };
     const stateRankIndex = Math.max(0, Math.floor(Number(state.rankIndex) || 0));
     const stateCash = Math.max(0, Math.floor(Number(state.cash) || 0));
     const stateTier = Math.max(0, Math.floor(Number(state.prestigeCount) || 0));
-    const stateInvestiture = Math.min(25, Math.max(0, Math.floor(Number(state.perks?.investiture) || 0)));
+    const stateInvestiture = Math.min(25, Math.max(0, Math.floor(Number(perks.investiture) || 0)));
     const canAscend = stateRankIndex >= 106 && stateCash >= (stateTier === 0 ? 0 : Math.floor(550000000 * (stateTier + 2) * (1 - 0.025 * stateInvestiture)));
     root.dataset.canAscend = canAscend ? 'true' : '';
     root.innerHTML = `
@@ -195,9 +209,10 @@ const renderPerkSimulator = () => {
         </div>
         <fieldset class="sim-goals card"><legend>Optimizer priorities</legend>${['career', 'actions', 'farming', 'gambling'].map(goal => `<label><span>${goal.charAt(0).toUpperCase() + goal.slice(1)}</span><input type="range" name="sim-goal-${goal}" min="0" max="100" value="${settings.goalWeights[goal]}" data-sim-goal="${goal}"><output>${settings.goalWeights[goal]}</output></label>`).join('')}</fieldset>
         <div class="sim-perk-grid">${SIMULATOR_PERKS.map(id => {
-            const current = Number(state.perks?.[id]) || 0;
+            const current = Number(perks[id]) || 0;
             const max = perkData[id]?.maxLevel || current;
-            return `<label class="sim-perk-card"><span><strong>${perkData[id]?.name || id}</strong><small>Current ${current} · Max ${max}</small></span><input type="number" name="sim-perk-${id}" inputmode="numeric" autocomplete="off" min="${current}" max="${max}" value="${simulatorTargets[id]}" data-sim-perk="${id}"></label>`;
+            const targetVal = simulatorTargets?.[id] ?? current;
+            return `<label class="sim-perk-card"><span><strong>${perkData[id]?.name || id}</strong><small>Current ${current} · Max ${max}</small></span><input type="number" name="sim-perk-${id}" inputmode="numeric" autocomplete="off" min="${current}" max="${max}" value="${targetVal}" data-sim-perk="${id}"></label>`;
         }).join('')}</div>
         <div id="sim-summary" class="sim-summary card" role="status" aria-live="polite"></div>
         <div class="sim-actions"><button id="sim-optimize" class="action-btn secondary-btn" type="button"><iconify-icon icon="lucide:sparkles" aria-hidden="true"></iconify-icon> Recommend Allocation</button><button id="sim-reset" class="action-btn secondary-btn" type="button">Reset</button><button id="sim-apply" class="action-btn accent-btn" type="button">Apply Allocation</button></div>`;
@@ -211,7 +226,7 @@ const renderPerkSimulator = () => {
         void updateSimulatorPreview();
     }));
     root.querySelector('#sim-reset')?.addEventListener('click', () => {
-        simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(getState().perks?.[id]) || 0]));
+        simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number((getState() || {}).perks?.[id]) || 0]));
         renderPerkSimulator();
     });
     root.querySelector('#sim-optimize')?.addEventListener('click', async event => {
@@ -265,7 +280,7 @@ const renderPerksGrid = () => {
             const data = perkData[id];
             if (!data) return;
 
-            const playerState = getState();
+            const playerState = getState() || {};
             const level = (playerState.perks && playerState.perks[id]) || 0;
             const maxLevel = data.maxLevel || 0;
             const points = Math.max(0, Math.floor(Number(playerState.prestigePoints) || 0));
@@ -310,8 +325,8 @@ const renderPerksGrid = () => {
         });
     }
 
-    const playerState = getState();
-    const perkData = getPerkData();
+    const playerState = getState() || {};
+    const perkData = getPerkData() || {};
     const points = Math.max(0, Math.floor(Number(playerState.prestigePoints) || 0));
 
     Object.entries(perkData).forEach(([id, data]) => {
