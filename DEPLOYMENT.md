@@ -39,9 +39,22 @@ Set these values in Vercel Project Settings or the equivalent server environment
 SUPABASE_URL=<project URL from Supabase API settings>
 SUPABASE_ANON_KEY=<new anonymous key>
 SUPABASE_SERVICE_ROLE_KEY=<new service-role key>
+BCONOMY_DEV_COMMANDS=false
+BCONOMY_DEV_USER_IDS=
 ```
 
 Do not prefix the service-role variable with `NEXT_PUBLIC_`, `VITE_`, or another client-exposed prefix.
+
+Developer cash commands are fail-closed. Leave `BCONOMY_DEV_COMMANDS=false` in production unless an explicit operational need has been approved. When enabled, authorization is:
+
+| Request path | Additional requirement | Result |
+| --- | --- | --- |
+| Direct local development | Non-production process, loopback socket, localhost/loopback Host, and no proxy-forwarding headers | Allowed |
+| Remote or production | Authenticated player UUID appears in comma-separated `BCONOMY_DEV_USER_IDS` | Allowed |
+| Forwarded/spoofed local request | Any proxy-forwarding header is present | Denied unless the authenticated UUID is allowlisted |
+| Switch disabled | None | Always denied |
+
+`ALLOW_DEV_COMMANDS=true` is accepted as a deprecated one-release alias for the master switch and produces a startup warning. It does not weaken the request or actor checks. The UUID allowlist is server-only and is never returned by configuration APIs.
 
 ## 5. Configure Inactive-Guest Cleanup
 

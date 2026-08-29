@@ -8,6 +8,57 @@ let currentProfile = null;
 
 const AUTH_SESSION_KEY = 'bconomy_auth_session';
 const AUTH_PROFILE_KEY = 'bconomy_auth_profile';
+const AUTH_RECOVERY_STATE_KEY = 'bconomy_auth_recovery_state';
+const AUTH_RECOVERY_ACCOUNT_KEY = 'bconomy_auth_recovery_account';
+const GUEST_RECOVERY_SNAPSHOT_KEY = 'bconomy_guest_recovery_snapshot';
+const IDENTITY_ERROR_CODES = new Set(['INVALID_AUTH', 'GUEST_EXPIRED', 'PROFILE_NOT_FOUND']);
+let authRecoveryState = 'ready';
+
+const dispatchAuthEvent = (name, detail = {}) => {
+    if (globalThis.window?.dispatchEvent && typeof CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(name, { detail }));
+    }
+};
+
+const setRecoveryState = state => {
+    authRecoveryState = state;
+    try {
+        if (state === 'ready') localStorage.removeItem(AUTH_RECOVERY_STATE_KEY);
+        else localStorage.setItem(AUTH_RECOVERY_STATE_KEY, state);
+    } catch {
+        // Persistent storage can be unavailable in privacy-restricted contexts.
+    }
+};
+
+const clearIdentityCredentials = () => {
+    currentSession = null;
+    currentProfile = null;
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_PROFILE_KEY);
+};
+
+const normalizeRecoverySnapshot = state => {
+    const snapshot = state && typeof state === 'object' ? JSON.parse(JSON.stringify(state)) : {};
+    const safeInteger = (value, maximum = Number.MAX_SAFE_INTEGER) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.min(maximum, Math.max(0, Math.floor(number))) : 0;
+    };
+    snapshot.cash = safeInteger(snapshot.cash);
+    snapshot.rankIndex = safeInteger(snapshot.rankIndex, 106);
+    snapshot.prestigeCount = safeInteger(snapshot.prestigeCount);
+    snapshot.prestigePoints = safeInteger(snapshot.prestigePoints);
+    return snapshot;
+};
+
+const responseError = async response => {
+    let data = {};
+    try { data = await response.json(); } catch { /* The status still identifies the failure. */ }
+    const candidate = data?.error;
+    const error = new Error(typeof candidate === 'string' ? candidate : candidate?.message || `Request failed (${response.status}).`);
+    error.code = candidate?.code || (response.status === 401 ? 'INVALID_AUTH' : `HTTP_${response.status}`);
+    error.status = response.status;
+    return error;
+};
 
 /**
  * Calculate password strength score (0 to 4) and textual evaluation
@@ -78,8 +129,10 @@ export function evaluatePasswordStrength(password) {
 /**
  * Initialize Auth State from stored session and server
  */
-export async function initAuth() {
+export async function initAuth(deviceState = null) {
     try {
+        try { authRecoveryState = localStorage.getItem(AUTH_RECOVERY_STATE_KEY) || 'ready'; } catch { authRecoveryState = 'ready'; }
+        let signInRequestedDuringInit = false;
         const storedSession = localStorage.getItem(AUTH_SESSION_KEY);
         const storedProfile = localStorage.getItem(AUTH_PROFILE_KEY);
 
@@ -88,23 +141,43 @@ export async function initAuth() {
             currentProfile = JSON.parse(storedProfile);
         }
 
-        if (currentProfile && currentProfile.id) {
-            const refreshed = await refreshUserProfile(currentProfile.id);
-            if (!refreshed) {
-                currentSession = null;
-                currentProfile = null;
-                localStorage.removeItem(AUTH_SESSION_KEY);
-                localStorage.removeItem(AUTH_PROFILE_KEY);
+        if (authRecoveryState === 'guest-recovery-running' || authRecoveryState === 'guest-recovery-failed') {
+            try {
+                await retryGuestRecovery();
+            } catch (error) {
+                dispatchAuthEvent('bconomy-auth-change', { session: currentSession, profile: currentProfile });
+                dispatchAuthEvent('bconomy-identity-recovery-failed', {
+                    message: error.message || 'Guest recovery is still pending. Retry when persistence is available.'
+                });
+                return null;
             }
         }
 
-        if (!currentSession || !currentProfile) {
+        if (currentProfile && currentProfile.id) {
+            try {
+                await refreshUserProfile(currentProfile.id);
+            } catch (error) {
+                if (IDENTITY_ERROR_CODES.has(error.code)) {
+                    if (isGuestProfile(currentProfile)) {
+                        await recoverGuestIdentity(deviceState || currentProfile.state);
+                    } else {
+                        requireSignInForRecovery(error.message);
+                        signInRequestedDuringInit = true;
+                    }
+                } else {
+                    console.warn('Player profile refresh is temporarily unavailable; retaining the account cache.', error);
+                }
+            }
+        }
+
+        if ((!currentSession || !currentProfile) && authRecoveryState === 'ready') {
             await ensureGuestIdentity();
         }
 
-        window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
-            detail: { session: currentSession, profile: currentProfile }
-        }));
+        dispatchAuthEvent('bconomy-auth-change', { session: currentSession, profile: currentProfile });
+        if (authRecoveryState === 'requires-sign-in' && !signInRequestedDuringInit) {
+            dispatchAuthEvent('bconomy-auth-required', { message: 'Your account session could not be restored. Sign in to continue.' });
+        }
 
         return currentProfile;
     } catch (e) {
@@ -114,6 +187,38 @@ export async function initAuth() {
 }
 
 export const isGuestProfile = profile => profile?.account_kind === 'guest';
+export const getAuthRecoveryState = () => authRecoveryState;
+export const isIdentityErrorCode = code => IDENTITY_ERROR_CODES.has(code);
+export const getRecoveryAccountId = () => {
+    try { return localStorage.getItem(AUTH_RECOVERY_ACCOUNT_KEY) || ''; } catch { return ''; }
+};
+export const getRecoveryAccountState = userId => {
+    if (!userId || getRecoveryAccountId() !== userId) return null;
+    try { return JSON.parse(localStorage.getItem(`bconomy_player_state:${userId}`) || 'null')?.state || null; } catch { return null; }
+};
+
+export function completeAuthRecovery() {
+    setRecoveryState('ready');
+    try { localStorage.removeItem(AUTH_RECOVERY_ACCOUNT_KEY); } catch { /* optional persistence */ }
+    dispatchAuthEvent('bconomy-auth-recovery-complete', { profile: currentProfile });
+}
+
+export function requireSignInForRecovery(message = 'Your account session expired. Sign in to continue.') {
+    const profile = currentProfile;
+    if (profile?.id && !localStorage.getItem(`bconomy_player_state:${profile.id}`)) {
+        localStorage.setItem(`bconomy_player_state:${profile.id}`, JSON.stringify({
+            state: profile.state || {},
+            revision: Math.max(0, Number(profile.state_revision) || 0)
+        }));
+    }
+    try {
+        if (profile?.id) localStorage.setItem(AUTH_RECOVERY_ACCOUNT_KEY, profile.id);
+    } catch { /* optional persistence */ }
+    clearIdentityCredentials();
+    setRecoveryState('requires-sign-in');
+    dispatchAuthEvent('bconomy-auth-change', { session: null, profile: null });
+    dispatchAuthEvent('bconomy-auth-required', { message });
+}
 
 export async function ensureGuestIdentity() {
     if (currentSession && currentProfile) return currentProfile;
@@ -161,6 +266,51 @@ export async function migrateGuestProgress(deviceState) {
     return currentProfile;
 }
 
+export async function recoverGuestIdentity(deviceState) {
+    const snapshot = normalizeRecoverySnapshot(deviceState);
+    localStorage.setItem(GUEST_RECOVERY_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    clearIdentityCredentials();
+    setRecoveryState('guest-recovery-running');
+    try {
+        const replacement = await ensureGuestIdentity();
+        if (!replacement) throw new Error('A replacement guest identity could not be created.');
+        const migrated = await migrateGuestProgress(snapshot);
+        if (!migrated?.state) throw new Error('The replacement guest state could not be verified.');
+        localStorage.removeItem(GUEST_RECOVERY_SNAPSHOT_KEY);
+        setRecoveryState('ready');
+        dispatchAuthEvent('bconomy-identity-recovered', { profile: migrated });
+        dispatchAuthEvent('bconomy-auth-change', { session: currentSession, profile: currentProfile });
+        return migrated;
+    } catch (error) {
+        setRecoveryState('guest-recovery-failed');
+        const recoveryError = new Error(error.message || 'Guest recovery failed. Retry to continue.');
+        recoveryError.code = 'GUEST_RECOVERY_FAILED';
+        dispatchAuthEvent('bconomy-auth-change', { session: currentSession, profile: currentProfile });
+        dispatchAuthEvent('bconomy-identity-recovery-failed', { message: recoveryError.message });
+        throw recoveryError;
+    }
+}
+
+export async function retryGuestRecovery() {
+    let snapshot = null;
+    try { snapshot = JSON.parse(localStorage.getItem(GUEST_RECOVERY_SNAPSHOT_KEY) || 'null'); } catch { /* handled below */ }
+    if (!snapshot) throw new Error('No guest recovery snapshot is available.');
+    if (isGuestProfile(currentProfile) && !currentProfile.guest_migrated_at) {
+        try {
+            const migrated = await migrateGuestProgress(snapshot);
+            localStorage.removeItem(GUEST_RECOVERY_SNAPSHOT_KEY);
+            setRecoveryState('ready');
+            dispatchAuthEvent('bconomy-identity-recovered', { profile: migrated });
+            dispatchAuthEvent('bconomy-auth-change', { session: currentSession, profile: currentProfile });
+            return migrated;
+        } catch (error) {
+            setRecoveryState('guest-recovery-failed');
+            throw error;
+        }
+    }
+    return recoverGuestIdentity(snapshot);
+}
+
 export function getAuthSession() {
     return currentSession;
 }
@@ -191,22 +341,16 @@ export function setAuthProfile(profile) {
  * Refresh user profile from server
  */
 export async function refreshUserProfile(userId) {
-    if (!userId) return null;
-    try {
-        let res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
-        if (res.status === 401 && await refreshAuthSession()) {
-            res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
-        }
-        if (res.ok) {
-            const data = await res.json();
-            currentProfile = data;
-            localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
-            return currentProfile;
-        }
-    } catch (e) {
-        console.error('Error fetching user profile:', e);
+    if (!userId) throw Object.assign(new Error('Player profile is unavailable.'), { code: 'PROFILE_NOT_FOUND' });
+    let res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
+    if (res.status === 401 && await refreshAuthSession()) {
+        res = await fetch('/api/player/profile', { headers: getAuthHeaders() });
     }
-    return null;
+    if (!res.ok) throw await responseError(res);
+    const data = await res.json();
+    currentProfile = data;
+    localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
+    return currentProfile;
 }
 
 export async function refreshAuthSession() {
@@ -309,12 +453,8 @@ export async function signInUser({ usernameOrEmail, password }) {
  * Sign out current player
  */
 export async function signOutUser() {
-    currentSession = null;
-    currentProfile = null;
-    localStorage.removeItem(AUTH_SESSION_KEY);
-    localStorage.removeItem(AUTH_PROFILE_KEY);
-
-    window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
-        detail: { session: null, profile: null }
-    }));
+    clearIdentityCredentials();
+    setRecoveryState('ready');
+    try { localStorage.removeItem(AUTH_RECOVERY_ACCOUNT_KEY); } catch { /* optional persistence */ }
+    dispatchAuthEvent('bconomy-auth-change', { session: null, profile: null });
 }

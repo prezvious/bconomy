@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+process.env.BCONOMY_DEV_COMMANDS = 'true';
 const app = require('../server');
 
 const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
@@ -27,7 +28,10 @@ const server = app.listen(0, '127.0.0.1');
     const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
     const health = await healthResponse.json();
     assert.strictEqual(health.status, 'ok');
-    assert.strictEqual(health.version, '4.0.1');
+    assert.strictEqual(health.version, '4.1.0');
+
+    const progressionRules = await (await fetch(`http://127.0.0.1:${port}/api/data/progression-rules`)).json();
+    assert.deepStrictEqual(progressionRules, { maxTargetedTierAdvance: 3000 });
 
     const noVersion = await request('/api/game/queries', { type: 'progression.summary', guestState: { cash: 0 } });
     assert.strictEqual(noVersion.status, 426);
@@ -67,11 +71,11 @@ const server = app.listen(0, '127.0.0.1');
     const invalid = await request('/api/game/commands', {
         commandId: 'bad', expectedRevision: 0, type: 'player.reset', payload: {}, guestState
     }, headers);
-    // Test player.setCash & player.addCash in development mode
+    // Test canonical dev.setCash and the guarded player.addCash compatibility alias.
     const setCashCmd = await request('/api/game/commands', {
         commandId: '123e4567-e89b-42d3-a456-426614174001',
         expectedRevision: 0,
-        type: 'player.setCash',
+        type: 'dev.setCash',
         payload: { cash: 500000000000000 },
         guestState
     }, headers);

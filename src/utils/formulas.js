@@ -193,6 +193,8 @@ function displayItemName(name) {
  * @param {boolean} isMaxAffordable
  * @returns {Object} { totalCost, targetTier, targetRankIndex, affordable }
  */
+const MAX_TARGETED_TIER_ADVANCE = 3000;
+
 function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, ranks, isMaxAffordable = false) {
     const cronyismLevel = Math.min(25, (playerState.perks && playerState.perks.cronyism) || 0);
     const investitureLevel = Math.min(25, (playerState.perks && playerState.perks.investiture) || 0);
@@ -200,6 +202,8 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
     let curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
     let curRank = Math.min(106, Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
     let availableCash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
+    const initialTier = curTier;
+    const initialRank = curRank;
 
     // Helper: cost of rank slice within a tier from [fromRankExcl + 1 ... toRankIncl]
     const getSliceCost = (fromRankExcl, toRankIncl, tier) => {
@@ -215,6 +219,37 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
     // Helper: cost of an entire tier T (all 106 rank promotions 0 -> 106 PLUS ascension to T+1)
     const getTierCost = (tier) => {
         return getSliceCost(0, 106, tier) + getAscensionCost(tier, investitureLevel);
+    };
+
+    const getNextCost = (tier = curTier, rank = curRank) => {
+        if (rank >= 106) return getAscensionCost(tier, investitureLevel);
+        const nextRank = ranks[rank + 1];
+        return nextRank ? getRankUpCost(nextRank.basePrice, cronyismLevel, 0, false, tier) : 0;
+    };
+
+    const preview = (totalCost, resolvedTier, resolvedRank, affordable = availableCash >= totalCost) => {
+        const advances = resolvedTier > initialTier || (resolvedTier === initialTier && resolvedRank > initialRank);
+        let reason;
+        let nextCost = totalCost;
+        if (!advances && isMaxAffordable) {
+            reason = 'INSUFFICIENT_CASH';
+            nextCost = getNextCost();
+        } else if (!advances) {
+            reason = 'ALREADY_REACHED';
+            nextCost = 0;
+        } else {
+            reason = affordable ? 'READY' : 'INSUFFICIENT_CASH';
+        }
+        return {
+            totalCost,
+            targetTier: resolvedTier,
+            targetRankIndex: resolvedRank,
+            affordable: reason === 'READY' || reason === 'ALREADY_REACHED',
+            canAdvance: reason === 'READY',
+            reason,
+            nextCost,
+            deficit: reason === 'INSUFFICIENT_CASH' ? Math.max(0, nextCost - availableCash) : 0
+        };
     };
 
     // Precalculate tier slope for quadratic leaping when tier >= 1
@@ -243,12 +278,7 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
                         break;
                     }
                 }
-                return {
-                    totalCost,
-                    targetTier: curTier,
-                    targetRankIndex: curRank,
-                    affordable: true
-                };
+                return preview(totalCost, curTier, curRank, true);
             }
 
             // Player can afford to reach God (Rank 106).
@@ -259,12 +289,7 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
                 remainingCash -= costToFinishRanks;
                 totalCost += costToFinishRanks;
                 curRank = 106;
-                return {
-                    totalCost,
-                    targetTier: curTier,
-                    targetRankIndex: curRank,
-                    affordable: true
-                };
+                return preview(totalCost, curTier, curRank, true);
             }
 
             // Can afford reaching God AND ascending
@@ -281,12 +306,7 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
                 curTier += 1;
                 curRank = 0;
             } else {
-                return {
-                    totalCost: 0,
-                    targetTier: curTier,
-                    targetRankIndex: curRank,
-                    affordable: true
-                };
+                return preview(0, curTier, curRank, false);
             }
         }
 
@@ -365,25 +385,32 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
             }
         }
 
-        return {
-            totalCost,
-            targetTier: curTier,
-            targetRankIndex: curRank,
-            affordable: true
-        };
+        return preview(totalCost, curTier, curRank, true);
     }
 
     // Explicit Target (targetTier, targetRankIndex)
-    const reqTier = Math.max(0, parseInt(targetTier, 10) || 0);
-    const reqRankIndex = Math.min(106, Math.max(0, parseInt(targetRankIndex, 10) || 0));
+    const numericTier = targetTier === null || targetTier === '' ? Number.NaN : Number(targetTier);
+    const numericRank = targetRankIndex === null || targetRankIndex === '' ? Number.NaN : Number(targetRankIndex);
+    if (!Number.isSafeInteger(numericTier) || numericTier < 0 || !Number.isSafeInteger(numericRank) || numericRank < 0 || numericRank > 106) {
+        return {
+            error: 'Target tier and rank must be finite, non-negative safe integers within the rank table.',
+            code: 'INVALID_TARGET'
+        };
+    }
+    const reqTier = numericTier;
+    const reqRankIndex = numericRank;
+    const maximumTargetTier = Math.min(Number.MAX_SAFE_INTEGER, curTier + MAX_TARGETED_TIER_ADVANCE);
+    if (reqTier > maximumTargetTier) {
+        return {
+            error: `Target tier cannot be more than ${MAX_TARGETED_TIER_ADVANCE} tiers ahead.`,
+            code: 'TARGET_TIER_OUT_OF_RANGE',
+            maxTargetedTierAdvance: MAX_TARGETED_TIER_ADVANCE,
+            maximumTargetTier
+        };
+    }
 
     if (reqTier < curTier || (reqTier === curTier && reqRankIndex <= curRank)) {
-        return {
-            totalCost: 0,
-            targetTier: curTier,
-            targetRankIndex: curRank,
-            affordable: true
-        };
+        return preview(0, curTier, curRank, true);
     }
 
     let totalCost = 0;
@@ -403,12 +430,7 @@ function calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, r
         totalCost += getSliceCost(0, reqRankIndex, reqTier);
     }
 
-    return {
-        totalCost,
-        targetTier: reqTier,
-        targetRankIndex: reqRankIndex,
-        affordable: availableCash >= totalCost
-    };
+    return preview(totalCost, reqTier, reqRankIndex, availableCash >= totalCost);
 }
 
 module.exports = {
@@ -423,6 +445,7 @@ module.exports = {
     getAmnesiacChance,
     displayItemName,
     BOOSTER_TIERS,
+    MAX_TARGETED_TIER_ADVANCE,
     calculateBoosterMultiplier,
     calculateTargetedRankUpCost
 };

@@ -8,6 +8,7 @@ const GUEST_REVISION_KEY = 'bconomy_guest_revision';
 let playerState = null;
 let rankData = [];
 let perkData = {};
+let progressionRules = { maxTargetedTierAdvance: 3000 };
 let toolRecipes = {};
 let stateRevision = 0;
 
@@ -17,16 +18,20 @@ export const setRevision = revision => {
     const numeric = Number(revision);
     stateRevision = Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0;
 };
+export const toFiniteNonNegativeSafeInteger = (value, fallback = 0, maximum = Number.MAX_SAFE_INTEGER) => {
+    if (value === null || value === undefined || value === '' || typeof value === 'boolean') return fallback;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.min(maximum, Math.max(0, Math.floor(numeric)));
+};
+
 export const normalizeStateInvariants = (state) => {
     if (!state || typeof state !== 'object') return state;
-    if (typeof state.cash === 'number') {
-        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(state.cash)));
-    } else {
-        state.cash = 0;
-    }
-    state.rankIndex = Math.min(106, Math.max(0, Math.floor(Number(state.rankIndex) || 0)));
-    state.prestigeCount = Math.max(0, Math.floor(Number(state.prestigeCount) || 0));
-    state.prestigePoints = Math.max(0, Math.floor(Number(state.prestigePoints) || 0));
+    const maximumRankIndex = rankData.length > 0 ? rankData.length - 1 : 106;
+    state.cash = toFiniteNonNegativeSafeInteger(state.cash);
+    state.rankIndex = toFiniteNonNegativeSafeInteger(state.rankIndex, 0, maximumRankIndex);
+    state.prestigeCount = toFiniteNonNegativeSafeInteger(state.prestigeCount);
+    state.prestigePoints = toFiniteNonNegativeSafeInteger(state.prestigePoints);
     if (!state.perks || typeof state.perks !== 'object') state.perks = {};
     if (!state.inventory || typeof state.inventory !== 'object') state.inventory = {};
     if (!state.tools || typeof state.tools !== 'object') state.tools = { mine: 1, explore: 1, hunt: 1, fish: 1 };
@@ -39,10 +44,20 @@ export const setState = (state) => {
 };
 
 export const getRankData = () => rankData;
-export const setRankData = (data) => { rankData = data; };
+export const setRankData = (data) => {
+    rankData = Array.isArray(data) ? data : [];
+    if (playerState) normalizeStateInvariants(playerState);
+};
 
 export const getPerkData = () => perkData;
 export const setPerkData = (data) => { perkData = data; };
+
+export const getProgressionRules = () => progressionRules;
+export const setProgressionRules = (rules) => {
+    progressionRules = {
+        maxTargetedTierAdvance: toFiniteNonNegativeSafeInteger(rules?.maxTargetedTierAdvance, 3000)
+    };
+};
 
 export const getToolRecipes = () => toolRecipes;
 export const setToolRecipes = (recipes) => { toolRecipes = recipes; };
@@ -77,13 +92,12 @@ export const clearGuestMigrationSource = () => {
 
 export const saveState = (state) => {
     if (state !== undefined) {
-        playerState = state;
+        playerState = normalizeStateInvariants(state);
+    } else if (playerState) {
+        normalizeStateInvariants(playerState);
     }
     try {
         if (playerState) {
-            if (typeof playerState.cash === 'number' && playerState.cash > Number.MAX_SAFE_INTEGER) {
-                playerState.cash = Number.MAX_SAFE_INTEGER;
-            }
             const session = getAuthSession();
             if (session?.user?.id) {
                 localStorage.setItem(`${LEGACY_STATE_KEY}:${session.user.id}`, JSON.stringify({ state: playerState, revision: stateRevision }));

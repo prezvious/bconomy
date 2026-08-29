@@ -149,9 +149,10 @@ async function ensurePlayerProfile(userId, username, email, defaultState = null,
 /**
  * Retrieve user's full profile and saved state from Supabase
  */
-async function getProfileByUserId(userId) {
+async function lookupProfileByUserId(userId) {
     const client = getSupabaseAdmin();
-    if (!client || !userId) return null;
+    if (!client) return { status: 'unavailable', error: 'Supabase is not configured' };
+    if (!userId) return { status: 'missing' };
 
     try {
         const { data, error } = await client
@@ -162,17 +163,23 @@ async function getProfileByUserId(userId) {
 
         if (error) {
             console.error('Error fetching player profile:', error);
-            return null;
+            return { status: 'unavailable', error: 'Player persistence is unavailable' };
         }
 
         if (data) {
             data.formatted_player_id = formatPlayerId(data.player_id);
+            return { status: 'found', profile: data };
         }
-        return data;
+        return { status: 'missing' };
     } catch (e) {
         console.error('Error fetching profile from Supabase:', e);
-        return null;
+        return { status: 'unavailable', error: 'Player persistence is unavailable' };
     }
+}
+
+async function getProfileByUserId(userId) {
+    const lookup = await lookupProfileByUserId(userId);
+    return lookup.status === 'found' ? lookup.profile : null;
 }
 
 async function touchPlayerActivity(userId, now = new Date()) {
@@ -455,6 +462,7 @@ module.exports = {
     findEmailByUsername,
     findProfileByUsername,
     ensurePlayerProfile,
+    lookupProfileByUserId,
     getProfileByUserId,
     touchPlayerActivity,
     signUpUserAdmin,

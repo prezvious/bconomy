@@ -79,7 +79,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v4.0.1" title="Click to view release notes">Bconomy v4.0.1</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v4.1.0" title="Click to view release notes">Bconomy v4.1.0</button>
             </div>
         </nav>
 
@@ -116,6 +116,15 @@
                     </div>
                 </div>
             </header>
+
+            <div id="identity-recovery-notice" class="identity-recovery-notice hidden" role="status" aria-live="polite">
+                <iconify-icon icon="lucide:triangle-alert" aria-hidden="true"></iconify-icon>
+                <span id="identity-recovery-message"></span>
+                <button id="identity-recovery-retry" class="action-btn secondary-btn hidden" type="button">Retry recovery</button>
+                <button id="identity-recovery-dismiss" class="modal-close-btn" type="button" aria-label="Dismiss recovery notice">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
 
             <main class="ledger-main" id="main-content" tabindex="-1">
                 <div class="panels-container">
@@ -971,6 +980,7 @@
                     <div class="form-group mb-3">
                         <label for="targeted-tier-input" class="form-label">Target Tier:</label>
                         <input type="number" id="targeted-tier-input" name="targeted-tier" class="form-input" inputmode="numeric" autocomplete="off" min="0" value="0">
+                        <span id="targeted-tier-error" class="field-error hidden" role="alert"></span>
                     </div>
                     <div class="form-group mb-3">
                         <label for="targeted-rank-select" class="form-label">Target Rank:</label>
@@ -1451,7 +1461,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v4.0.1 Latest</span>
+                            <span class="badge release-latest-tag">v4.1.0 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>

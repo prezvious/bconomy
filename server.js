@@ -8,7 +8,7 @@ const cors = require('cors');
 const path = require('path');
 const {
     isSupabaseConfigured,
-    getProfileByUserId,
+    lookupProfileByUserId,
     touchPlayerActivity,
     signUpUserAdmin,
     signInUserServer,
@@ -33,6 +33,13 @@ const {
     cleanupInactiveGuests
 } = require('./src/db/factions');
 const { executeCommand, executeQuery } = require('./src/api/gameGateway');
+const {
+    DEV_COMMAND_TYPES,
+    isExplicitlyEnabled: areDevCommandsEnabled,
+    isLocalDevelopmentRequest,
+    authorizeDevCommand,
+    warnDeprecatedDevToggle
+} = require('./src/api/devCommandAccess');
 const { normalizePlayerState, createDefaultState } = require('./src/state/playerState');
 const { getAllItems } = require('./src/data/itemRegistry');
 const ActionEngine = require('./src/engine/actionEngine');
@@ -59,6 +66,7 @@ const GamblingEngine = require('./src/engine/gamblingEngine');
 const { FactionEngine, getMultiplierTable } = require('./src/engine/factionEngine');
 
 const app = express();
+warnDeprecatedDevToggle();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -172,8 +180,10 @@ const resolveFactionActor = async req => {
     const user = await verifyAccessToken(token);
     if (!user) return { error: { code: 'INVALID_AUTH', message: 'Your player session expired. Reload Bconomy to continue as a guest or sign in again.' }, status: 401 };
     await maybeCleanupInactiveGuests();
-    let profile = await getProfileByUserId(user.id);
-    if (!profile) return { error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' }, status: 404 };
+    const initialLookup = await lookupProfileByUserId(user.id);
+    if (initialLookup.status === 'unavailable') return { error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' }, status: 503 };
+    if (initialLookup.status === 'missing') return { error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' }, status: 404 };
+    let profile = initialLookup.profile;
 
     if (profile.account_kind === 'guest') {
         if (isExpiredGuestProfile(profile)) {
@@ -190,7 +200,12 @@ const resolveFactionActor = async req => {
             expectedRevision: profile.state_revision,
             guestImport: false
         });
-        if (migration.status === 'applied') profile = await getProfileByUserId(user.id) || profile;
+        if (migration.status === 'applied') {
+            const migratedLookup = await lookupProfileByUserId(user.id);
+            if (migratedLookup.status === 'unavailable') return { error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' }, status: 503 };
+            if (migratedLookup.status === 'missing') return { error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' }, status: 404 };
+            profile = migratedLookup.profile;
+        }
         if (!['applied', 'duplicate'].includes(migration.status)) {
             return { error: { code: migration.code || 'MIGRATION_FAILED', message: migration.message || 'Existing faction data could not be migrated safely.' }, status: factionStatusCode(migration) };
         }
@@ -214,8 +229,10 @@ const resolveGameContext = async (req, { query = false } = {}) => {
         const user = await verifyAccessToken(token);
         if (!user) return { errorStatus: 401, error: { code: 'INVALID_AUTH', message: 'Your session expired. Sign in again.' } };
         await maybeCleanupInactiveGuests();
-        const profile = await getProfileByUserId(user.id);
-        if (!profile) return { errorStatus: 404, error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } };
+        const lookup = await lookupProfileByUserId(user.id);
+        if (lookup.status === 'unavailable') return { errorStatus: 503, error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable. Try again.' } };
+        if (lookup.status === 'missing') return { errorStatus: 404, error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } };
+        const profile = lookup.profile;
         if (isExpiredGuestProfile(profile)) {
             await cleanupInactiveGuest(user.id);
             return { errorStatus: 401, error: { code: 'GUEST_EXPIRED', message: 'This guest identity was deleted after 365 days without activity.' } };
@@ -286,11 +303,28 @@ app.post('/api/game/commands', async (req, res) => {
     if (!isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || typeof type !== 'string' || !type) {
         return res.status(400).json({ error: { code: 'INVALID_COMMAND', message: 'Command ID, non-negative revision, and type are required.' } });
     }
+    const isDevCommand = DEV_COMMAND_TYPES.has(type);
+    if (isDevCommand && !areDevCommandsEnabled()) {
+        return res.status(403).json({ error: { code: 'DEV_COMMANDS_DISABLED', message: 'Developer commands are disabled.' } });
+    }
     try {
         const context = await resolveGameContext(req);
         if (context.error) return res.status(context.errorStatus).json({ error: context.error });
         if (context.mode === 'signed' && req.body.guestState !== undefined) {
             return res.status(400).json({ error: { code: 'SIGNED_STATE_FORBIDDEN', message: 'Signed commands cannot supply client-owned state.' } });
+        }
+        let executionContext = {};
+        if (isDevCommand) {
+            const access = authorizeDevCommand({ req, userId: context.user?.id });
+            if (!access.allowed) {
+                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: access.code, startedAt });
+                return res.status(403).json({ error: { code: access.code, message: access.message } });
+            }
+            executionContext = {
+                allowDevCommands: true,
+                devCommandSource: access.source,
+                devCommandActorId: context.user?.id || null
+            };
         }
         if (context.mode === 'signed') {
             const receipt = await getPlayerCommandReceipt({ userId: context.user.id, commandId });
@@ -325,7 +359,7 @@ app.post('/api/game/commands', async (req, res) => {
         } else if (type === 'action.perform') {
             authoritativePayload = { ...payload, factionContext: null };
         }
-        const outcome = executeCommand(context.state, type, authoritativePayload, Date.now());
+        const outcome = executeCommand(context.state, type, authoritativePayload, Date.now(), executionContext);
         if (!outcome.ok) {
             logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: outcome.code, startedAt });
             return res.status(422).json({ error: { code: outcome.code, message: outcome.error, details: outcome.details }, state: context.state, revision: context.revision });
@@ -340,7 +374,10 @@ app.post('/api/game/commands', async (req, res) => {
                 result: outcome.result
             });
             if (commit.status === 'conflict') {
-                const latest = await getProfileByUserId(context.user.id);
+                const latestLookup = await lookupProfileByUserId(context.user.id);
+                if (latestLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Latest progress could not be loaded safely. Try again.' } });
+                if (latestLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
+                const latest = latestLookup.profile;
                 return res.status(409).json({
                     error: { code: 'STATE_CONFLICT', message: 'Progress changed in another session. Review the latest state and try again.' },
                     state: normalizePlayerState(latest?.state || context.state),
@@ -348,7 +385,10 @@ app.post('/api/game/commands', async (req, res) => {
                 });
             }
             if (commit.status === 'duplicate') {
-                const latest = await getProfileByUserId(context.user.id);
+                const latestLookup = await lookupProfileByUserId(context.user.id);
+                if (latestLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Committed progress could not be loaded safely. Try again.' } });
+                if (latestLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
+                const latest = latestLookup.profile;
                 const revision = Math.max(0, Math.floor(Number(latest?.state_revision ?? commit.revision) || 0));
                 logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt });
                 return res.json({ state: normalizePlayerState(latest?.state || outcome.state), revision, result: commit.result || outcome.result, duplicate: true });
@@ -443,10 +483,12 @@ app.post('/api/factions/commands', async (req, res) => {
 
 app.get('/api/player/profile', async (req, res) => {
     const user = await verifyAccessToken(getBearerToken(req));
-    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!user) return res.status(401).json({ error: { code: 'INVALID_AUTH', message: 'Invalid or expired session.' } });
     await maybeCleanupInactiveGuests();
-    let profile = await getProfileByUserId(user.id);
-    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    const lookup = await lookupProfileByUserId(user.id);
+    if (lookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' } });
+    if (lookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Profile not found.' } });
+    let profile = lookup.profile;
     if (isExpiredGuestProfile(profile)) {
         await cleanupInactiveGuest(user.id);
         return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
@@ -463,7 +505,10 @@ app.get('/api/player/profile', async (req, res) => {
         if (!['applied', 'duplicate'].includes(migration.status)) {
             return res.status(factionStatusCode(migration)).json({ error: migration.message || 'Existing faction data could not be migrated safely.' });
         }
-        profile = await getProfileByUserId(user.id) || profile;
+        const migratedLookup = await lookupProfileByUserId(user.id);
+        if (migratedLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Migrated progress could not be loaded safely.' } });
+        if (migratedLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
+        profile = migratedLookup.profile;
     }
     profile.state = normalizePlayerState(profile.state);
     res.json(profile);
@@ -472,8 +517,11 @@ app.get('/api/player/profile', async (req, res) => {
 app.post('/api/player/guest-migrate', async (req, res) => {
     const user = await verifyAccessToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: { code: 'INVALID_AUTH', message: 'The guest session is invalid or expired.' } });
-    const profile = await getProfileByUserId(user.id);
-    if (!profile || profile.account_kind !== 'guest') {
+    const lookup = await lookupProfileByUserId(user.id);
+    if (lookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' } });
+    if (lookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
+    const profile = lookup.profile;
+    if (profile.account_kind !== 'guest') {
         return res.status(422).json({ error: { code: 'GUEST_REQUIRED', message: 'Only an anonymous guest identity can use guest migration.' } });
     }
     if (isExpiredGuestProfile(profile)) {
@@ -498,17 +546,21 @@ app.post('/api/player/guest-migrate', async (req, res) => {
     });
     const status = factionStatusCode(outcome);
     if (status !== 200) return res.status(status).json({ error: { code: outcome.code || 'GUEST_MIGRATION_FAILED', message: outcome.message || 'Guest progress could not be migrated safely.' } });
-    const updatedProfile = await getProfileByUserId(user.id);
-    if (!updatedProfile) return res.status(500).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'The migrated guest profile could not be loaded.' } });
+    const updatedLookup = await lookupProfileByUserId(user.id);
+    if (updatedLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'The migrated guest profile could not be loaded safely.' } });
+    if (updatedLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'The migrated guest profile could not be loaded.' } });
+    const updatedProfile = updatedLookup.profile;
     updatedProfile.state = normalizePlayerState(updatedProfile.state);
     res.json({ profile: updatedProfile, snapshot: outcome.snapshot, duplicate: outcome.status === 'duplicate' });
 });
 
 app.post('/api/player/import', async (req, res) => {
     const user = await verifyAccessToken(getBearerToken(req));
-    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
-    const importingProfile = await getProfileByUserId(user.id);
-    if (!importingProfile) return res.status(404).json({ error: 'Profile not found' });
+    if (!user) return res.status(401).json({ error: { code: 'INVALID_AUTH', message: 'Invalid or expired session.' } });
+    const importingLookup = await lookupProfileByUserId(user.id);
+    if (importingLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' } });
+    if (importingLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Profile not found.' } });
+    const importingProfile = importingLookup.profile;
     if (isExpiredGuestProfile(importingProfile)) {
         await cleanupInactiveGuest(user.id);
         return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
@@ -523,8 +575,9 @@ app.post('/api/player/import', async (req, res) => {
     const state = normalizePlayerState(req.body.deviceState);
     const outcome = await replacePlayerState({ userId: user.id, expectedRevision, state });
     if (outcome.status === 'conflict') {
-        const latest = await getProfileByUserId(user.id);
-        return res.status(409).json({ error: 'Cloud progress changed before import', profile: latest });
+        const latestLookup = await lookupProfileByUserId(user.id);
+        if (latestLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Latest cloud progress could not be loaded.' } });
+        return res.status(409).json({ error: 'Cloud progress changed before import', profile: latestLookup.profile || null });
     }
     if (outcome.status !== 'applied') return res.status(503).json({ error: 'Device progress could not be imported safely' });
     await touchPlayerActivity(user.id);
@@ -775,7 +828,11 @@ app.post('/api/prestige/targeted-rank-up', (req, res) => {
     FarmEngine.ensureFarmState(playerState);
     const result = RankPrestigeEngine.targetedRankUp(playerState, targetTier, targetRankIndex, isMaxAffordable);
     if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
+        return res.status(400).json({
+            error: { code: result.code || 'DOMAIN_REJECTED', message: result.error, details: result },
+            state: playerState,
+            result
+        });
     }
     res.json({ state: playerState, result });
 });
@@ -1143,6 +1200,11 @@ app.get('/api/data/perks', (req, res) => {
     res.json(PERK_DEFINITIONS);
 });
 
+app.get('/api/data/progression-rules', (req, res) => {
+    const { MAX_TARGETED_TIER_ADVANCE } = require('./src/utils/formulas');
+    res.json({ maxTargetedTierAdvance: MAX_TARGETED_TIER_ADVANCE });
+});
+
 app.get('/api/data/boosters', (req, res) => {
     const { BOOSTER_TIERS } = require('./src/utils/formulas');
     const { BOOSTER_REGISTRY } = require('./src/engine/shopTables');
@@ -1222,7 +1284,7 @@ app.get('/api/config/auth', (req, res) => {
         enabled: isSupabaseConfigured(),
         supabaseUrl: url || null,
         supabaseAnonKey: anonKey || null,
-        devMode: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_COMMANDS === 'true'
+        devMode: areDevCommandsEnabled() && isLocalDevelopmentRequest(req)
     });
 });
 
@@ -1255,10 +1317,10 @@ app.post('/api/auth/signup', async (req, res) => {
         if (accessToken && !currentUser) {
             return res.status(401).json({ error: 'The guest session expired. Refresh it before creating an account.' });
         }
-        const currentProfile = currentUser ? await getProfileByUserId(currentUser.id) : null;
-        if (currentUser && !currentProfile) {
-            return res.status(404).json({ error: 'Player profile not found.' });
-        }
+        const currentLookup = currentUser ? await lookupProfileByUserId(currentUser.id) : null;
+        if (currentLookup?.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' } });
+        if (currentLookup?.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
+        const currentProfile = currentLookup?.profile || null;
         let result;
         if (currentUser && currentProfile?.account_kind === 'guest') {
             if (isExpiredGuestProfile(currentProfile)) {
@@ -1317,12 +1379,12 @@ app.post('/api/player/find-email', async (req, res) => {
 app.get('/api/player/profile/:userId', async (req, res) => {
     const { userId } = req.params;
     const user = await verifyAccessToken(getBearerToken(req));
-    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!user) return res.status(401).json({ error: { code: 'INVALID_AUTH', message: 'Invalid or expired session.' } });
     if (!userId || user.id !== userId) return res.status(403).json({ error: 'Profile ownership mismatch' });
-    const profile = await getProfileByUserId(userId);
-    if (!profile) {
-        return res.status(404).json({ error: 'Profile not found' });
-    }
+    const lookup = await lookupProfileByUserId(userId);
+    if (lookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' } });
+    if (lookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Profile not found.' } });
+    const profile = lookup.profile;
     if (isExpiredGuestProfile(profile)) {
         await cleanupInactiveGuest(user.id);
         return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });

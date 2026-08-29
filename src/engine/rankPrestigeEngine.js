@@ -167,15 +167,26 @@ class RankPrestigeEngine {
         const { calculateTargetedRankUpCost } = require('../utils/formulas');
         const calc = calculateTargetedRankUpCost(playerState, targetTier, targetRankIndex, RANKS, isMaxAffordable);
 
-        if (!calc.affordable || playerState.cash < calc.totalCost) {
-            return { error: 'Not enough cash for targeted rank up.' };
+        if (calc.error) return calc;
+
+        if (calc.reason === 'ALREADY_REACHED') {
+            return { error: 'Already at or above requested target rank/tier.', code: 'ALREADY_REACHED' };
+        }
+
+        if (calc.reason === 'INSUFFICIENT_CASH' || !calc.canAdvance || playerState.cash < calc.totalCost) {
+            return {
+                error: 'Not enough cash for targeted rank up.',
+                code: 'INSUFFICIENT_CASH',
+                nextCost: calc.nextCost,
+                deficit: calc.deficit
+            };
         }
 
         const initialTier = playerState.prestigeCount || 0;
         const initialRank = playerState.rankIndex || 0;
 
         if (calc.targetTier === initialTier && calc.targetRankIndex === initialRank) {
-            return { error: 'Already at or above requested target rank/tier.' };
+            return { error: 'Already at or above requested target rank/tier.', code: 'ALREADY_REACHED' };
         }
 
         playerState.cash -= calc.totalCost;

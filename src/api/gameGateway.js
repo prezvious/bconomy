@@ -13,28 +13,39 @@ const GamblingEngine = require('../engine/gamblingEngine');
 const { getAllItems } = require('../data/itemRegistry');
 const { normalizePlayerState, cleanupOwnedItemFlags, createDefaultState } = require('../state/playerState');
 
-const isDevModeAllowed = () => process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_COMMANDS === 'true';
+const requireDevAccess = executionContext => {
+    if (executionContext?.allowDevCommands === true) return null;
+    return {
+        ok: false,
+        code: executionContext?.devCommandErrorCode || 'DEV_COMMANDS_DISABLED',
+        error: executionContext?.devCommandErrorMessage || 'Developer commands are disabled.'
+    };
+};
+
+const setCash = (state, payload, now, executionContext) => {
+    const denied = requireDevAccess(executionContext);
+    if (denied) return denied;
+    const val = payload?.cash !== undefined ? payload.cash : payload?.amount;
+    state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(val) || 0)));
+    return { success: true, cash: state.cash };
+};
+
+const addCash = (state, payload, now, executionContext) => {
+    const denied = requireDevAccess(executionContext);
+    if (denied) return denied;
+    const delta = Math.floor(Number(payload?.cash !== undefined ? payload.cash : payload?.amount) || 0);
+    state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, (state.cash || 0) + delta));
+    return { success: true, cash: state.cash };
+};
+
+const DEPRECATED_COMMAND_TYPES = new Set(['player.setCash', 'player.addCash']);
 
 const COMMAND_TYPES = Object.freeze({
     'player.reset': (state) => ({ replaceState: createDefaultState(), result: { success: true } }),
-    'player.setCash': (state, payload) => {
-        if (!isDevModeAllowed()) {
-            return { ok: false, code: 'DEV_COMMANDS_DISABLED', error: 'Developer cheat commands are disabled in production.' };
-        }
-        const val = payload?.cash !== undefined ? payload.cash : payload?.amount;
-        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(val) || 0)));
-        return { success: true, cash: state.cash };
-    },
-    'player.addCash': (state, payload) => {
-        if (!isDevModeAllowed()) {
-            return { ok: false, code: 'DEV_COMMANDS_DISABLED', error: 'Developer cheat commands are disabled in production.' };
-        }
-        const delta = Math.floor(Number(payload?.cash !== undefined ? payload.cash : payload?.amount) || 0);
-        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, (state.cash || 0) + delta));
-        return { success: true, cash: state.cash };
-    },
-    'dev.setCash': (state, payload) => COMMAND_TYPES['player.setCash'](state, payload),
-    'dev.addCash': (state, payload) => COMMAND_TYPES['player.addCash'](state, payload),
+    'dev.setCash': setCash,
+    'dev.addCash': addCash,
+    'player.setCash': setCash,
+    'player.addCash': addCash,
     'inventory.setFlags': (state, payload, now) => InventoryEngine.setFlags(state, payload.itemIds, payload.changes),
     'shop.setWishlist': (state, payload, now) => InventoryEngine.setWishlist(state, payload.itemIds, payload.wished, Number.isSafeInteger(payload.addedAt) ? payload.addedAt : now),
     'action.perform': (state, payload, now) => ActionEngine.performAction(state, payload.actionType, now, Math.random, payload.factionContext),
@@ -135,11 +146,21 @@ function isDomainFailure(result) {
     return !result || result.error || result.success === false || result.ok === false;
 }
 
-function executeCommand(playerState, type, payload = {}, now = Date.now()) {
+function executeCommand(playerState, type, payload = {}, now = Date.now(), executionContext = {}) {
     const handler = COMMAND_TYPES[type];
     if (!handler) return { ok: false, code: 'UNKNOWN_COMMAND', error: `Unknown game command '${type}'` };
+    if (DEPRECATED_COMMAND_TYPES.has(type) && executionContext.allowDevCommands === true) {
+        console.warn(JSON.stringify({
+            event: 'deprecated_game_command',
+            commandType: type,
+            replacement: type.replace(/^player\./, 'dev.'),
+            removal: 'next-release',
+            actorId: executionContext.devCommandActorId || null,
+            source: executionContext.devCommandSource || 'internal'
+        }));
+    }
     let state = normalizePlayerState(playerState);
-    const rawResult = handler(state, payload || {}, now);
+    const rawResult = handler(state, payload || {}, now, executionContext);
     if (rawResult?.replaceState) state = normalizePlayerState(rawResult.replaceState);
     if (rawResult?.ok === true && rawResult.playerState) state = normalizePlayerState(rawResult.playerState);
     const result = rawResult?.ok === true && rawResult.result ? rawResult.result : rawResult?.result || rawResult;

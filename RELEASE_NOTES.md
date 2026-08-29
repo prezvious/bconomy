@@ -4,6 +4,37 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.1.0] — 2026-08-29
+
+### Added
+- **Progression Rules API & Authoritative Previews**:
+  - Added `GET /api/data/progression-rules` publishing game advancement constraints (`maxTargetedTierAdvance: 3000`).
+  - Added structured preview status feedback (`READY`, `INSUFFICIENT_CASH`, `ALREADY_REACHED`) with exact next-tier costs and remaining deficit calculations.
+- **Player Identity Recovery Protocol**:
+  - Added seamless guest session recovery with automatic snapshot migration, preserving local device progress across expired guest tokens.
+  - Added registered account identity recovery banner (`#identity-recovery-notice`) with state caching and sign-in recovery prompts, preventing registered progress from being overwritten or downgraded to guest accounts.
+
+### Changed
+- **Server-Authoritative Developer Command Security**:
+  - Promoted `dev.setCash` and `dev.addCash` to canonical developer commands, secured by a fail-closed master switch (`BCONOMY_DEV_COMMANDS=true`).
+  - Implemented request-level authorization allowing direct local development (loopback address, localhost host header, no proxy-forwarding headers) and remote/production actor authorization via `BCONOMY_DEV_USER_IDS` allowlists.
+  - Proxy-forwarded requests now automatically deny dev command execution unless explicitly allowlisted by UUID.
+  - Replaced duplicate client-side rank advancement calculations with authoritative backend previews.
+
+### Deprecated
+- `player.setCash` and `player.addCash` command names are deprecated and will be removed in a future release; use `dev.setCash` and `dev.addCash`.
+- `ALLOW_DEV_COMMANDS` environment variable is deprecated; use `BCONOMY_DEV_COMMANDS`.
+
+### Fixed
+- **Rank Advancement & Ascension Edge Cases**:
+  - Enforced free Tier 0 God ascension (Tier 0 to Tier 1 Rank 0) while properly charging ascension fees on Tier 1+.
+  - Hardened targeted rank advancement against invalid, negative, or non-finite inputs (`INVALID_TARGET`, `TARGET_TIER_OUT_OF_RANGE`).
+  - Added field validation error display (`#targeted-tier-error`) in targeted rank-up dialog.
+- **Perk Simulator Null-Safety**:
+  - Added default target initialization and null-safety guards across all Perk Simulator allocation sliders and preview routines.
+
+---
+
 ## [v4.0.1] — 2026-08-29
 
 ### Fixed

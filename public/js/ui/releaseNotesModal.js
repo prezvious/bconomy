@@ -3,9 +3,68 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.1.0',
+        version: 'v4.1.0',
+        isLatest: true,
+        date: '2026-08-29',
+        title: 'v4.1.0 — Hardened Developer Controls, Identity Recovery & Progression Contracts',
+        sections: [
+            {
+                type: 'Developer Tooling & Security',
+                items: [
+                    {
+                        title: 'Server-Authoritative Dev Cash Commands',
+                        bullets: [
+                            'Made dev.setCash and dev.addCash canonical and fail-closed behind BCONOMY_DEV_COMMANDS=true.',
+                            'Implemented authorization matrix requiring direct local development or actor allowlisting via BCONOMY_DEV_USER_IDS, with proxy spoofing protection.',
+                            'Retained player.setCash and player.addCash as guarded deprecation aliases with structured warning logs.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Identity & Session Recovery',
+                items: [
+                    {
+                        title: 'Account-Aware Identity Recovery',
+                        bullets: [
+                            'Added automatic snapshot migration for expired anonymous guest identities without losing local progress.',
+                            'Added session recovery banner and sign-in barrier for expired registered accounts to prevent overwriting cloud state.',
+                            'Retried failed commands with stable operation UUIDs and rebuilt state revisions.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Progression & Targeted Advancement',
+                items: [
+                    {
+                        title: 'Progression Rules API & Advancement Hardening',
+                        bullets: [
+                            'Added GET /api/data/progression-rules publishing the 3,000-tier advance limit.',
+                            'Introduced explicit READY, INSUFFICIENT_CASH, and ALREADY_REACHED preview reason codes with deficit tracking.',
+                            'Replaced duplicate client calculations with authoritative backend previews, added input validation error feedback, and ensured free Tier 0 God ascension.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Bug Fixes & UI Stability',
+                items: [
+                    {
+                        title: 'Perk Simulator Null-Safety',
+                        bullets: [
+                            'Added default simulatorTargets initialization and null-safety across all allocation sliders and preview routines.',
+                            'Hardened state normalization across all save and sign-in entrypoints.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.0.1',
         version: 'v4.0.1',
-        isLatest: true,
         date: '2026-08-29',
         title: 'v4.0.1 — Targeted Rank Advancement & State Normalization Fixes',
         sections: [

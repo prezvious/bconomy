@@ -12,7 +12,10 @@ import {
     getAuthProfile,
     setAuthProfile,
     getAuthHeaders,
-    isGuestProfile
+    isGuestProfile,
+    completeAuthRecovery,
+    getRecoveryAccountId,
+    getRecoveryAccountState
 } from '../auth.js';
 import { getState, setState, saveState, setRevision } from '../state.js';
 import { showToast } from './toast.js';
@@ -361,17 +364,22 @@ async function handleSignIn(e) {
             submitBtn.classList.add('btn-loading');
         }
 
+        const recoveryAccountId = getRecoveryAccountId();
         const deviceState = getState();
         const data = await signInUser({ usernameOrEmail: identifier, password });
-        showToast(`Welcome back, Guild Master ${data.profile?.username || ''}!`, 'success');
-        closeAuthModal();
 
         // Load user's cloud saved state
         const profile = getAuthProfile();
-        if (profile && profile.state && Object.keys(profile.state).length > 0) {
-            await reconcileSignedState(profile, deviceState);
+        if (profile) {
+            const reconciliationSource = recoveryAccountId
+                ? getRecoveryAccountState(profile.id)
+                : deviceState;
+            await reconcileSignedState(profile, reconciliationSource);
             renderAll();
         }
+        completeAuthRecovery();
+        showToast(`Welcome back, Guild Master ${data.profile?.username || ''}!`, 'success');
+        closeAuthModal();
         updateAccountHeaderUI();
     } catch (err) {
         showAuthError('auth-pane-signin', err.message || 'Failed to sign in.');
@@ -414,17 +422,22 @@ async function handleSignUp(e) {
             submitBtn.classList.add('btn-loading');
         }
 
+        const recoveryAccountId = getRecoveryAccountId();
         const deviceState = getState();
         const data = await signUpUser({ username, email, password });
-        showToast(`Enlisted successfully as Player ${data.profile?.formatted_player_id || '#' + data.profile?.player_id}!`, 'success');
-        closeAuthModal();
 
         // Sync initial state if available
         const profile = getAuthProfile();
-        if (profile && profile.state && Object.keys(profile.state).length > 0) {
-            await reconcileSignedState(profile, deviceState);
+        if (profile) {
+            const reconciliationSource = recoveryAccountId
+                ? getRecoveryAccountState(profile.id)
+                : deviceState;
+            await reconcileSignedState(profile, reconciliationSource);
             renderAll();
         }
+        completeAuthRecovery();
+        showToast(`Enlisted successfully as Player ${data.profile?.formatted_player_id || '#' + data.profile?.player_id}!`, 'success');
+        closeAuthModal();
         updateAccountHeaderUI();
     } catch (err) {
         showAuthError('auth-pane-signup', err.message || 'Failed to create account.');

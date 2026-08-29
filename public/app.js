@@ -1,8 +1,8 @@
 // Bconomy Main Entry Point (ES Module)
 import { apiCall, gameCommand, doResetPlayer } from './js/api.js';
-import { loadState, getState, setState, saveState, setRankData, setPerkData, setRevision, clearGuestMigrationSource } from './js/state.js';
-import { initAuth, getAuthProfile, isGuestProfile, migrateGuestProgress } from './js/auth.js';
-import { setupAuthModal, reconcileSignedState } from './js/ui/authModal.js';
+import { loadState, getState, setState, saveState, setRankData, setPerkData, setProgressionRules, setRevision, clearGuestMigrationSource } from './js/state.js';
+import { initAuth, getAuthProfile, isGuestProfile, migrateGuestProgress, retryGuestRecovery } from './js/auth.js';
+import { setupAuthModal, reconcileSignedState, openAuthModal } from './js/ui/authModal.js';
 import { setupThemeToggle } from './js/theme.js';
 import { renderAll } from './js/ui/header.js';
 import { updateAllToolRecipes } from './js/ui/tools.js';
@@ -17,25 +17,91 @@ import { setupHotkeys } from './js/controls.js';
 import { setupUtilityRail } from './js/ui/utilityRail.js';
 import { showToast } from './js/ui/toast.js';
 
+const RECOVERY_NOTICE_KEY = 'bconomy_identity_recovery_notice';
+
+const setupIdentityRecoveryUI = () => {
+    const notice = document.getElementById('identity-recovery-notice');
+    const message = document.getElementById('identity-recovery-message');
+    const retryButton = document.getElementById('identity-recovery-retry');
+    const dismissButton = document.getElementById('identity-recovery-dismiss');
+    if (!notice || !message) return;
+
+    const showNotice = (text, retryable = false) => {
+        message.textContent = text;
+        retryButton?.classList.toggle('hidden', !retryable);
+        notice.classList.remove('hidden');
+        try { sessionStorage.setItem(RECOVERY_NOTICE_KEY, JSON.stringify({ text, retryable })); } catch { /* optional persistence */ }
+    };
+
+    try {
+        const stored = JSON.parse(sessionStorage.getItem(RECOVERY_NOTICE_KEY) || 'null');
+        if (stored?.text) showNotice(stored.text, !!stored.retryable);
+    } catch { /* ignore invalid session notice */ }
+
+    dismissButton?.addEventListener('click', () => {
+        notice.classList.add('hidden');
+        try { sessionStorage.removeItem(RECOVERY_NOTICE_KEY); } catch { /* optional persistence */ }
+    });
+
+    retryButton?.addEventListener('click', async () => {
+        retryButton.disabled = true;
+        try {
+            const profile = await retryGuestRecovery();
+            setState(profile.state);
+            setRevision(profile.state_revision);
+            saveState();
+            renderAll();
+        } catch (error) {
+            showNotice(error.message || 'Guest recovery failed. Your snapshot is still safe; retry when persistence is available.', true);
+        } finally {
+            retryButton.disabled = false;
+        }
+    });
+
+    window.addEventListener('bconomy-identity-recovered', event => {
+        const profile = event.detail?.profile;
+        if (profile?.state) {
+            setState(profile.state);
+            setRevision(profile.state_revision);
+            saveState();
+        }
+        showNotice('Economic and device progress was restored under a new guest identity. Faction membership, invitations, notifications, and prior command receipts could not be restored.', false);
+    });
+    window.addEventListener('bconomy-identity-recovery-failed', event => {
+        showNotice(event.detail?.message || 'Guest recovery failed. Your recovery snapshot is safe; retry when persistence is available.', true);
+    });
+    window.addEventListener('bconomy-auth-required', event => {
+        showNotice(event.detail?.message || 'Sign in to restore access to your registered account progress.', false);
+        queueMicrotask(() => openAuthModal('signin', document.getElementById('header-signin-btn')));
+    });
+    window.addEventListener('bconomy-auth-recovery-complete', () => {
+        notice.classList.add('hidden');
+        try { sessionStorage.removeItem(RECOVERY_NOTICE_KEY); } catch { /* optional persistence */ }
+    });
+};
+
 const init = async () => {
     setupThemeToggle();
     applyInterfaceSettings();
     setupUtilityRail();
     setupConsoleHandlers();
+    setupAuthModal();
+    setupIdentityRecoveryUI();
 
     try {
         const deviceState = loadState();
         // Initialize Supabase Auth & Profile
-        await initAuth();
-        setupAuthModal();
+        await initAuth(deviceState);
 
-        const [ranks, perks] = await Promise.all([
+        const [ranks, perks, progressionRules] = await Promise.all([
             apiCall('/api/data/ranks', 'GET'),
-            apiCall('/api/data/perks', 'GET')
+            apiCall('/api/data/perks', 'GET'),
+            apiCall('/api/data/progression-rules', 'GET')
         ]);
 
         setRankData(ranks);
         setPerkData(perks);
+        setProgressionRules(progressionRules);
 
         // Check if player profile has cloud-saved state
         let profile = getAuthProfile();
@@ -122,54 +188,36 @@ function parseConsoleAmount(amount) {
 // Expose JS Console helpers for testing cash balance
 window.addCash = async (amount = 10000000000) => {
     const addAmt = parseConsoleAmount(amount);
-    const profile = getAuthProfile();
-    if (profile) {
-        try {
-            const res = await gameCommand('player.addCash', { cash: addAmt });
-            if (res && res.state) {
-                renderAll();
-                console.log(`%c[Bconomy Dev] Added $${addAmt.toLocaleString()} BC Cash! Current Cash: $${res.state.cash.toLocaleString()} BC`, 'color: #4cd964; font-weight: bold;');
-                return res.state.cash;
-            }
-        } catch (e) {
-            console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
-            showToast(e.message || 'Developer commands are unavailable.', 'error');
-            return (getState() || {}).cash || 0;
+    try {
+        const res = await gameCommand('dev.addCash', { cash: addAmt });
+        if (res && res.state) {
+            renderAll();
+            console.log(`%c[Bconomy Dev] Added $${addAmt.toLocaleString()} BC Cash! Current Cash: $${res.state.cash.toLocaleString()} BC`, 'color: #4cd964; font-weight: bold;');
+            return res.state.cash;
         }
+    } catch (e) {
+        console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
+        showToast(e.message || 'Developer commands are unavailable.', 'error');
+        return (getState() || {}).cash || 0;
     }
-    const state = getState() || loadState() || {};
-    state.cash = Math.min(Number.MAX_SAFE_INTEGER, (Number(state.cash) || 0) + addAmt);
-    setState(state);
-    saveState(state);
-    renderAll();
-    console.log(`%c[Bconomy Dev] Added $${addAmt.toLocaleString()} BC Cash! Current Cash: $${state.cash.toLocaleString()} BC`, 'color: #4cd964; font-weight: bold;');
-    return state.cash;
+    return (getState() || {}).cash || 0;
 };
 
 window.setCash = async (amount = 10000000000) => {
     const setAmt = parseConsoleAmount(amount);
-    const profile = getAuthProfile();
-    if (profile) {
-        try {
-            const res = await gameCommand('player.setCash', { cash: setAmt });
-            if (res && res.state) {
-                renderAll();
-                console.log(`%c[Bconomy Dev] Set cash to $${setAmt.toLocaleString()} BC!`, 'color: #4cd964; font-weight: bold;');
-                return res.state.cash;
-            }
-        } catch (e) {
-            console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
-            showToast(e.message || 'Developer commands are unavailable.', 'error');
-            return (getState() || {}).cash || 0;
+    try {
+        const res = await gameCommand('dev.setCash', { cash: setAmt });
+        if (res && res.state) {
+            renderAll();
+            console.log(`%c[Bconomy Dev] Set cash to $${setAmt.toLocaleString()} BC!`, 'color: #4cd964; font-weight: bold;');
+            return res.state.cash;
         }
+    } catch (e) {
+        console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
+        showToast(e.message || 'Developer commands are unavailable.', 'error');
+        return (getState() || {}).cash || 0;
     }
-    const state = getState() || loadState() || {};
-    state.cash = setAmt;
-    setState(state);
-    saveState(state);
-    renderAll();
-    console.log(`%c[Bconomy Dev] Set cash to $${setAmt.toLocaleString()} BC!`, 'color: #4cd964; font-weight: bold;');
-    return state.cash;
+    return (getState() || {}).cash || 0;
 };
 
 window.resetProgress = async () => {

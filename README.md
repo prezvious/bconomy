@@ -62,6 +62,8 @@ npm start
 
 The server starts at `http://localhost:3000`.
 
+Developer cash commands are disabled by default. For direct local testing, set `BCONOMY_DEV_COMMANDS=true`; remote use additionally requires the authenticated UUID in `BCONOMY_DEV_USER_IDS`. See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete authorization matrix. `dev.setCash` and `dev.addCash` are canonical; the older `player.*` names are deprecated compatibility aliases for one release.
+
 ### Testing
 
 ```bash

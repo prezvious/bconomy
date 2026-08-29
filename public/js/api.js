@@ -1,6 +1,16 @@
 // API Client & Action Handlers
 import { getState, setState, saveState, getRevision, setRevision } from './state.js';
-import { getAccessToken, getAuthHeaders, refreshAuthSession, signOutUser } from './auth.js';
+import {
+    getAccessToken,
+    getAuthHeaders,
+    getAuthProfile,
+    getAuthRecoveryState,
+    refreshAuthSession,
+    isGuestProfile,
+    isIdentityErrorCode,
+    recoverGuestIdentity,
+    requireSignInForRecovery
+} from './auth.js';
 import { showToast } from './ui/toast.js';
 
 /**
@@ -9,6 +19,10 @@ import { showToast } from './ui/toast.js';
 let _postQueue = Promise.resolve();
 let factionRevision = null;
 
+if (globalThis.window?.addEventListener) {
+    window.addEventListener('bconomy-identity-recovered', () => { factionRevision = null; });
+}
+
 const rememberFactionSnapshot = snapshot => {
     if (!snapshot || typeof snapshot !== 'object') return;
     const nextRevision = Number(snapshot.faction?.revision);
@@ -16,8 +30,8 @@ const rememberFactionSnapshot = snapshot => {
 };
 
 const COMMAND_ENDPOINTS = Object.freeze({
-    '/api/player/set-cash': { type: 'player.setCash' },
-    '/api/player/add-cash': { type: 'player.addCash' },
+    '/api/player/set-cash': { type: 'dev.setCash' },
+    '/api/player/add-cash': { type: 'dev.addCash' },
     '/api/inventory/lock': { type: 'inventory.setFlags', payload: body => ({ itemIds: [body.itemName], changes: { locked: !!body.locked } }) },
     '/api/inventory/pin': { type: 'inventory.setFlags', payload: body => ({ itemIds: [body.itemName], changes: { favorite: !!body.pinned } }) },
     '/api/action': { type: 'action.perform' },
@@ -84,16 +98,66 @@ const errorMessage = data => {
     return candidate?.message || 'API Error';
 };
 
-const fetchWithSessionRefresh = async (url, options, retry = true) => {
-    const response = await fetch(url, options);
-    if (response.status !== 401 || !retry || !getAccessToken()) return response;
-    if (!await refreshAuthSession()) {
-        await signOutUser();
-        showToast('Your player session expired. Reload Bconomy to continue as a guest or sign in again.', 'error');
-        return response;
+const apiError = (data, fallback = 'API Error') => {
+    const error = new Error(errorMessage(data) || fallback);
+    error.code = data?.error?.code || data?.result?.code || 'API_ERROR';
+    error.details = data?.error?.details;
+    return error;
+};
+
+const requestJsonWithRecovery = async buildRequest => {
+    const recoveryState = getAuthRecoveryState();
+    if (recoveryState !== 'ready') {
+        const error = new Error(recoveryState === 'requires-sign-in'
+            ? 'Sign in to your account to continue.'
+            : 'Guest progress recovery must finish before commands can continue.');
+        error.code = 'SIGN_IN_REQUIRED';
+        throw error;
     }
-    options.headers = { ...options.headers, ...getAuthHeaders() };
-    return fetch(url, options);
+
+    let refreshAttempts = 0;
+    let identityRecoveryAttempts = 0;
+    let networkRetries = 0;
+    while (true) {
+        const request = buildRequest();
+        let response;
+        try {
+            response = await fetch(request.url, request.options);
+        } catch (error) {
+            if (networkRetries >= 1) throw error;
+            networkRetries += 1;
+            continue;
+        }
+
+        let data = {};
+        try { data = await response.json(); } catch { /* The HTTP status will produce the error. */ }
+        const responseCode = data?.error?.code;
+
+        if (response.status === 401 && getAccessToken() && refreshAttempts < 1) {
+            refreshAttempts += 1;
+            if (await refreshAuthSession()) continue;
+        }
+
+        const identityFailure = response.status === 401 || isIdentityErrorCode(responseCode);
+        if (identityFailure && identityRecoveryAttempts < 1) {
+            identityRecoveryAttempts += 1;
+            const profile = getAuthProfile();
+            if (isGuestProfile(profile)) {
+                const replacement = await recoverGuestIdentity(getState());
+                setState(replacement.state);
+                setRevision(replacement.state_revision);
+                factionRevision = null;
+                saveState();
+                continue;
+            }
+            requireSignInForRecovery(data?.error?.message || 'Your account session expired. Sign in to continue.');
+            const error = new Error('Sign in to your account to continue.');
+            error.code = 'SIGN_IN_REQUIRED';
+            throw error;
+        }
+
+        return { response, data };
+    }
 };
 
 const applyGameResponse = data => {
@@ -113,28 +177,26 @@ export const gameCommand = async (type, payload = {}, triggerElement = null) => 
         triggerElement.disabled = true;
     }
     try {
-        const signed = !!getAccessToken();
-        const body = {
-            commandId: commandId(),
-            expectedRevision: getRevision(),
-            type,
-            payload,
-            ...(signed ? {} : { guestState: getState() })
-        };
-        const requestOptions = {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-            body: JSON.stringify(body)
-        };
-        let response;
-        try {
-            response = await fetchWithSessionRefresh('/api/game/commands', requestOptions);
-        } catch {
-            response = await fetchWithSessionRefresh('/api/game/commands', requestOptions);
-        }
-        const data = await response.json();
+        const stableCommandId = commandId();
+        const { response, data } = await requestJsonWithRecovery(() => {
+            const signed = !!getAccessToken();
+            return {
+                url: '/api/game/commands',
+                options: {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
+                    body: JSON.stringify({
+                        commandId: stableCommandId,
+                        expectedRevision: getRevision(),
+                        type,
+                        payload,
+                        ...(signed ? {} : { guestState: getState() })
+                    })
+                }
+            };
+        });
         if (response.status === 409 && data.state) applyGameResponse(data);
-        if (!response.ok || data.error) throw new Error(errorMessage(data));
+        if (!response.ok || data.error) throw apiError(data);
         return applyGameResponse(data);
     } finally {
         if (triggerElement) {
@@ -145,25 +207,31 @@ export const gameCommand = async (type, payload = {}, triggerElement = null) => 
 };
 
 export const gameQuery = async (type, payload = {}) => {
-    const signed = !!getAccessToken();
-    const response = await fetchWithSessionRefresh('/api/game/queries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-        body: JSON.stringify({ type, payload, ...(signed ? {} : { guestState: getState() }) })
+    const { response, data } = await requestJsonWithRecovery(() => {
+        const signed = !!getAccessToken();
+        return {
+            url: '/api/game/queries',
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
+                body: JSON.stringify({ type, payload, ...(signed ? {} : { guestState: getState() }) })
+            }
+        };
     });
-    const data = await response.json();
-    if (!response.ok || data.error) throw new Error(errorMessage(data));
+    if (!response.ok || data.error) throw apiError(data);
     return applyGameResponse(data);
 };
 
 export const factionQuery = async (type, payload = {}) => {
-    const response = await fetchWithSessionRefresh('/api/factions/queries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-        body: JSON.stringify({ type, payload })
-    });
-    const data = await response.json();
-    if (!response.ok || data.error) throw new Error(errorMessage(data));
+    const { response, data } = await requestJsonWithRecovery(() => ({
+        url: '/api/factions/queries',
+        options: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
+            body: JSON.stringify({ type, payload })
+        }
+    }));
+    if (!response.ok || data.error) throw apiError(data);
     if (type === 'faction.snapshot') rememberFactionSnapshot(data.result);
     return data.result;
 };
@@ -174,25 +242,28 @@ export const factionCommand = async (type, payload = {}, triggerElement = null) 
         triggerElement.disabled = true;
     }
     try {
-        const response = await fetchWithSessionRefresh('/api/factions/commands', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-            body: JSON.stringify({
-                commandId: commandId(),
-                expectedRevision: getRevision(),
-                expectedFactionRevision: factionRevision,
-                type,
-                payload
-            })
-        });
-        const data = await response.json();
+        const stableCommandId = commandId();
+        const { response, data } = await requestJsonWithRecovery(() => ({
+            url: '/api/factions/commands',
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
+                body: JSON.stringify({
+                    commandId: stableCommandId,
+                    expectedRevision: getRevision(),
+                    expectedFactionRevision: factionRevision,
+                    type,
+                    payload
+                })
+            }
+        }));
         if (response.status === 409 && data.state) applyGameResponse(data);
         if (data.snapshot) rememberFactionSnapshot(data.snapshot);
         if (!response.ok || data.error) {
             if (response.status === 409 && data.snapshot && globalThis.window?.dispatchEvent && typeof CustomEvent === 'function') {
                 window.dispatchEvent(new CustomEvent('bconomy-faction-stale', { detail: { snapshot: data.snapshot } }));
             }
-            throw new Error(errorMessage(data));
+            throw apiError(data);
         }
         if (data.state) applyGameResponse(data);
         return { ...(data.result || {}), snapshot: data.snapshot || null, duplicate: !!data.duplicate };
@@ -377,5 +448,5 @@ export const doApplyPerkAllocation = targetLevels => gameCommand('prestige.apply
 export const doAscendAndApplyAllocation = targetLevels => gameCommand('prestige.ascendAndApply', { targetLevels });
 export const doGetToolMaxSummary = toolType => gameQuery('tool.maxAffordable', { toolType });
 export const doResetPlayer = () => gameCommand('player.reset');
-export const doSetCash = (cash, el) => gameCommand('player.setCash', { cash }, el);
-export const doAddCash = (cash, el) => gameCommand('player.addCash', { cash }, el);
+export const doSetCash = (cash, el) => gameCommand('dev.setCash', { cash }, el);
+export const doAddCash = (cash, el) => gameCommand('dev.addCash', { cash }, el);

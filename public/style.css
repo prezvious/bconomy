@@ -10886,6 +10886,51 @@ details[open] .details-arrow {
     }
 }
 
+.identity-recovery-notice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 20px 0;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    background: color-mix(in srgb, var(--warning) 12%, var(--bg-surface));
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+}
+
+.identity-recovery-notice > iconify-icon {
+    color: var(--warning);
+    font-size: 20px;
+}
+
+.identity-recovery-notice .modal-close-btn {
+    position: static;
+}
+
+@media (max-width: 640px) {
+    .identity-recovery-notice {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .identity-recovery-notice #identity-recovery-retry {
+        grid-column: 2 / -1;
+        justify-self: start;
+    }
+
+    .identity-recovery-notice .modal-close-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    #targeted-tier-input {
+        font-size: 16px;
+    }
+}
+
 @media (max-width: 380px) {
     .utility-dock,
     .utility-rail-closed .utility-dock {
