@@ -83,9 +83,11 @@ class ActionEngine {
      * @param {Object} playerState - The current player state
      * @param {string} actionType - 'mine', 'explore', 'hunt', 'fish', or 'work'
      * @param {number} [currentTime] - Optional timestamp (defaults to Date.now())
+     * @param {Function} [rng] - Random-number source
+     * @param {Object|null} [factionContext] - Server-authoritative shared faction effect
      * @returns {Object} Result of the action
      */
-    static performAction(playerState, actionType, currentTime = Date.now(), rng = Math.random) {
+    static performAction(playerState, actionType, currentTime = Date.now(), rng = Math.random, factionContext = undefined) {
         const now = currentTime;
         playerState.inventory = playerState.inventory || {};
         playerState.cooldowns = playerState.cooldowns || { mine: 0, explore: 0, hunt: 0, fish: 0, work: 0 };
@@ -96,7 +98,8 @@ class ActionEngine {
 
         ShopEngine.ensureShopState(playerState, now);
         BoosterEngine.ensureBoosterState(playerState);
-        FactionEngine.ensureFactionState(playerState, now);
+        const hasAuthoritativeFactionContext = factionContext !== undefined;
+        if (!hasAuthoritativeFactionContext) FactionEngine.ensureFactionState(playerState, now);
         ToolEngine.ensureSocketState(playerState);
 
         const cooldown = playerState.cooldowns[actionType] || 0;
@@ -126,9 +129,15 @@ class ActionEngine {
             }
         };
 
-        const factionMultiplier = FactionEngine.getFactionMultiplier(playerState, actionType, now);
-        const factionName = (playerState.faction && playerState.faction.name) || 'Faction';
-        const factionBoost = (playerState.faction && playerState.faction.boosts && playerState.faction.boosts[actionType]) || { level: 0 };
+        const factionMultiplier = hasAuthoritativeFactionContext
+            ? Math.max(1, Number(factionContext?.multiplier) || 1)
+            : FactionEngine.getFactionMultiplier(playerState, actionType, now);
+        const factionName = hasAuthoritativeFactionContext
+            ? factionContext?.name || 'Faction'
+            : (playerState.faction && playerState.faction.name) || 'Faction';
+        const factionBoost = hasAuthoritativeFactionContext
+            ? { level: Math.max(0, Math.min(36, Math.floor(Number(factionContext?.level) || 0))) }
+            : (playerState.faction && playerState.faction.boosts && playerState.faction.boosts[actionType]) || { level: 0 };
 
         if (['mine', 'explore', 'hunt', 'fish'].includes(actionType)) {
             let table;

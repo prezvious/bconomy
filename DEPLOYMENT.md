@@ -1,14 +1,20 @@
-# Bconomy Deployment Guide: Vercel & Supabase
+# Bconomy v4.0.0 Deployment Guide: Vercel and Supabase
 
-This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed player saves, and server-authoritative game commands.
+This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed solo saves, and server-authoritative multiplayer factions. Apply the database schema before deploying the v4.0.0 application because the release removes client-owned factions.
 
 ## 1. Rotate Previously Exposed Credentials
 
-Before deploying v3.2.0, rotate every Supabase credential that has ever appeared in repository history, especially the service-role key. Never put credential values in source files, documentation, client-side JavaScript, screenshots, or issue comments.
+Rotate every Supabase credential that has ever appeared in repository history, especially the service-role key. Never put credential values in source files, documentation, client-side JavaScript, screenshots, or issue comments.
 
-Use newly generated values only in the deployment provider’s encrypted environment-variable store. A service-role key is a server secret and must never be exposed to the browser.
+Use newly generated values only in the deployment provider's encrypted environment-variable store. A service-role key is a server secret and must never be exposed to the browser.
 
-## 2. Apply the Supabase Schema
+## 2. Enable Anonymous Guest Identities
+
+In the Supabase Dashboard, open **Authentication → Providers → Anonymous Sign-Ins** and enable anonymous sign-ins. Bconomy uses a real anonymous Auth user for every guest so guests can join factions without opening a registration or sign-in form.
+
+Creating an account upgrades that same Auth user. Do not add a workflow that creates a second user during upgrade, because the Player ID, solo progress, and faction membership must remain attached to one identity.
+
+## 3. Apply the Supabase Schema
 
 1. Open the target project in the Supabase Dashboard.
 2. Open **SQL Editor** and create a new query.
@@ -16,14 +22,16 @@ Use newly generated values only in the deployment provider’s encrypted environ
 
 The script is re-runnable. It creates or updates:
 
-- `player_state`, including `state_revision` for optimistic concurrency.
-- Row Level Security that lets authenticated users read only their own profile while keeping state writes server-authoritative.
-- Automatic profile provisioning for new Auth users.
-- `player_command_receipts` and `commit_player_command(...)` for idempotent, revision-checked command commits.
+- `player_state`, including `account_kind`, `last_active_at`, `guest_migrated_at`, and revision-checked solo state.
+- `player_command_receipts` for 24-hour solo-command idempotency.
+- Shared faction, membership, boost, request, invitation, access-code, ledger, activity, notification, message-bag, rate-limit, and receipt tables.
+- Transactional faction query, command, legacy-migration, and inactive-guest-cleanup functions.
+- Deferred invariants that require at most 20 members and exactly one Leader matching each faction's recorded owner.
+- Row Level Security that permits a player to read only their own profile while keeping all shared faction rows and state writes behind server-authoritative functions.
 
-For an existing database, run the updated script before deploying the new application code. Do not deploy the v3.2.0 server against an older schema.
+Run the updated schema before deploying the application. Do not run the v4.0.0 server against a v3 database.
 
-## 3. Configure Server Environment Variables
+## 4. Configure Server Environment Variables
 
 Set these values in Vercel Project Settings or the equivalent server environment:
 
@@ -33,11 +41,21 @@ SUPABASE_ANON_KEY=<new anonymous key>
 SUPABASE_SERVICE_ROLE_KEY=<new service-role key>
 ```
 
-Do not prefix the service-role variable with `NEXT_PUBLIC_`, `VITE_`, or any other client-exposed prefix.
+Do not prefix the service-role variable with `NEXT_PUBLIC_`, `VITE_`, or another client-exposed prefix.
 
-## 4. Deploy
+## 5. Configure Inactive-Guest Cleanup
 
-### Git Integration
+The server performs a guarded opportunistic cleanup, but production should also schedule the database function once per day with Supabase Cron or an equivalent trusted scheduler:
+
+```sql
+select public.faction_cleanup_inactive_guests();
+```
+
+The function deletes anonymous accounts after 365 complete days without activity. Membership cleanup is deterministic: a departing Leader is replaced by the highest Faction Rank, then earliest join time, then Player ID; an empty faction is deleted. Registered accounts are not included.
+
+## 6. Deploy
+
+### Git integration
 
 1. Connect the repository to Vercel.
 2. Set the three environment variables for every intended environment.
@@ -50,7 +68,7 @@ npm install --global vercel
 vercel
 ```
 
-## 5. Verify the Release
+## 7. Verify the Release
 
 Run the local regression suite before deployment:
 
@@ -58,22 +76,31 @@ Run the local regression suite before deployment:
 npm test
 ```
 
-After deployment, verify:
+After deploying to a staging environment, verify:
 
 - `GET /api/health` reports a healthy application.
-- Guest actions persist only in the device save.
-- A signed-in player can read their cloud profile and commit one command.
-- A repeated command with the same `commandId` does not apply twice.
-- A stale `expectedRevision` returns a conflict and does not overwrite newer progress.
-- Device/cloud divergence presents the explicit reconciliation choice.
-- `/api/auth/lookup-email` and `/api/auth/sync` return `410 Gone`.
+- A new browser automatically receives an anonymous guest identity and completes its one-time device migration.
+- Registering that guest preserves the same Player ID, solo save, and faction membership.
+- A repeated solo or faction command with the same `commandId` does not apply twice.
+- A stale `expectedRevision` returns a conflict without overwriting newer progress.
+- Two different players can create, discover, request access to, join, and view the same faction.
+- Invite-only, one-time-code-only, and public join-request modes enforce their distinct entry paths.
+- Each new join request offers a newly selected cheerful default message, while allowing edits or regeneration before submission.
+- Fixed rank permissions prevent a member from managing an equal or higher-ranked member.
+- All members can deposit, the shared treasury updates once, and an active faction boost is applied authoritatively to the matching solo action.
+- Redeeming a one-time code consumes it; resetting it invalidates the earlier code; no membership cooldown or code expiry is introduced.
+- The 20-member limit is enforced inside the join transaction.
+- A controlled staging guest with more than 365 days of inactivity is deleted and Leader succession follows the documented order.
+- Singular `/api/faction/*`, `/api/auth/lookup-email`, and `/api/auth/sync` return `410 Gone`.
 
-The versioned request contract is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.md).
+The transport contract is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.md), and the complete player and operator rules are in [docs/FACTIONS.md](docs/FACTIONS.md).
 
-## 6. Authentication and Save Behavior
+## 8. Authentication and Save Behavior
 
-- Players can register with a unique username, optional email, and password.
+- Players begin with a server-backed anonymous guest identity and do not need to see a sign-in prompt to use factions.
+- Players can upgrade a guest with a unique username, optional email, and password.
 - Sign-in accepts a username or email plus password; username resolution happens only on the trusted server.
-- Authenticated browser requests carry the player access token as a bearer token.
-- Game mutations are validated and executed on the server, then committed with an expected state revision and idempotency receipt.
-- Guest and authenticated saves use separate browser storage. Linking a device save to an account requires an explicit import choice.
+- Guest and registered browser requests carry the player's access token as a bearer token.
+- Solo commands and multiplayer faction commands are validated server-side, revision checked where cash changes, and protected by idempotency receipts.
+- Player-state schema version 2 contains only solo state. Faction membership, treasury, boosts, requests, invitations, codes, ranks, and logs live in shared PostgreSQL tables.
+- Existing registered and guest device saves receive one legacy-faction migration; the local faction field is removed afterward.

@@ -9,6 +9,7 @@ const path = require('path');
 const {
     isSupabaseConfigured,
     getProfileByUserId,
+    touchPlayerActivity,
     signUpUserAdmin,
     signInUserServer,
     refreshSessionServer,
@@ -16,8 +17,21 @@ const {
     commitPlayerCommand,
     getPlayerCommandReceipt,
     replacePlayerState,
-    getSupabaseConfig
+    getSupabaseConfig,
+    createGuestSessionServer,
+    upgradeGuestUserAdmin
 } = require('./src/db/supabase');
+const {
+    getFactionSnapshot,
+    listPublicFactions,
+    searchFactionPlayers,
+    getNextJoinMessage,
+    executeFactionCommand,
+    getFactionEffect,
+    migrateLegacyFaction,
+    cleanupInactiveGuest,
+    cleanupInactiveGuests
+} = require('./src/db/factions');
 const { executeCommand, executeQuery } = require('./src/api/gameGateway');
 const { normalizePlayerState, createDefaultState } = require('./src/state/playerState');
 const { getAllItems } = require('./src/data/itemRegistry');
@@ -58,7 +72,7 @@ app.get('/api/health', (req, res) => {
 });
 
 const DEFAULT_STATE = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     cash: 0,
     rankIndex: 0,
     prestigeCount: 0,
@@ -67,7 +81,6 @@ const DEFAULT_STATE = {
     tools: { mine: 1, explore: 1, hunt: 1, fish: 1 },
     perks: { investiture: 0, cronyism: 0, backchannel: 0, partiality: 0, serendipity: 0, numismatist: 0, amnesiac: 0, water_byproducts: 0, jackpot_fever: 0 },
     cooldowns: { mine: 0, explore: 0, hunt: 0, fish: 0, work: 0 },
-    faction: null,
     farm: {
         waterAvailableAt: 0,
         markedPlotIds: [],
@@ -126,6 +139,65 @@ const getBearerToken = req => {
 };
 
 const isUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+let lastGuestCleanupAt = 0;
+const GUEST_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+
+const isExpiredGuestProfile = (profile, now = Date.now()) => {
+    if (profile?.account_kind !== 'guest') return false;
+    const lastActiveAt = new Date(profile.last_active_at || 0).getTime();
+    return Number.isFinite(lastActiveAt) && lastActiveAt <= now - GUEST_RETENTION_MS;
+};
+
+const maybeCleanupInactiveGuests = async () => {
+    const now = Date.now();
+    if (now - lastGuestCleanupAt < 24 * 60 * 60 * 1000) return;
+    lastGuestCleanupAt = now;
+    const result = await cleanupInactiveGuests(new Date(now));
+    if (!['ok', 'unavailable'].includes(result?.status)) {
+        console.error('Inactive guest cleanup failed:', result);
+    }
+};
+
+const factionStatusCode = result => {
+    if (result?.status === 'conflict') return 409;
+    if (result?.status === 'unavailable' || result?.code === 'PERSISTENCE_ERROR') return 503;
+    if (result?.code === 'INVALID_AUTH' || result?.code === 'GUEST_EXPIRED') return 401;
+    if (result?.status === 'error' || result?.status === 'missing_player') return 422;
+    return 200;
+};
+
+const resolveFactionActor = async req => {
+    const token = getBearerToken(req);
+    if (!token) return { error: { code: 'FACTION_IDENTITY_REQUIRED', message: 'A registered or guest player identity is required for multiplayer factions.' }, status: 401 };
+    const user = await verifyAccessToken(token);
+    if (!user) return { error: { code: 'INVALID_AUTH', message: 'Your player session expired. Reload Bconomy to continue as a guest or sign in again.' }, status: 401 };
+    await maybeCleanupInactiveGuests();
+    let profile = await getProfileByUserId(user.id);
+    if (!profile) return { error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' }, status: 404 };
+
+    if (profile.account_kind === 'guest') {
+        if (isExpiredGuestProfile(profile)) {
+            await cleanupInactiveGuest(user.id);
+            return { error: { code: 'GUEST_EXPIRED', message: 'This guest identity was deleted after 365 days without activity.' }, status: 401 };
+        }
+        if (!profile.guest_migrated_at) {
+            return { error: { code: 'GUEST_MIGRATION_REQUIRED', message: 'Finish the one-time guest migration before using multiplayer factions.' }, status: 409, user, profile };
+        }
+    } else {
+        const migration = await migrateLegacyFaction({
+            userId: user.id,
+            state: profile.state,
+            expectedRevision: profile.state_revision,
+            guestImport: false
+        });
+        if (migration.status === 'applied') profile = await getProfileByUserId(user.id) || profile;
+        if (!['applied', 'duplicate'].includes(migration.status)) {
+            return { error: { code: migration.code || 'MIGRATION_FAILED', message: migration.message || 'Existing faction data could not be migrated safely.' }, status: factionStatusCode(migration) };
+        }
+    }
+    await touchPlayerActivity(user.id);
+    return { user, profile };
+};
 
 const requireGameApiVersion = (req, res) => {
     const version = req.get('x-bconomy-api-version');
@@ -141,8 +213,14 @@ const resolveGameContext = async (req, { query = false } = {}) => {
     if (token) {
         const user = await verifyAccessToken(token);
         if (!user) return { errorStatus: 401, error: { code: 'INVALID_AUTH', message: 'Your session expired. Sign in again.' } };
+        await maybeCleanupInactiveGuests();
         const profile = await getProfileByUserId(user.id);
         if (!profile) return { errorStatus: 404, error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } };
+        if (isExpiredGuestProfile(profile)) {
+            await cleanupInactiveGuest(user.id);
+            return { errorStatus: 401, error: { code: 'GUEST_EXPIRED', message: 'This guest identity was deleted after 365 days without activity.' } };
+        }
+        await touchPlayerActivity(user.id);
         return {
             mode: 'signed',
             user,
@@ -230,7 +308,24 @@ app.post('/api/game/commands', async (req, res) => {
                 revision: context.revision
             });
         }
-        const outcome = executeCommand(context.state, type, payload, Date.now());
+        let authoritativePayload = payload;
+        if (type === 'action.perform' && context.mode === 'signed') {
+            const factionEffect = await getFactionEffect(context.user.id, payload.actionType, new Date());
+            if (factionEffect.status !== 'ok') {
+                return res.status(factionStatusCode(factionEffect)).json({
+                    error: {
+                        code: factionEffect.code || 'FACTION_EFFECT_UNAVAILABLE',
+                        message: factionEffect.message || 'The shared faction boost could not be verified safely.'
+                    },
+                    state: context.state,
+                    revision: context.revision
+                });
+            }
+            authoritativePayload = { ...payload, factionContext: factionEffect };
+        } else if (type === 'action.perform') {
+            authoritativePayload = { ...payload, factionContext: null };
+        }
+        const outcome = executeCommand(context.state, type, authoritativePayload, Date.now());
         if (!outcome.ok) {
             logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: outcome.code, startedAt });
             return res.status(422).json({ error: { code: outcome.code, message: outcome.error, details: outcome.details }, state: context.state, revision: context.revision });
@@ -277,18 +372,150 @@ app.post('/api/game/commands', async (req, res) => {
     }
 });
 
+app.post('/api/factions/queries', async (req, res) => {
+    if (!requireGameApiVersion(req, res)) return;
+    const { type, payload = {} } = req.body || {};
+    if (typeof type !== 'string' || !type) {
+        return res.status(400).json({ error: { code: 'INVALID_FACTION_QUERY', message: 'Faction query type is required.' } });
+    }
+    try {
+        const actor = await resolveFactionActor(req);
+        if (actor.error) return res.status(actor.status).json({ error: actor.error });
+        let result;
+        if (type === 'faction.snapshot') result = await getFactionSnapshot(actor.user.id);
+        else if (type === 'faction.directory') result = await listPublicFactions(actor.user.id, payload);
+        else if (type === 'faction.playerSearch') result = await searchFactionPlayers(actor.user.id, payload);
+        else if (type === 'faction.joinMessage') result = await getNextJoinMessage(actor.user.id);
+        else return res.status(404).json({ error: { code: 'UNKNOWN_FACTION_QUERY', message: `Unknown faction query '${type}'.` } });
+
+        const status = factionStatusCode(result);
+        if (status !== 200) return res.status(status).json({ error: { code: result.code || 'FACTION_QUERY_FAILED', message: result.message || 'Faction data could not be loaded.' } });
+        return res.json({ result });
+    } catch (error) {
+        console.error('Faction query failed:', error);
+        return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The faction query could not be completed.' } });
+    }
+});
+
+app.post('/api/factions/commands', async (req, res) => {
+    if (!requireGameApiVersion(req, res)) return;
+    const { commandId, expectedRevision, expectedFactionRevision = null, type, payload = {} } = req.body || {};
+    if (!isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0
+        || (expectedFactionRevision !== null && (!Number.isSafeInteger(expectedFactionRevision) || expectedFactionRevision < 0))
+        || typeof type !== 'string' || !type) {
+        return res.status(400).json({ error: { code: 'INVALID_FACTION_COMMAND', message: 'Command ID, non-negative player revision, and faction command type are required.' } });
+    }
+    try {
+        const actor = await resolveFactionActor(req);
+        if (actor.error) return res.status(actor.status).json({ error: actor.error });
+        const outcome = await executeFactionCommand({
+            userId: actor.user.id,
+            commandId,
+            expectedPlayerRevision: expectedRevision,
+            expectedFactionRevision,
+            type,
+            payload
+        });
+        const status = factionStatusCode(outcome);
+        if (status !== 200) {
+            const latestSnapshot = outcome.code === 'FACTION_CONFLICT'
+                ? await getFactionSnapshot(actor.user.id)
+                : undefined;
+            return res.status(status).json({
+                error: { code: outcome.code || 'FACTION_COMMAND_REJECTED', message: outcome.message || 'The faction command was rejected.' },
+                state: outcome.playerState ? normalizePlayerState(outcome.playerState) : undefined,
+                revision: outcome.playerRevision,
+                snapshot: latestSnapshot?.status === 'ok' ? latestSnapshot : undefined
+            });
+        }
+        return res.json({
+            result: outcome.result || {},
+            snapshot: outcome.snapshot || null,
+            state: outcome.playerState ? normalizePlayerState(outcome.playerState) : undefined,
+            revision: Number.isSafeInteger(Number(outcome.playerRevision)) ? Number(outcome.playerRevision) : expectedRevision,
+            duplicate: outcome.status === 'duplicate'
+        });
+    } catch (error) {
+        console.error('Faction command failed:', error);
+        return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The faction command could not be completed.' } });
+    }
+});
+
 app.get('/api/player/profile', async (req, res) => {
     const user = await verifyAccessToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
-    const profile = await getProfileByUserId(user.id);
+    await maybeCleanupInactiveGuests();
+    let profile = await getProfileByUserId(user.id);
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    if (isExpiredGuestProfile(profile)) {
+        await cleanupInactiveGuest(user.id);
+        return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
+    }
+    await touchPlayerActivity(user.id);
+    profile.last_active_at = new Date().toISOString();
+    if (profile.account_kind !== 'guest') {
+        const migration = await migrateLegacyFaction({
+            userId: user.id,
+            state: profile.state,
+            expectedRevision: profile.state_revision,
+            guestImport: false
+        });
+        if (!['applied', 'duplicate'].includes(migration.status)) {
+            return res.status(factionStatusCode(migration)).json({ error: migration.message || 'Existing faction data could not be migrated safely.' });
+        }
+        profile = await getProfileByUserId(user.id) || profile;
+    }
     profile.state = normalizePlayerState(profile.state);
     res.json(profile);
+});
+
+app.post('/api/player/guest-migrate', async (req, res) => {
+    const user = await verifyAccessToken(getBearerToken(req));
+    if (!user) return res.status(401).json({ error: { code: 'INVALID_AUTH', message: 'The guest session is invalid or expired.' } });
+    const profile = await getProfileByUserId(user.id);
+    if (!profile || profile.account_kind !== 'guest') {
+        return res.status(422).json({ error: { code: 'GUEST_REQUIRED', message: 'Only an anonymous guest identity can use guest migration.' } });
+    }
+    if (isExpiredGuestProfile(profile)) {
+        await cleanupInactiveGuest(user.id);
+        return res.status(401).json({ error: { code: 'GUEST_EXPIRED', message: 'This guest identity was deleted after 365 days without activity.' } });
+    }
+    const expectedRevision = Number(req.body?.expectedRevision);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || !isObjectState(req.body?.deviceState)) {
+        return res.status(400).json({ error: { code: 'INVALID_MIGRATION', message: 'A device save and non-negative revision are required.' } });
+    }
+    const importedState = normalizePlayerState(req.body.deviceState);
+    if (req.body.deviceState.faction && typeof req.body.deviceState.faction === 'object') {
+        const legacyHolder = { faction: JSON.parse(JSON.stringify(req.body.deviceState.faction)) };
+        FactionEngine.ensureFactionState(legacyHolder);
+        if (legacyHolder.faction) importedState.faction = legacyHolder.faction;
+    }
+    const outcome = await migrateLegacyFaction({
+        userId: user.id,
+        state: importedState,
+        expectedRevision,
+        guestImport: true
+    });
+    const status = factionStatusCode(outcome);
+    if (status !== 200) return res.status(status).json({ error: { code: outcome.code || 'GUEST_MIGRATION_FAILED', message: outcome.message || 'Guest progress could not be migrated safely.' } });
+    const updatedProfile = await getProfileByUserId(user.id);
+    if (!updatedProfile) return res.status(500).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'The migrated guest profile could not be loaded.' } });
+    updatedProfile.state = normalizePlayerState(updatedProfile.state);
+    res.json({ profile: updatedProfile, snapshot: outcome.snapshot, duplicate: outcome.status === 'duplicate' });
 });
 
 app.post('/api/player/import', async (req, res) => {
     const user = await verifyAccessToken(getBearerToken(req));
     if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    const importingProfile = await getProfileByUserId(user.id);
+    if (!importingProfile) return res.status(404).json({ error: 'Profile not found' });
+    if (isExpiredGuestProfile(importingProfile)) {
+        await cleanupInactiveGuest(user.id);
+        return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
+    }
+    if (importingProfile.account_kind === 'guest') {
+        return res.status(422).json({ error: 'Guest device progress can be imported only through the one-time guest migration.' });
+    }
     const expectedRevision = Number(req.body?.expectedRevision);
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || !isObjectState(req.body?.deviceState)) {
         return res.status(400).json({ error: 'A device save and expected revision are required' });
@@ -300,6 +527,7 @@ app.post('/api/player/import', async (req, res) => {
         return res.status(409).json({ error: 'Cloud progress changed before import', profile: latest });
     }
     if (outcome.status !== 'applied') return res.status(503).json({ error: 'Device progress could not be imported safely' });
+    await touchPlayerActivity(user.id);
     outcome.profile.state = normalizePlayerState(outcome.profile.state);
     res.json(outcome.profile);
 });
@@ -341,12 +569,13 @@ app.post('/api/action', (req, res) => {
     if (!isObjectState(playerState) || !actionType) {
         return res.status(400).json({ error: 'Missing or invalid playerState or actionType' });
     }
-    FarmEngine.ensureFarmState(playerState);
-    const result = ActionEngine.performAction(playerState, actionType);
+    const normalizedState = normalizePlayerState(playerState);
+    FarmEngine.ensureFarmState(normalizedState);
+    const result = ActionEngine.performAction(normalizedState, actionType, Date.now(), Math.random, null);
     if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
+        return res.status(400).json({ error: result.error, state: normalizedState, result });
     }
-    res.json({ state: playerState, result });
+    res.json({ state: normalizedState, result });
 });
 
 // Tool endpoints
@@ -978,175 +1207,8 @@ app.post('/api/gambling/slots', (req, res) => {
     res.json({ state: playerState, result });
 });
 
-// Faction Endpoints
-app.post('/api/faction/create', (req, res) => {
-    const { playerState, name, description } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    const result = FactionEngine.createFaction(playerState, name, description);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/state', (req, res) => {
-    const { playerState } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    FactionEngine.ensureFactionState(playerState);
-    res.json({ state: playerState });
-});
-
-app.post('/api/faction/deposit', (req, res) => {
-    const { playerState, amount } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    const result = FactionEngine.depositCash(playerState, amount);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/boost/activate', (req, res) => {
-    const { playerState, actionType, level, durationHours, mode } = req.body;
-    if (!isObjectState(playerState) || !actionType) {
-        return res.status(400).json({ error: 'Missing or invalid playerState or actionType' });
-    }
-    const result = FactionEngine.activateBoost(playerState, actionType, level, durationHours, mode);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/boost/stop', (req, res) => {
-    const { playerState, actionType } = req.body;
-    if (!isObjectState(playerState) || !actionType) {
-        return res.status(400).json({ error: 'Missing or invalid playerState or actionType' });
-    }
-    const result = FactionEngine.stopBoost(playerState, actionType);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-
-app.get('/api/data/tools/:toolType/recipe/:level', (req, res) => {
-    const { toolType, level } = req.params;
-    const reqs = ToolEngine.getUpgradeRequirements(toolType, parseInt(level, 10));
-    if (!reqs) {
-        return res.status(404).json({ error: 'Recipe not found' });
-    }
-    res.json(reqs);
-});
-
-// Gambling Endpoints
-app.post('/api/gambling/coinflip', (req, res) => {
-    const { playerState, wagerInput, choice, mode, streakState, isCashOut } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    FarmEngine.ensureFarmState(playerState);
-    const result = GamblingEngine.rollCoinflip(playerState, { wagerInput, choice, mode, streakState, isCashOut });
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.get('/api/gambling/limits/:numismatistLevel?', (req, res) => {
-    const level = parseInt(req.params.numismatistLevel || 0, 10);
-    const maxBetLimit = GamblingEngine.getMaxBetLimit(level);
-    res.json({ numismatistLevel: level, maxBetLimit });
-});
-
-app.post('/api/gambling/slots', (req, res) => {
-    const { playerState, wagerInput, freeSpinState } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    FarmEngine.ensureFarmState(playerState);
-    const result = GamblingEngine.rollSlots(playerState, { wagerInput, freeSpinState });
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-// Faction Endpoints
-app.post('/api/faction/create', (req, res) => {
-    const { playerState, name, description } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    const result = FactionEngine.createFaction(playerState, name, description);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/state', (req, res) => {
-    const { playerState } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    FactionEngine.ensureFactionState(playerState);
-    res.json({ state: playerState });
-});
-
-app.post('/api/faction/deposit', (req, res) => {
-    const { playerState, amount } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    const result = FactionEngine.depositCash(playerState, amount);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/boost/activate', (req, res) => {
-    const { playerState, actionType, level, durationHours, mode } = req.body;
-    if (!isObjectState(playerState) || !actionType) {
-        return res.status(400).json({ error: 'Missing or invalid playerState or actionType' });
-    }
-    const result = FactionEngine.activateBoost(playerState, actionType, level, durationHours, mode);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/boost/stop', (req, res) => {
-    const { playerState, actionType } = req.body;
-    if (!isObjectState(playerState) || !actionType) {
-        return res.status(400).json({ error: 'Missing or invalid playerState or actionType' });
-    }
-    const result = FactionEngine.stopBoost(playerState, actionType);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
-});
-
-app.post('/api/faction/customize', (req, res) => {
-    const { playerState, name, description } = req.body;
-    if (!isObjectState(playerState)) {
-        return res.status(400).json({ error: 'Missing or invalid playerState' });
-    }
-    const result = FactionEngine.updateCustomization(playerState, name, description);
-    if (result && result.error) {
-        return res.status(400).json({ error: result.error, state: playerState, result });
-    }
-    res.json({ state: playerState, result });
+app.all('/api/faction/*', (req, res) => {
+    res.status(410).json({ error: 'Local faction endpoints were removed. Reload Bconomy to use multiplayer factions.' });
 });
 
 app.get('/api/data/faction-multipliers', (req, res) => {
@@ -1163,6 +1225,23 @@ app.get('/api/config/auth', (req, res) => {
     });
 });
 
+app.post('/api/auth/guest', async (req, res) => {
+    if (!isSupabaseConfigured()) {
+        return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Guest multiplayer identity is unavailable until Supabase is configured.' } });
+    }
+    try {
+        const initialState = createDefaultState();
+        FarmEngine.ensureFarmState(initialState);
+        ShopEngine.ensureShopState(initialState);
+        const result = await createGuestSessionServer(initialState);
+        result.profile.state = normalizePlayerState(result.profile.state);
+        res.json(result);
+    } catch (error) {
+        console.error('Guest identity creation failed:', error);
+        res.status(503).json({ error: { code: 'GUEST_CREATION_FAILED', message: error.message || 'Guest identity could not be created.' } });
+    }
+});
+
 app.post('/api/auth/signup', async (req, res) => {
     const { username, email, password } = req.body;
     if (!username || !password) {
@@ -1170,17 +1249,35 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     try {
-        const initialState = createDefaultState();
-        FarmEngine.ensureFarmState(initialState);
-        ShopEngine.ensureShopState(initialState);
-        FactionEngine.ensureFactionState(initialState);
-
-        const result = await signUpUserAdmin({
-            username,
-            email,
-            password,
-            defaultState: initialState
-        });
+        const accessToken = getBearerToken(req);
+        const currentUser = accessToken ? await verifyAccessToken(accessToken) : null;
+        if (accessToken && !currentUser) {
+            return res.status(401).json({ error: 'The guest session expired. Refresh it before creating an account.' });
+        }
+        const currentProfile = currentUser ? await getProfileByUserId(currentUser.id) : null;
+        if (currentUser && !currentProfile) {
+            return res.status(404).json({ error: 'Player profile not found.' });
+        }
+        let result;
+        if (currentUser && currentProfile?.account_kind === 'guest') {
+            if (isExpiredGuestProfile(currentProfile)) {
+                await cleanupInactiveGuest(currentUser.id);
+                return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
+            }
+            result = await upgradeGuestUserAdmin({ userId: currentUser.id, username, email, password });
+        } else if (!currentUser) {
+            const initialState = createDefaultState();
+            FarmEngine.ensureFarmState(initialState);
+            ShopEngine.ensureShopState(initialState);
+            result = await signUpUserAdmin({
+                username,
+                email,
+                password,
+                defaultState: initialState
+            });
+        } else {
+            return res.status(409).json({ error: 'This player identity is already registered.' });
+        }
         res.json(result);
     } catch (err) {
         res.status(400).json({ error: err.message || 'Failed to sign up.' });
@@ -1225,6 +1322,12 @@ app.get('/api/player/profile/:userId', async (req, res) => {
     if (!profile) {
         return res.status(404).json({ error: 'Profile not found' });
     }
+    if (isExpiredGuestProfile(profile)) {
+        await cleanupInactiveGuest(user.id);
+        return res.status(401).json({ error: 'This guest identity was deleted after 365 days without activity.' });
+    }
+    await touchPlayerActivity(user.id);
+    profile.last_active_at = new Date().toISOString();
     profile.state = normalizePlayerState(profile.state);
     res.json(profile);
 });

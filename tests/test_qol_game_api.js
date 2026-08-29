@@ -27,7 +27,7 @@ const server = app.listen(0, '127.0.0.1');
     const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
     const health = await healthResponse.json();
     assert.strictEqual(health.status, 'ok');
-    assert.strictEqual(health.version, '3.2.0');
+    assert.strictEqual(health.version, '4.0.0');
 
     const noVersion = await request('/api/game/queries', { type: 'progression.summary', guestState: { cash: 0 } });
     assert.strictEqual(noVersion.status, 426);

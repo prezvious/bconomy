@@ -58,6 +58,12 @@ export const loadState = () => {
     return null;
 };
 
+export const clearGuestMigrationSource = () => {
+    localStorage.removeItem(GUEST_STATE_KEY);
+    localStorage.removeItem(GUEST_REVISION_KEY);
+    localStorage.removeItem(LEGACY_STATE_KEY);
+};
+
 export const saveState = (state) => {
     if (state !== undefined) {
         playerState = state;

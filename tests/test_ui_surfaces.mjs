@@ -148,7 +148,23 @@ global.document = {
 global.HTMLElement = MockElement;
 global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 
-global.fetch = async (url) => {
+let mockFactionSnapshot = {
+    status: 'ok',
+    membership: null,
+    faction: null,
+    invitations: [],
+    joinRequests: [],
+    notifications: []
+};
+
+global.fetch = async (url, options = {}) => {
+    if (url === '/api/factions/queries') {
+        const request = JSON.parse(options.body || '{}');
+        const result = request.type === 'faction.directory'
+            ? { status: 'ok', items: [] }
+            : mockFactionSnapshot;
+        return { ok: true, status: 200, json: async () => ({ result }) };
+    }
     return {
         ok: true,
         status: 200,
@@ -214,40 +230,58 @@ assert.strictEqual(document.getElementById('bulk-mode-sell')._listeners.keydown.
 console.log('✓ Test 2 Passed: Shop surface renders cleanly and persistent bulk controls remain single-bound');
 
 // 4. Test Faction Unaffiliated View
-const { renderFaction } = await import('../public/js/ui/faction.js');
-renderFaction();
+const { renderFaction, resetFactionViewCache } = await import('../public/js/ui/faction.js');
+await renderFaction({ resetTab: true });
 
 const factionPanel = document.getElementById('panel-faction');
-assert(factionPanel.innerHTML.includes('faction-empty-state'), 'Unaffiliated faction page should render its focused empty state');
-assert(factionPanel.innerHTML.includes('faction-benefit-grid'), 'Faction benefits should be summarized before creation');
-assert(factionPanel.innerHTML.includes('btn-open-create-faction'), 'Create Faction action should open the dedicated dialog');
-console.log('✓ Test 3 Passed: Unaffiliated Faction empty state and create-dialog action render cleanly');
+assert(factionPanel.innerHTML.includes('Discover'), 'Unaffiliated faction page should expose the public directory');
+assert(factionPanel.innerHTML.includes('Invitations'), 'Unaffiliated faction page should expose invitations');
+assert(factionPanel.innerHTML.includes('Join Code'), 'Unaffiliated faction page should expose one-time code redemption');
+assert(factionPanel.innerHTML.includes('My Requests'), 'Unaffiliated faction page should expose pending join requests');
+console.log('✓ Test 3 Passed: Unaffiliated multiplayer discovery and joining controls render cleanly');
 
 // 5. Test Faction Affiliated View
-setState({
+mockFactionSnapshot = {
+    status: 'ok',
+    membership: { factionId: 'faction-1', factionRank: 'leader', joinedAt: new Date().toISOString(), lifetimeContribution: 5000000 },
     faction: {
-        created: true,
+        id: 'faction-1',
+        factionNumber: 7,
         name: 'The Iron Syndicate',
         description: 'Masters of resource extraction',
-        points: 2500000,
-        lifetimeContributed: 5000000,
+        membershipMode: 'public',
+        leaderPlayerId: 1,
+        leaderUsername: 'IronLeader',
+        treasuryBalance: 2500000,
+        lifetimeContribution: 5000000,
+        viewerRank: 'leader',
+        memberCount: 1,
+        members: [{ playerId: 1, username: 'IronLeader', factionRank: 'leader', lifetimeContribution: 5000000, joinedAt: new Date().toISOString(), isGuest: false }],
         boosts: {
-            mine: { level: 4, multiplier: 2.0, activeUntil: Date.now() + 3600000, mode: 'duration', costPerHour: 1600000 },
-            explore: { level: 0, multiplier: 1.0, activeUntil: 0, mode: 'duration', costPerHour: 0 },
-            hunt: { level: 0, multiplier: 1.0, activeUntil: 0, mode: 'duration', costPerHour: 0 },
-            fish: { level: 0, multiplier: 1.0, activeUntil: 0, mode: 'duration', costPerHour: 0 },
-            work: { level: 0, multiplier: 1.0, activeUntil: 0, mode: 'duration', costPerHour: 0 }
-        }
-    }
-});
-renderFaction();
+            mine: { level: 4, multiplier: 2.0, mode: 'duration', costPerHour: 1600000, remainingSeconds: 3600 },
+            explore: { level: 0, multiplier: 1.0, mode: 'duration', costPerHour: 0, remainingSeconds: 0 },
+            hunt: { level: 0, multiplier: 1.0, mode: 'duration', costPerHour: 0, remainingSeconds: 0 },
+            fish: { level: 0, multiplier: 1.0, mode: 'duration', costPerHour: 0, remainingSeconds: 0 },
+            work: { level: 0, multiplier: 1.0, mode: 'duration', costPerHour: 0, remainingSeconds: 0 }
+        },
+        activity: [],
+        ledger: []
+    },
+    invitations: [],
+    joinRequests: [],
+    notifications: []
+};
+resetFactionViewCache();
+await renderFaction({ resetTab: true });
 
 assert(factionPanel.innerHTML.includes('The Iron Syndicate'), 'Active faction name should render in status banner');
-assert(factionPanel.innerHTML.includes('faction-tab-overview'), 'Active faction should expose the Overview tab');
-assert(factionPanel.innerHTML.includes('faction-tab-operations'), 'Active faction should expose the Operations tab');
-assert(factionPanel.innerHTML.includes('faction-boost-card'), 'Active faction 5-action boost cards should render');
-assert(factionPanel.innerHTML.includes('2.00× Active'), 'Mining active multiplier should reflect 2.00x');
-console.log('✓ Test 4 Passed: Affiliated Faction guild status banner, treasury, and boost cards render accurately');
+assert(factionPanel.innerHTML.includes('data-faction-tab="overview"'), 'Active faction should expose the Overview tab');
+assert(factionPanel.innerHTML.includes('data-faction-tab="operations"'), 'Active faction should expose the Operations tab');
+assert(factionPanel.innerHTML.includes('data-faction-tab="members"'), 'Active faction should expose the shared roster');
+assert(factionPanel.innerHTML.includes('data-faction-tab="recruitment"'), 'Active faction should expose recruitment controls');
+assert(factionPanel.innerHTML.includes('data-faction-tab="permissions"'), 'Active faction should expose fixed Faction Rank permissions');
+assert(factionPanel.innerHTML.includes('2,500,000 FP'), 'Shared treasury balance should render accurately');
+console.log('✓ Test 4 Passed: Affiliated multiplayer faction status, treasury, roster, recruitment, and permissions render accurately');
 
 console.log('--- All UI Surfaces Integration Tests Passed Successfully! ---');
 process.exit(0);

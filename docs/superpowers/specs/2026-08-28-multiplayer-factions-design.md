@@ -157,7 +157,7 @@ Every faction page contains a Rank Permissions view with this complete matrix.
 | Remove lower-ranked members | No | No | Yes | Yes | Yes |
 | Activate, extend, modify, or stop boosts | No | No | Yes | Yes | Yes |
 | Promote or demote members below Lieutenant | No | No | No | Yes | Yes |
-| View, generate, or reset the one-time code | No | No | No | Yes | Yes |
+| View code status, generate a code, or reset the code | No | No | No | Yes | Yes |
 | Edit the faction name and description | No | No | No | Yes | Yes |
 | Change the membership mode | No | No | No | No | Yes |
 | Promote a member to Lieutenant | No | No | No | No | Yes |
@@ -200,7 +200,8 @@ Changing the membership mode requires a confirmation that lists the effects. Swi
 ### Code-only
 
 - Code-only factions do not appear in the public directory.
-- Only Lieutenants and the Leader may view, generate, or reset the code.
+- Only Lieutenants and the Leader may view the code's active status, generate a code, or reset the code.
+- The plaintext code is displayed once, immediately after generation. It cannot be retrieved later because only its cryptographic hash is stored.
 - A code is cryptographically random, stored only as a hash, and compared in constant time where practical.
 - A code has no expiration date.
 - The first successful redemption joins the player immediately as a Private and consumes the code.

@@ -20,11 +20,11 @@ A persistent text-based economy and incremental game engine built with Node.js, 
 - **Inventory & Item Details** — Lock or favorite any owned type, batch-select with checkboxes, Shift ranges, or lasso movement, and hand selected items to bulk selling.
 - **Realistic Crafting** — Gather 450 general-purpose raw materials, build 216 products through direct or recursive atomic recipes, inspect reverse dependencies, craft exact maximums, and fill direct intermediates in place.
 - **System Shop** — Wishlist restock targets, read configurable sell-roll indicators, preview atomic bulk trades, and extend every active booster from one review.
-- **Factions** — Create a faction, fund its treasury, and configure duration or continuous action multipliers.
+- **Multiplayer Factions** — Join up to 20 players through invitations, one-time codes, or public requests; delegate fixed Faction Ranks; share a treasury and action boosts; and transfer faction ownership safely.
 - **Gambling** — Play coinflip and slots modes with server-validated wagers.
 - **Display Preferences** — Choose number formatting and interface density, then configure shared quantity presets globally, per system, or for an individual item.
 - **Keyboard Controls** — Use or remap 18 shortcuts for navigation, core actions, contextual Help, Console entry, and theme switching.
-- **Contextual Help & Commands** — Follow section-aware Help, search the full 49-topic handbook, and personalize every existing Console slash command with aliases and autocomplete.
+- **Contextual Help & Commands** — Follow section-aware Help, search the full 59-topic handbook, and personalize every existing Console slash command with aliases and autocomplete.
 - **Versioned Game API** — Typed, server-authoritative queries and idempotent commands with normalized state, authenticated revisions, and conflict-safe persistence.
 
 ---
@@ -100,7 +100,9 @@ Direct mode consumes only owned recipe inputs. Recursive mode plans and produces
 
 ### Player state and API
 
-Guest saves and authenticated cloud saves are isolated. Signed-in commands carry a verified bearer token, expected state revision, and unique command ID; Supabase commits them atomically and replays duplicate receipts without applying effects twice. Device/cloud divergence requires an explicit reconciliation choice. See [docs/GAME_API_V1.md](docs/GAME_API_V1.md) for the contract and [DEPLOYMENT.md](DEPLOYMENT.md) for schema and credential requirements.
+When Supabase is configured, Bconomy creates an anonymous guest identity automatically. Guest and registered commands carry a verified bearer token, expected state revision, and unique command ID; Supabase commits them atomically and replays duplicate receipts without applying effects twice. A one-time migration imports the existing device save and any legacy local faction. Creating an account upgrades the same guest identity, so its Player ID, solo progress, and faction membership remain intact.
+
+Faction data is deliberately absent from player-state schema version 2. It is stored in shared, server-authoritative tables so every member sees one roster, treasury, boost state, and activity history. Guest identities and their memberships are deleted after 365 days without activity; if an inactive guest was the Leader, ownership passes to the highest-ranked remaining member, with earlier join time breaking a tie. See [docs/GAME_API_V1.md](docs/GAME_API_V1.md) for the transport contract, [docs/FACTIONS.md](docs/FACTIONS.md) for the faction rules, and [DEPLOYMENT.md](DEPLOYMENT.md) for schema and credential requirements.
 
 ---
 

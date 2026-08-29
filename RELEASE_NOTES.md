@@ -4,6 +4,36 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.0.0] — 2026-08-29
+
+### Added
+- **Multiplayer factions**:
+  - Added shared factions for up to 20 players, with exactly one Leader-owner and the fixed Faction Ranks Private, Corporal, Sergeant, Lieutenant, and Leader.
+  - Added Invite-only, Code-only, and Public-request membership modes, searchable public listings, invitations, join-request review, member removal, rank changes, ownership transfer, departure, and disbanding.
+  - Added one-time join codes that never expire by time, are shown once after generation, are stored only as hashes, and become invalid after one successful redemption or an authorized reset.
+  - Added 48 cheerful default join-request messages delivered through a per-player shuffle bag. Every request starts with a new message that can be edited or regenerated before sending.
+- **Shared faction economy**:
+  - Added irreversible one-to-one cash deposits from every member into a shared Faction Point treasury.
+  - Added shared fixed-duration and continuous action boosts for Mining, Exploring, Hunting, Fishing, and Work, plus a treasury ledger, activity history, notifications, and lifetime contribution totals.
+- **Guest multiplayer identities**:
+  - Added automatic anonymous guest identities so players can use factions without first signing in or creating an account.
+  - Added same-identity guest account upgrades that preserve solo progress, Player ID, and faction membership.
+  - Added 365-day inactivity cleanup with deterministic Leader succession to the highest-ranked, earliest-joined eligible member.
+
+### Changed
+- Player-state schema version 2 removes client-owned faction data. Faction membership, recruitment, ranks, treasury, boosts, codes, activity, and notifications now live in server-authoritative PostgreSQL records.
+- Game actions resolve the acting player's current shared faction multiplier on the server. All non-faction game systems remain solo.
+- Expanded the searchable in-game handbook from 49 to 59 topics with complete faction and guest-retention guidance.
+
+### Security and Integrity
+- Added Row Level Security to every shared faction table and restricted all faction reads and writes to service-only validated functions.
+- Added revision checks, idempotent command receipts, rate limits, hash-only access-code storage, transactional capacity checks, and deferred enforcement of one Leader-owner and the 20-member maximum.
+- Added one-time legacy migration for existing local factions and device guest saves; migration removes the obsolete local faction field only after shared import completes.
+
+### Breaking Changes
+- Multiplayer factions require a configured Supabase project with anonymous sign-ins enabled and the v4.0.0 schema applied before the application is deployed.
+- The former singular `/api/faction/*` local-state endpoints and faction commands in the general game gateway are removed. Clients must use `/api/factions/queries` and `/api/factions/commands` with a registered or anonymous bearer identity.
+
 ## [v3.2.0] — 2026-08-25
 
 ### Added

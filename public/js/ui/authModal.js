@@ -11,9 +11,10 @@ import {
     getAuthSession,
     getAuthProfile,
     setAuthProfile,
-    getAuthHeaders
+    getAuthHeaders,
+    isGuestProfile
 } from '../auth.js';
-import { getState, setState, saveState, loadState, setRevision } from '../state.js';
+import { getState, setState, saveState, setRevision } from '../state.js';
 import { showToast } from './toast.js';
 import { renderAll } from './header.js';
 import { openDialog, closeDialog, showConfirmation } from './modal.js';
@@ -450,21 +451,35 @@ export function openAccountDetailsModal(returnFocus = null) {
     const idEl = document.getElementById('account-modal-player-id');
     const userEl = document.getElementById('account-modal-username');
     const emailEl = document.getElementById('account-modal-email');
+    const standingEl = document.getElementById('account-modal-standing');
     const signoutBtn = document.getElementById('account-modal-signout-btn');
+    const signinBtn = document.getElementById('account-modal-signin-btn');
+    const signupBtn = document.getElementById('account-modal-signup-btn');
+    const guest = isGuestProfile(profile);
 
     if (idEl) idEl.textContent = `Player ${playerIdFormatted}`;
-    if (userEl) userEl.textContent = profile.username || 'Guild Master';
-    if (emailEl) emailEl.textContent = session?.user?.email || profile.email || 'None';
+    if (userEl) userEl.textContent = profile.username || (guest ? 'Guest Player' : 'Guild Master');
+    if (emailEl) emailEl.textContent = guest ? 'Not linked' : (session?.user?.email || profile.email || 'None');
+    if (standingEl) standingEl.textContent = guest ? 'Temporary Guest · 365-day inactivity retention' : 'Active & Verified';
 
-    if (signoutBtn) {
+    signinBtn?.classList.toggle('hidden', !guest);
+    signupBtn?.classList.toggle('hidden', !guest);
+    signoutBtn?.classList.toggle('hidden', guest);
+    if (signinBtn) signinBtn.onclick = () => {
+        closeDialog(modal, { reason: 'signin' });
+        openAuthModal('signin', document.getElementById('header-account-btn'));
+    };
+    if (signupBtn) signupBtn.onclick = () => {
+        closeDialog(modal, { reason: 'signup' });
+        openAuthModal('signup', document.getElementById('header-account-btn'));
+    };
+
+    if (signoutBtn && !guest) {
         signoutBtn.onclick = async () => {
             closeDialog(modal, { reason: 'signout' });
             await signOutUser();
-            const guestState = loadState();
-            if (guestState) setState(guestState);
             showToast('Signed out of Bconomy.', 'info');
-            updateAccountHeaderUI();
-            renderAll();
+            location.reload();
         };
     }
 
@@ -486,10 +501,11 @@ export function updateAccountHeaderUI() {
 
     if (session && profile) {
         const playerIdFormatted = profile.formatted_player_id || `#${profile.player_id}`;
+        const guest = isGuestProfile(profile);
         accountContainer.innerHTML = `
-            <button type="button" id="header-account-btn" class="player-account-btn" title="View Account Profile (${profile.username})" aria-label="Player Account Profile">
-                <iconify-icon icon="lucide:user-check" class="player-account-icon" aria-hidden="true"></iconify-icon>
-                <span class="player-account-id">Player ${playerIdFormatted}</span>
+            <button type="button" id="header-account-btn" class="player-account-btn" title="View ${guest ? 'Guest' : 'Account'} Profile (${profile.username})" aria-label="${guest ? 'Guest Player' : 'Player Account'} Profile">
+                <iconify-icon icon="${guest ? 'lucide:user-round' : 'lucide:user-check'}" class="player-account-icon" aria-hidden="true"></iconify-icon>
+                <span class="player-account-id">${guest ? 'Guest' : 'Player'} ${playerIdFormatted}</span>
                 <iconify-icon icon="lucide:chevron-down" class="player-account-chevron" aria-hidden="true"></iconify-icon>
             </button>
         `;

@@ -4,7 +4,7 @@
 
 **Bconomy** is a persistent text-based economy and incremental game engine built on a **Node.js / Express** backend architecture paired with a static, single-page HTML/CSS/JavaScript client that uses native ES modules. No React or Vite build step is required.
 
-The architecture isolates pure game logic into modular engine modules located in `/src/engine` and pure mathematical utility functions in `/src/utils/formulas.js`. The Express server (`server.js`) acts as the state orchestration layer and RESTful API gateway, managing client requests, performing deterministic state mutations, enforcing anti-exploit validations, and returning serialized state payloads with pre-formatted UI output strings.
+The architecture isolates pure game logic into modular engine modules located in `/src/engine` and pure mathematical utility functions in `/src/utils/formulas.js`. The Express server (`server.js`) acts as the state orchestration layer and REST API gateway, managing client requests, performing deterministic state mutations, enforcing anti-exploit validations, and returning serialized state payloads with pre-formatted UI output strings. Solo progress remains private player state. Factions are the one multiplayer surface and are stored as server-authoritative shared PostgreSQL records.
 
 ### High-Level System Architecture Diagram
 
@@ -46,6 +46,9 @@ Below is the complete file-by-file breakdown of the project workspace:
 *   **[server.js](file:///c:/Users/camar/Downloads/bconomy/server.js)**: Main application entry point and Express server listening on port 3000. Provides static asset serving from `/public` and handles all REST API endpoints for default state creation, resource actions, tool upgrades, career rank advancement, prestige ascensions, perk level upgrades, farming plot actions, system shop purchases/sales, and loot booster activations.
 *   **[src/utils/formulas.js](file:///c:/Users/camar/Downloads/bconomy/src/utils/formulas.js)**: Pure mathematical function library housing standard economy equations: non-linear tool yield multipliers, work base pay, multi-stack work bonus odds, cronyism/investiture rank discounts, serendipity rare drop multipliers, amnesia cooldown reset chances, booster multiplicative stacking calculations, and PascalCase text formatting.
 *   **[src/engine/actionEngine.js](file:///c:/Users/camar/Downloads/bconomy/src/engine/actionEngine.js)**: Core handler for resource gathering actions (`mine`, `explore`, `hunt`, `fish`) and the `work` action. Computes loot drops using roll pools, applies tool yield, serendipity, and multiplicative booster multipliers, rolls uniform drop variance ($\pm 4\%$), evaluates Amnesiac perk triggers, updates state cooldowns, and formats output text blocks for display.
+*   **`src/engine/factionMultiplayerRules.js`**: Shared definitions for Faction Ranks, fixed permissions, membership modes, capacity, generated request-message shuffle bags, deterministic Leader succession, and membership-mode transitions.
+*   **`src/db/factions.js`**: Trusted server wrapper for faction snapshots, public directory queries, player search, message generation, transactional commands, legacy migration, and guest cleanup.
+*   **`src/data/factionJoinMessages.js`**: Curated pool of 48 complete, cheerful join-request messages. A per-player shuffle bag prevents repetition until the pool has been exhausted.
 *   **[src/engine/boosterEngine.js](file:///c:/Users/camar/Downloads/bconomy/src/engine/boosterEngine.js)**: Dedicated engine for managing action-specific loot boosters across 4 action types and 6 tiers. Implements canonical and legacy inventory-name resolution, handles direct console/UI activations, plans and executes atomic bulk activation, enforces same-tier duration extensions vs. cross-tier multiplicative stacking ($2^k$), and handles inventory item consumption.
 *   **[src/engine/dropTables.js](file:///c:/Users/camar/Downloads/bconomy/src/engine/dropTables.js)**: Master data tables module containing:
     *   Resource drop chance tables (`MINE_DROP_TABLE`, `EXPLORE_DROP_TABLE`, `HUNT_DROP_TABLE`, `FISH_DROP_TABLE`).
@@ -80,6 +83,7 @@ Below is the complete file-by-file breakdown of the project workspace:
 *   **`tests/test_preferences_and_number_formatting.mjs`**: Preference migration/default and number-format boundary coverage.
 *   **`tests/test_dialog_manager.mjs`**: Native-dialog lifecycle, Escape, backdrop policy, focus restoration, and permanent-confirmation coverage.
 *   **`tests/test_ui_surfaces.mjs`** and **`tests/test_static_ui_contract.mjs`**: Rendering and static accessibility/responsive-contract coverage for the redesigned pages.
+*   **`tests/test_multiplayer_faction_rules.js`** and **`tests/test_multiplayer_faction_contract.mjs`**: Permission, membership-mode, message-pool, schema, API, guest-lifecycle, authoritative-effect, UI, and handbook coverage for multiplayer factions.
 
 ### Configuration & Project Metadata
 *   **[package.json](file:///c:/Users/camar/Downloads/bconomy/package.json)**: Node.js project manifest defining dependencies (`express`, `cors`), main script (`server.js`), and test scripts.
@@ -100,10 +104,11 @@ Below is the complete file-by-file breakdown of the project workspace:
 
 ## 3. Player State Schema & Critical Variables
 
-The central state (`DEFAULT_STATE`) object defines the data structure tracked per player:
+Player-state schema version 2 (`DEFAULT_STATE`) defines private solo data. It never stores faction membership, treasury, ranks, requests, invitations, access codes, or boosts; those records are shared PostgreSQL data keyed to the player's server identity.
 
 ```json
 {
+  "schemaVersion": 2,
   "cash": 0,
   "rankIndex": 0,
   "prestigeCount": 0,
@@ -377,16 +382,30 @@ The backend Express server (`server.js`) exposes the following HTTP endpoints:
 Bulk booster results report `itemsAffectedCount`, `totalUnits`, an inventory-key `breakdown`, aggregated `tierSummaries` with previous and projected expiries, and per-action `actionSummaries` with active tiers and resulting multipliers. `allOwned` consumes every usable T1–T6 booster unit, `oneEach` consumes one unit from each distinct owned booster inventory entry, and `custom` applies bounded quantities supplied by the client. Multiple inventory entries resolving to the same action and tier contribute duration to one tier; an already-active tier extends from its current expiry and does not create another multiplier tier. Unknown custom keys, unsafe or non-integer quantities, over-owned quantities, and empty selections fail before any state is committed.
 
 ### Faction System Endpoints
-*   `POST /api/faction/state`: Fetches and processes faction state. Body: `{ playerState }`.
-*   `POST /api/faction/deposit`: Converts cash to Faction Points at 1:1 parity ($1 Cash = 1 FP). Body: `{ playerState, amount }`.
-*   `POST /api/faction/boost/activate`: Starts or extends a faction boost for `mine`, `explore`, `hunt`, `fish`, or `work` across 36 levels ($1.25\times \dots 10.00\times$). Body: `{ playerState, actionType, level, durationHours, mode }`.
-*   `POST /api/faction/boost/stop`: Deactivates an active faction boost. Body: `{ playerState, actionType }`.
-*   `POST /api/faction/customize`: Updates Faction Name (max 32 chars) and Description (max 160 chars). Body: `{ playerState, name, description }`.
-*   `GET /api/data/faction-multipliers`: Returns complete 36-level multiplier metadata and hourly FP cost table.
+*   `POST /api/factions/queries`: Returns a viewer-filtered snapshot, public directory, invitation-player search, or the next generated join-request message.
+*   `POST /api/factions/commands`: Executes one idempotent shared mutation using `type`, UUID `commandId`, current `expectedRevision`, and operation-specific `payload`.
+*   `GET /api/data/faction-multipliers`: Returns the complete 36-level multiplier metadata and hourly FP cost table.
+*   `POST /api/faction/*`: Retired singular local-faction endpoints return `410 Gone`.
+
+The faction command registry covers creation, deposits, invitations, public requests, one-time codes, rank changes, removal, Leader transfer, leave, disband, customization, membership mode, notification reads, and boost activation or stopping. All faction endpoints require a verified registered or anonymous bearer identity. The detailed request and response contract is in `docs/GAME_API_V1.md`.
 
 ---
 
-## 7. Faction System Architecture & Cost Curves
+## 7. Multiplayer Faction Architecture and Cost Curves
+
+Factions are shared across at most 20 members, including exactly one Leader. A player can belong to one faction. The rank order is Private, Corporal, Sergeant, Lieutenant, and Leader; these ranks are separate from Bconomy's solo progression ranks.
+
+| Faction Rank | Fixed permissions |
+| :--- | :--- |
+| Private | View permitted faction data, deposit Cash as FP, receive active boosts, and leave. |
+| Corporal | Private permissions plus send invitations and revoke their own invitations. |
+| Sergeant | Corporal permissions plus review public join requests, remove lower-ranked members, and manage boosts. |
+| Lieutenant | Sergeant permissions plus promote or demote members strictly below Lieutenant, edit details, and generate or reset a one-time access code. |
+| Leader | Full control, including appointing Lieutenants, changing membership mode, transferring ownership, and disbanding. |
+
+Membership is invite-only, code-only, or public with join requests. Codes are single-use and have no time expiry; plaintext is displayed only when generated and only its hash is stored. Every public request starts with one of 48 cheerful messages drawn from a per-player shuffle bag, and the player may edit or regenerate it before sending. There is no faction membership cooldown.
+
+Guests receive anonymous Supabase identities automatically and can use every permitted faction feature. Account registration upgrades the same identity. Anonymous identities inactive for 365 days are deleted. If the deleted guest was Leader, succession chooses the highest Faction Rank, then earliest join time, then Player ID; a faction with no remaining members is deleted.
 
 ### Mathematical Specifications
 *   **Parity**: $1.00\text{ Cash} = 1\text{ FP}$.
@@ -458,6 +477,8 @@ All core game engine logic, state persistence models, mathematical calculations,
 *   `test_boosterEngine.js`: **PASSING**
 *   `test_error_indicator.mjs`: **PASSING**
 *   `test_factionEngine.js`: **PASSING**
+*   `test_multiplayer_faction_rules.js`: **PASSING**
+*   `test_multiplayer_faction_contract.mjs`: **PASSING**
 *   `test_farmEngine.js`: **PASSING**
 *   `test_gambling_api.js`: **PASSING**
 *   `test_gamblingEngine.js`: **PASSING**

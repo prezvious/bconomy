@@ -89,7 +89,17 @@ export async function initAuth() {
         }
 
         if (currentProfile && currentProfile.id) {
-            await refreshUserProfile(currentProfile.id);
+            const refreshed = await refreshUserProfile(currentProfile.id);
+            if (!refreshed) {
+                currentSession = null;
+                currentProfile = null;
+                localStorage.removeItem(AUTH_SESSION_KEY);
+                localStorage.removeItem(AUTH_PROFILE_KEY);
+            }
+        }
+
+        if (!currentSession || !currentProfile) {
+            await ensureGuestIdentity();
         }
 
         window.dispatchEvent(new CustomEvent('bconomy-auth-change', {
@@ -101,6 +111,54 @@ export async function initAuth() {
         console.warn('Failed to restore auth session:', e);
         return null;
     }
+}
+
+export const isGuestProfile = profile => profile?.account_kind === 'guest';
+
+export async function ensureGuestIdentity() {
+    if (currentSession && currentProfile) return currentProfile;
+    try {
+        const configResponse = await fetch('/api/config/auth');
+        const config = await configResponse.json();
+        if (!configResponse.ok || !config.enabled) return null;
+        const response = await fetch('/api/auth/guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        const data = await response.json();
+        if (!response.ok || !data.session || !data.profile) {
+            throw new Error(data?.error?.message || data?.error || 'Guest identity could not be created.');
+        }
+        currentSession = data.session;
+        currentProfile = data.profile;
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentSession));
+        localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
+        return currentProfile;
+    } catch (error) {
+        console.warn('Automatic guest identity is unavailable:', error);
+        return null;
+    }
+}
+
+export async function migrateGuestProgress(deviceState) {
+    if (!isGuestProfile(currentProfile)) return currentProfile;
+    if (currentProfile.guest_migrated_at) return currentProfile;
+    const response = await fetch('/api/player/guest-migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+            expectedRevision: Math.max(0, Number(currentProfile.state_revision) || 0),
+            deviceState
+        })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.profile) {
+        throw new Error(data?.error?.message || data?.error || 'Guest progress could not be migrated.');
+    }
+    currentProfile = data.profile;
+    localStorage.setItem(AUTH_PROFILE_KEY, JSON.stringify(currentProfile));
+    return currentProfile;
 }
 
 export function getAuthSession() {
@@ -175,15 +233,20 @@ export async function refreshAuthSession() {
  * Sign up a new player with Username, optional Email, and Password
  */
 export async function signUpUser({ username, email, password }) {
-    const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            username: username.trim(),
-            email: email ? email.trim() : undefined,
-            password: password
-        })
+    const requestBody = JSON.stringify({
+        username: username.trim(),
+        email: email ? email.trim() : undefined,
+        password: password
     });
+    const sendRequest = () => fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: requestBody
+    });
+    let res = await sendRequest();
+    if (res.status === 401 && getAccessToken() && await refreshAuthSession()) {
+        res = await sendRequest();
+    }
 
     const data = await res.json();
     if (!res.ok || data.error) {

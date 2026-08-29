@@ -1,6 +1,6 @@
 // Cooldown & Real-Time UI Loop
 import { getState } from '../state.js';
-import { ACTIONS, formatDurationMs, formatTimestampDate, formatDisplayNumber, formatMoney } from '../utils.js';
+import { ACTIONS, formatDurationMs, formatTimestampDate } from '../utils.js';
 import { getStoredSettings } from '../preferences.js';
 import { doFarmState } from '../api.js';
 import { renderFarm } from './farm.js';
@@ -169,113 +169,6 @@ export const cooldownLoop = () => {
 
     if (anyBoostExpired) {
         renderActiveBoosts();
-    }
-
-    // Real-time Faction Treasury & Boost Timers
-    if (playerState.faction && playerState.faction.created && playerState.faction.boosts) {
-        const faction = playerState.faction;
-        let fpChanged = false;
-
-        // Process continuous drain in real-time
-        ['mine', 'explore', 'hunt', 'fish', 'work'].forEach(actId => {
-            const boost = faction.boosts[actId];
-            if (!boost || boost.level === 0) return;
-
-            if (boost.mode === 'continuous' && boost.costPerHour > 0) {
-                const lastUp = boost.lastUpdated || now;
-                const elapsedMs = Math.max(0, now - lastUp);
-                if (elapsedMs >= 1000) { // update every second
-                    const elapsedHours = elapsedMs / (3600 * 1000);
-                    const fpCost = Math.floor(elapsedHours * boost.costPerHour);
-                    if (fpCost > 0) {
-                        if (faction.points >= fpCost) {
-                            faction.points -= fpCost;
-                            boost.lastUpdated = now;
-                            fpChanged = true;
-                        } else {
-                            faction.points = 0;
-                            boost.level = 0;
-                            boost.multiplier = 1.0;
-                            boost.activeUntil = 0;
-                            boost.costPerHour = 0;
-                            boost.lastUpdated = now;
-                            fpChanged = true;
-                        }
-                    }
-                }
-            } else if (boost.mode === 'duration') {
-                if (boost.activeUntil > 0 && now >= boost.activeUntil) {
-                    boost.level = 0;
-                    boost.multiplier = 1.0;
-                    boost.activeUntil = 0;
-                    boost.costPerHour = 0;
-                    boost.lastUpdated = now;
-                    fpChanged = true;
-                }
-            }
-        });
-
-        // Live update Treasury DOM elements
-        const fpEl = document.getElementById('treasury-fp-value');
-        if (fpEl) {
-            fpEl.textContent = `${formatDisplayNumber(faction.points || 0)} FP`;
-        }
-
-        const lifetimeEl = document.getElementById('treasury-lifetime-value');
-        if (lifetimeEl) {
-            lifetimeEl.textContent = formatMoney(faction.lifetimeContributed || 0);
-        }
-
-        // Live update action booster timer displays
-        ['mine', 'explore', 'hunt', 'fish', 'work'].forEach(actId => {
-            const timerEl = document.getElementById(`faction-timer-${actId}`);
-            const boost = faction.boosts[actId];
-            if (!timerEl || !boost || boost.level === 0) return;
-
-            let remainMs = 0;
-            let expireAt = 0;
-            if (boost.mode === 'continuous') {
-                const totalRemainHours = boost.costPerHour > 0 ? (faction.points / boost.costPerHour) : 0;
-                remainMs = Math.floor(totalRemainHours * 3600 * 1000);
-                expireAt = now + remainMs;
-            } else {
-                remainMs = Math.max(0, boost.activeUntil - now);
-                expireAt = boost.activeUntil;
-            }
-
-            timerEl.dataset.expire = expireAt;
-            timerEl.classList.add('timer-hoverable');
-            const isHovered = timerEl.dataset.hovered === 'true';
-            const settings = getStoredSettings();
-            const hoverMode = settings.timerHoverMode || 'swap';
-
-            if (hoverMode === 'tooltip' || hoverMode === 'both' || !timerEl.getAttribute('title')) {
-                timerEl.setAttribute('title', `Expires: ${formatTimestampDate(expireAt, settings)}`);
-            }
-
-            if (isHovered && (hoverMode === 'swap' || hoverMode === 'both')) {
-                timerEl.textContent = formatTimestampDate(expireAt, settings);
-            } else {
-                timerEl.textContent = formatDurationMs(remainMs, settings);
-            }
-        });
-    }
-
-    // Real-time Found Faction Eligibility Updates (for Unaffiliated view)
-    const foundStatusEl = document.getElementById('found-faction-cash-status');
-    const btnSubmitFound = document.getElementById('btn-submit-found-faction');
-    if (foundStatusEl) {
-        const cash = playerState.cash || 0;
-        const canAfford = cash >= 1000000;
-        if (canAfford) {
-            foundStatusEl.textContent = `✓ Ready to Found (${formatMoney(cash)} available)`;
-            foundStatusEl.className = 'found-cash-status text-success';
-            if (btnSubmitFound) btnSubmitFound.disabled = false;
-        } else {
-            foundStatusEl.textContent = `✗ Need ${formatMoney(1000000 - cash)} more cash`;
-            foundStatusEl.className = 'found-cash-status text-danger';
-            if (btnSubmitFound) btnSubmitFound.disabled = true;
-        }
     }
 
     // Real-time Farm Updates

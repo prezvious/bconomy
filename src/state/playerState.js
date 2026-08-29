@@ -3,7 +3,7 @@
 const { RANKS, PERK_DEFINITIONS } = require('../engine/dropTables');
 const { normalizeItemId, getItem } = require('../data/itemRegistry');
 
-const PLAYER_STATE_SCHEMA_VERSION = 1;
+const PLAYER_STATE_SCHEMA_VERSION = 2;
 const MAX_SAFE_QUANTITY = Number.MAX_SAFE_INTEGER;
 
 const DEFAULT_STATE = Object.freeze({
@@ -26,7 +26,6 @@ const DEFAULT_STATE = Object.freeze({
         jackpot_fever: 0
     }),
     cooldowns: Object.freeze({ mine: 0, explore: 0, hunt: 0, fish: 0, work: 0 }),
-    faction: null,
     farm: Object.freeze({
         waterAvailableAt: 0,
         markedPlotIds: Object.freeze([]),
@@ -141,6 +140,7 @@ function normalizePlayerState(candidate = {}) {
     state.lockedItems = normalizeOwnedFlagList(input.lockedItems, state.inventory);
     state.favoriteItems = normalizeOwnedFlagList(legacyFavorites, state.inventory);
     state.shopWishlist = normalizeWishlist(input.shopWishlist);
+    delete state.faction;
     delete state.pinnedItems;
     return state;
 }
@@ -152,6 +152,7 @@ function cleanupOwnedItemFlags(playerState) {
     playerState.favoriteItems = normalizeOwnedFlagList(playerState.favoriteItems, playerState.inventory);
     playerState.shopWishlist = normalizeWishlist(playerState.shopWishlist);
     playerState.schemaVersion = PLAYER_STATE_SCHEMA_VERSION;
+    delete playerState.faction;
     delete playerState.pinnedItems;
     return playerState;
 }

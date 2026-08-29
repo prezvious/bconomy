@@ -79,7 +79,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v3.2.0" title="Click to view release notes">Bconomy v3.2.0</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v4.0.0" title="Click to view release notes">Bconomy v4.0.0</button>
             </div>
         </nav>
 
@@ -1161,7 +1161,16 @@
                     <label for="create-faction-description" class="form-label">Motto or Description <span>160 characters maximum</span></label>
                     <textarea id="create-faction-description" name="faction-description" class="form-input" rows="4" maxlength="160" autocomplete="off" placeholder="Describe your faction…"></textarea>
                 </div>
-                <p class="permanence-note"><strong>Permanent choice:</strong> factions cannot currently be dissolved.</p>
+                <div class="form-group">
+                    <label for="create-faction-mode" class="form-label">Membership Mode</label>
+                    <select id="create-faction-mode" class="form-select">
+                        <option value="invite_only">Invite-only</option>
+                        <option value="code_only">Code-only</option>
+                        <option value="public">Public listing with join requests</option>
+                    </select>
+                    <span class="field-help">The Leader may change this later. Changing modes can cancel incompatible pending recruitment records.</span>
+                </div>
+                <p class="permanence-note"><strong>Leadership:</strong> you become the faction's sole Leader and owner.</p>
             </div>
             <div class="modal-actions">
                 <button id="btn-create-faction-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
@@ -1198,6 +1207,67 @@
             <div class="modal-actions">
                 <button id="btn-faction-modal-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
                 <button id="btn-faction-modal-save" class="action-btn primary-btn" type="button">Save Details</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Public Faction Join Request Modal -->
+    <dialog id="faction-join-request-modal" class="modal hidden" data-app-dialog aria-labelledby="faction-join-request-title">
+        <div class="modal-content card modal-dialog modal-standard">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:send" class="modal-icon" aria-hidden="true"></iconify-icon>
+                    <div>
+                        <h3 id="faction-join-request-title">Request to Join</h3>
+                        <p id="faction-join-request-subtitle" class="modal-header-subtitle"></p>
+                    </div>
+                </div>
+                <button id="btn-close-faction-join-request" class="modal-close-btn" type="button" aria-label="Close join-request dialog">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="faction-join-request-message" class="form-label">Message <span id="faction-join-message-count">0 / 200</span></label>
+                    <textarea id="faction-join-request-message" class="form-input" rows="5" aria-describedby="faction-join-request-help" placeholder="Tell the faction why you would like to join."></textarea>
+                    <span id="faction-join-request-help" class="field-help">A fresh cheerful message is provided each time. You may edit it or generate another one. The limit is 200 characters.</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-faction-join-request-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-faction-join-request-regenerate" class="action-btn secondary-btn" type="button">Regenerate</button>
+                <button id="btn-faction-join-request-send" class="action-btn primary-btn" type="button">Send Request</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Disband Faction Confirmation Modal -->
+    <dialog id="disband-faction-modal" class="modal hidden" data-app-dialog aria-labelledby="disband-faction-modal-title">
+        <div class="modal-content card modal-dialog modal-compact">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <iconify-icon icon="lucide:shield-x" class="modal-icon text-danger" aria-hidden="true"></iconify-icon>
+                    <div>
+                        <h3 id="disband-faction-modal-title">Permanently Disband Faction</h3>
+                        <p class="modal-header-subtitle">This action cannot be undone.</p>
+                    </div>
+                </div>
+                <button id="btn-close-disband-faction" class="modal-close-btn" type="button" aria-label="Close disband-faction dialog">
+                    <iconify-icon icon="lucide:x" aria-hidden="true"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="transaction-notice warning" role="note">Every member will be removed, all boosts will stop, and the shared treasury will be forfeited without a refund.</div>
+                <p>Type <strong id="disband-faction-name"></strong> exactly to confirm.</p>
+                <div class="form-group">
+                    <label for="disband-faction-confirmation" class="form-label">Faction name</label>
+                    <input id="disband-faction-confirmation" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                    <span id="disband-faction-error" class="field-error hidden" role="alert"></span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-disband-faction-cancel" class="action-btn secondary-btn" type="button">Cancel</button>
+                <button id="btn-disband-faction-submit" class="action-btn danger-btn" type="button">Disband permanently</button>
             </div>
         </div>
     </dialog>
@@ -1353,13 +1423,15 @@
                     </div>
                     <div class="account-info-item">
                         <span class="account-info-label">Account Standing</span>
-                        <span class="account-status-tag">Active & Verified</span>
+                        <span id="account-modal-standing" class="account-status-tag">Active & Verified</span>
                     </div>
                 </div>
             </div>
 
             <div class="modal-actions account-modal-actions">
                 <button id="account-modal-close-btn" class="action-btn secondary-btn" type="button" data-dialog-close>Close</button>
+                <button id="account-modal-signin-btn" class="action-btn secondary-btn hidden" type="button">Sign In</button>
+                <button id="account-modal-signup-btn" class="action-btn primary-btn hidden" type="button">Create Account</button>
                 <button id="account-modal-signout-btn" class="action-btn danger-btn" type="button">
                     <iconify-icon icon="lucide:log-out" aria-hidden="true"></iconify-icon>
                     <span>Sign Out</span>
@@ -1379,7 +1451,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v3.2.0 Latest</span>
+                            <span class="badge release-latest-tag">v4.0.0 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>

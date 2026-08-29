@@ -1,7 +1,7 @@
 // Bconomy Main Entry Point (ES Module)
-import { apiCall } from './js/api.js';
-import { loadState, getState, setState, saveState, setRankData, setPerkData, setRevision } from './js/state.js';
-import { initAuth, getAuthProfile } from './js/auth.js';
+import { apiCall, doResetPlayer } from './js/api.js';
+import { loadState, getState, setState, saveState, setRankData, setPerkData, setRevision, clearGuestMigrationSource } from './js/state.js';
+import { initAuth, getAuthProfile, isGuestProfile, migrateGuestProgress } from './js/auth.js';
 import { setupAuthModal, reconcileSignedState } from './js/ui/authModal.js';
 import { setupThemeToggle } from './js/theme.js';
 import { renderAll } from './js/ui/header.js';
@@ -37,10 +37,20 @@ const init = async () => {
         setPerkData(perks);
 
         // Check if player profile has cloud-saved state
-        const profile = getAuthProfile();
+        let profile = getAuthProfile();
         let state = null;
 
-        if (profile && profile.state && Object.keys(profile.state).length > 0) {
+        if (isGuestProfile(profile)) {
+            let migrationSource = deviceState;
+            if (!migrationSource) migrationSource = await apiCall('/api/state/default', 'GET');
+            if (!profile.guest_migrated_at) {
+                profile = await migrateGuestProgress(migrationSource);
+                clearGuestMigrationSource();
+            }
+            state = profile.state;
+            setRevision(profile.state_revision || 0);
+            addLogEntry(`Guest Player ${profile.formatted_player_id || '#' + profile.player_id} is ready. Guest identities are removed after 365 days without activity.`, 'system');
+        } else if (profile && profile.state && Object.keys(profile.state).length > 0) {
             await reconcileSignedState(profile, deviceState);
             state = getState() || profile.state;
             setRevision((getAuthProfile() || profile).state_revision || 0);
@@ -132,14 +142,19 @@ window.setCash = (amount = 10000000000) => {
 };
 
 window.resetProgress = async () => {
-    localStorage.removeItem('bconomy_player_state');
     try {
-        const freshState = await apiCall('/api/state/default', 'GET');
-        setState(freshState);
-        saveState(freshState);
+        const result = getAuthProfile()
+            ? await doResetPlayer()
+            : { state: await apiCall('/api/state/default', 'GET') };
+        if (result?.state) {
+            setState(result.state);
+            saveState(result.state);
+        }
+        localStorage.removeItem('bconomy_player_state');
         renderAll();
     } catch (e) {
-        localStorage.clear();
+        console.error('Progress reset failed:', e);
+        return;
     }
     console.log('%c[Bconomy Dev] Game progress successfully reset!', 'color: #ff4757; font-weight: bold;');
     location.reload();

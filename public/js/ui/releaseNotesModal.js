@@ -3,9 +3,75 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.0.0',
+        version: 'v4.0.0',
+        isLatest: true,
+        date: '2026-08-29',
+        title: 'v4.0.0 — Multiplayer Factions',
+        sections: [
+            {
+                type: 'New Features — Multiplayer Factions',
+                items: [
+                    {
+                        title: 'Build and Join Shared Factions',
+                        bullets: [
+                            'Factions now support up to 20 real players with one Leader-owner and fixed Private, Corporal, Sergeant, Lieutenant, and Leader permissions.',
+                            'Added Invite-only, Code-only, and Public-request recruitment, searchable listings, invitations, one-time codes with no time expiration, membership administration, ownership transfer, and activity records.',
+                            'Public join requests open with one of 48 cheerful generated messages; players can edit the message or regenerate another before sending.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'New Features — Shared Economy',
+                items: [
+                    {
+                        title: 'Coordinate Treasury and Action Boosts',
+                        bullets: [
+                            'Every member can make irreversible one-to-one cash deposits into the shared Faction Point treasury.',
+                            'Authorized officers can manage fixed-duration or continuous boosts for Mining, Exploring, Hunting, Fishing, and Work, and the verified boost applies to every member.',
+                            'Added a shared treasury ledger, faction activity history, personal notifications, roster contributions, and a complete Rank Permissions view.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements — Guest Access & Handbook',
+                items: [
+                    {
+                        title: 'Use Factions Without Registration',
+                        bullets: [
+                            'Players receive an anonymous guest identity automatically and can use every faction feature without first signing in or creating an account.',
+                            'Creating an account upgrades the same player identity, preserving progress and faction membership.',
+                            'Guest identities are removed after 365 days without activity; inactive guest Leaders transfer ownership to the highest-ranked, earliest-joined eligible member.'
+                        ]
+                    },
+                    {
+                        title: 'Expanded Faction Manual',
+                        bullets: [
+                            'Expanded the searchable handbook to 59 topics with clear guides for membership modes, generated request messages, one-time codes, Faction Ranks, treasury operations, leadership, departure, and guest retention.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Breaking Changes & Security',
+                items: [
+                    {
+                        title: 'Server-Authoritative Multiplayer State',
+                        bullets: [
+                            'Faction data has moved out of the client-owned player save into revisioned PostgreSQL records protected by Row Level Security and service-only transactional functions.',
+                            'Legacy local factions are imported once into shared state; player-state schema version 2 removes the local faction field.',
+                            'One-time codes are stored only as SHA-256 hashes, command IDs prevent duplicate mutations, membership and ownership invariants are enforced at transaction commit, and action boosts are resolved on the server.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v3.2.0',
         version: 'v3.2.0',
-        isLatest: true,
         date: '2026-08-25',
         title: 'v3.2.0 — Quality-of-Life Command Center',
         sections: [

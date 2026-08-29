@@ -10,7 +10,6 @@ const { FarmEngine } = require('../engine/farmEngine');
 const ShopEngine = require('../engine/shopEngine');
 const BoosterEngine = require('../engine/boosterEngine');
 const GamblingEngine = require('../engine/gamblingEngine');
-const { FactionEngine } = require('../engine/factionEngine');
 const { getAllItems } = require('../data/itemRegistry');
 const { normalizePlayerState, cleanupOwnedItemFlags, createDefaultState } = require('../state/playerState');
 
@@ -18,7 +17,7 @@ const COMMAND_TYPES = Object.freeze({
     'player.reset': (state) => ({ replaceState: createDefaultState(), result: { success: true } }),
     'inventory.setFlags': (state, payload, now) => InventoryEngine.setFlags(state, payload.itemIds, payload.changes),
     'shop.setWishlist': (state, payload, now) => InventoryEngine.setWishlist(state, payload.itemIds, payload.wished, Number.isSafeInteger(payload.addedAt) ? payload.addedAt : now),
-    'action.perform': (state, payload, now) => ActionEngine.performAction(state, payload.actionType, now),
+    'action.perform': (state, payload, now) => ActionEngine.performAction(state, payload.actionType, now, Math.random, payload.factionContext),
     'tool.upgrade': (state, payload) => ToolEngine.upgradeTool(state, payload.toolType),
     'tool.upgradeBulk': (state, payload) => ToolEngine.upgradeToolBulk(state, payload.toolType, payload.targetLevelOrCount, !!payload.isCount),
     'tool.socketInstall': (state, payload) => ToolEngine.installModule(state, payload.toolType, payload.socketIndex, payload.moduleId),
@@ -69,17 +68,7 @@ const COMMAND_TYPES = Object.freeze({
         streakState: payload.streakState,
         isCashOut: payload.isCashOut
     }),
-    'gambling.slots': (state, payload) => GamblingEngine.rollSlots(state, { wagerInput: payload.wagerInput, freeSpinState: payload.freeSpinState }),
-    'faction.refresh': (state, payload, now) => {
-        FactionEngine.ensureFactionState(state);
-        FactionEngine.processFactionState(state, now);
-        return { success: true, faction: state.faction };
-    },
-    'faction.create': (state, payload, now) => FactionEngine.createFaction(state, payload.name, payload.description, now),
-    'faction.deposit': (state, payload) => FactionEngine.depositCash(state, payload.amount),
-    'faction.activateBoost': (state, payload, now) => FactionEngine.activateBoost(state, payload.actionType, payload.level, payload.durationHours, payload.mode, now),
-    'faction.stopBoost': (state, payload, now) => FactionEngine.stopBoost(state, payload.actionType, now),
-    'faction.customize': (state, payload) => FactionEngine.updateCustomization(state, payload.name, payload.description)
+    'gambling.slots': (state, payload) => GamblingEngine.rollSlots(state, { wagerInput: payload.wagerInput, freeSpinState: payload.freeSpinState })
 });
 
 const stripStagedState = result => {
