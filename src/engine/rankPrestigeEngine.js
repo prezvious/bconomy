@@ -52,6 +52,7 @@ class RankPrestigeEngine {
         Object.assign(playerState, staged);
         return { success: true, ascension, allocation };
     }
+
     /**
      * Gets discounted cost for next rank.
      * @param {Object} playerState
@@ -183,12 +184,12 @@ class RankPrestigeEngine {
         playerState.prestigePoints = (playerState.prestigePoints || 0) + (tiersAscended * 5);
         playerState.rankIndex = calc.targetRankIndex;
 
-        const newRankInfo = RANKS[calc.targetRankIndex] || { index: calc.targetRankIndex, name: 'Unknown' };
+        const newRankInfo = RANKS[calc.targetRankIndex] || { index: calc.targetRankIndex + 1, name: 'Unknown' };
 
         return {
             success: true,
             totalCost: calc.totalCost,
-            newRank: calc.targetRankIndex,
+            newRank: newRankInfo.index || (calc.targetRankIndex + 1),
             newRankName: newRankInfo.name,
             newPrestigeCount: playerState.prestigeCount,
             pointsAwarded: tiersAscended * 5,

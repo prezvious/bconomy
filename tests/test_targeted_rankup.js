@@ -219,4 +219,32 @@ console.log('Testing RankPrestigeEngine Targeted Rank Up & Ascension Costs...');
     console.log(`✔ Test 7 Passed: MAX_SAFE_INTEGER reached Tier ${calcSafe.targetTier} Rank ${calcSafe.targetRankIndex}`);
 }
 
+// 8. Verify 500 Trillion ($500.00T) rank advancement & 1-based newRank return
+{
+    const playerState = {
+        cash: 500000000000000, // 500 Trillion
+        rankIndex: 0,
+        prestigeCount: 0,
+        prestigePoints: 0,
+        perks: {}
+    };
+
+    const calc500T = calculateTargetedRankUpCost(playerState, 0, 0, RANKS, true);
+    assert.strictEqual(calc500T.affordable, true);
+    assert.strictEqual(calc500T.targetTier, 418);
+    assert.strictEqual(calc500T.targetRankIndex, 80);
+    assert.strictEqual(calc500T.totalCost, 499986226015290);
+
+    const res500T = RankPrestigeEngine.targetedRankUp(playerState, 0, 0, true);
+    assert.strictEqual(res500T.success, true);
+    assert.strictEqual(res500T.newRank, 81, 'Rank return number must be 1-based (81 = Legate)');
+    assert.strictEqual(res500T.newRankName, 'Legate');
+    assert.strictEqual(res500T.newPrestigeCount, 418);
+    assert.strictEqual(playerState.rankIndex, 80);
+    assert.strictEqual(playerState.prestigeCount, 418);
+    assert.strictEqual(playerState.prestigePoints, 418 * 5);
+    assert.strictEqual(playerState.cash, 500000000000000 - 499986226015290);
+    console.log(`✔ Test 8 Passed: 500 Trillion cash advanced to Tier 418 Rank 81 (Legate) with ${res500T.pointsAwarded} prestige points awarded`);
+}
+
 console.log('ALL TARGETED RANK UP ENGINE TESTS PASSED!');

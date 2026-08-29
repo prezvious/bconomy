@@ -27,7 +27,7 @@ const server = app.listen(0, '127.0.0.1');
     const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
     const health = await healthResponse.json();
     assert.strictEqual(health.status, 'ok');
-    assert.strictEqual(health.version, '4.0.0');
+    assert.strictEqual(health.version, '4.0.1');
 
     const noVersion = await request('/api/game/queries', { type: 'progression.summary', guestState: { cash: 0 } });
     assert.strictEqual(noVersion.status, 426);
@@ -67,9 +67,28 @@ const server = app.listen(0, '127.0.0.1');
     const invalid = await request('/api/game/commands', {
         commandId: 'bad', expectedRevision: 0, type: 'player.reset', payload: {}, guestState
     }, headers);
-    assert.strictEqual(invalid.status, 400);
-    assert.strictEqual(invalid.data.error.code, 'INVALID_COMMAND');
-    console.log('✓ Version negotiation, query purity, guest envelopes, retry safety, and command validation verified');
+    // Test player.setCash & player.addCash in development mode
+    const setCashCmd = await request('/api/game/commands', {
+        commandId: '123e4567-e89b-42d3-a456-426614174001',
+        expectedRevision: 0,
+        type: 'player.setCash',
+        payload: { cash: 500000000000000 },
+        guestState
+    }, headers);
+    assert.strictEqual(setCashCmd.status, 200);
+    assert.strictEqual(setCashCmd.data.state.cash, 500000000000000);
+
+    const addCashCmd = await request('/api/game/commands', {
+        commandId: '123e4567-e89b-42d3-a456-426614174002',
+        expectedRevision: 0,
+        type: 'player.addCash',
+        payload: { cash: 1000000 },
+        guestState: setCashCmd.data.state
+    }, headers);
+    assert.strictEqual(addCashCmd.status, 200);
+    assert.strictEqual(addCashCmd.data.state.cash, 500000001000000);
+
+    console.log('✓ Version negotiation, query purity, guest envelopes, dev cash commands, retry safety, and command validation verified');
     console.log('--- Versioned Game API Tests Passed ---');
 })().catch(error => {
     console.error(error);

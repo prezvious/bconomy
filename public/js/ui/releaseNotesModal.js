@@ -3,9 +3,54 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.0.1',
+        version: 'v4.0.1',
+        isLatest: true,
+        date: '2026-08-29',
+        title: 'v4.0.1 — Targeted Rank Advancement & State Normalization Fixes',
+        sections: [
+            {
+                type: 'Bug Fixes',
+                items: [
+                    {
+                        title: 'Targeted Rank-Up & Indexing Polish',
+                        bullets: [
+                            'Fixed targeted rank promotion return values to consistently report 1-based rank numbers instead of internal 0-based array indices.',
+                            'Improved modal feedback with explicit status messages when at maximum rank (Rank 107 God), lacking cash, or when target rank is already reached.',
+                            'Preserved modal focus restoration when opened via header rank tracker or progression buttons.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Improvements',
+                items: [
+                    {
+                        title: 'Defensive State Normalization & Header Stability',
+                        bullets: [
+                            'Integrated centralized state invariant normalization clamping cash, rank indices, and prestige values within safe numeric bounds.',
+                            'Hardened header stats and deficit tracker against uninitialized rank metadata or legacy save formats.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Developer Tooling & API',
+                items: [
+                    {
+                        title: 'Dev Cash Commands & Gateway Integration',
+                        bullets: [
+                            'Added typed player.setCash and player.addCash command support in development mode for rapid local testing.',
+                            'Upgraded console helper functions (setCash, addCash) to dispatch server-authoritative game commands.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.0.0',
         version: 'v4.0.0',
-        isLatest: true,
         date: '2026-08-29',
         title: 'v4.0.0 — Multiplayer Factions',
         sections: [

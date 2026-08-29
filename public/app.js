@@ -1,5 +1,5 @@
 // Bconomy Main Entry Point (ES Module)
-import { apiCall, doResetPlayer } from './js/api.js';
+import { apiCall, gameCommand, doResetPlayer } from './js/api.js';
 import { loadState, getState, setState, saveState, setRankData, setPerkData, setRevision, clearGuestMigrationSource } from './js/state.js';
 import { initAuth, getAuthProfile, isGuestProfile, migrateGuestProgress } from './js/auth.js';
 import { setupAuthModal, reconcileSignedState } from './js/ui/authModal.js';
@@ -15,6 +15,7 @@ import { addLogEntry, setupConsoleHandlers } from './js/ui/log.js';
 import { applyInterfaceSettings, SETTINGS_CHANGE_EVENT } from './js/preferences.js';
 import { setupHotkeys } from './js/controls.js';
 import { setupUtilityRail } from './js/ui/utilityRail.js';
+import { showToast } from './js/ui/toast.js';
 
 const init = async () => {
     setupThemeToggle();
@@ -119,10 +120,25 @@ function parseConsoleAmount(amount) {
 }
 
 // Expose JS Console helpers for testing cash balance
-window.addCash = (amount = 10000000000) => {
-    const state = loadState() || {};
+window.addCash = async (amount = 10000000000) => {
     const addAmt = parseConsoleAmount(amount);
-    state.cash = Math.min(Number.MAX_SAFE_INTEGER, (state.cash || 0) + addAmt);
+    const profile = getAuthProfile();
+    if (profile) {
+        try {
+            const res = await gameCommand('player.addCash', { cash: addAmt });
+            if (res && res.state) {
+                renderAll();
+                console.log(`%c[Bconomy Dev] Added $${addAmt.toLocaleString()} BC Cash! Current Cash: $${res.state.cash.toLocaleString()} BC`, 'color: #4cd964; font-weight: bold;');
+                return res.state.cash;
+            }
+        } catch (e) {
+            console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
+            showToast(e.message || 'Developer commands are unavailable.', 'error');
+            return (getState() || {}).cash || 0;
+        }
+    }
+    const state = getState() || loadState() || {};
+    state.cash = Math.min(Number.MAX_SAFE_INTEGER, (Number(state.cash) || 0) + addAmt);
     setState(state);
     saveState(state);
     renderAll();
@@ -130,9 +146,24 @@ window.addCash = (amount = 10000000000) => {
     return state.cash;
 };
 
-window.setCash = (amount = 10000000000) => {
-    const state = loadState() || {};
+window.setCash = async (amount = 10000000000) => {
     const setAmt = parseConsoleAmount(amount);
+    const profile = getAuthProfile();
+    if (profile) {
+        try {
+            const res = await gameCommand('player.setCash', { cash: setAmt });
+            if (res && res.state) {
+                renderAll();
+                console.log(`%c[Bconomy Dev] Set cash to $${setAmt.toLocaleString()} BC!`, 'color: #4cd964; font-weight: bold;');
+                return res.state.cash;
+            }
+        } catch (e) {
+            console.warn('%c[Bconomy Dev] Server rejected cash modification:', 'color: #ff4757; font-weight: bold;', e.message);
+            showToast(e.message || 'Developer commands are unavailable.', 'error');
+            return (getState() || {}).cash || 0;
+        }
+    }
+    const state = getState() || loadState() || {};
     state.cash = setAmt;
     setState(state);
     saveState(state);

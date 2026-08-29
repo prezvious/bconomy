@@ -16,6 +16,8 @@ const rememberFactionSnapshot = snapshot => {
 };
 
 const COMMAND_ENDPOINTS = Object.freeze({
+    '/api/player/set-cash': { type: 'player.setCash' },
+    '/api/player/add-cash': { type: 'player.addCash' },
     '/api/inventory/lock': { type: 'inventory.setFlags', payload: body => ({ itemIds: [body.itemName], changes: { locked: !!body.locked } }) },
     '/api/inventory/pin': { type: 'inventory.setFlags', payload: body => ({ itemIds: [body.itemName], changes: { favorite: !!body.pinned } }) },
     '/api/action': { type: 'action.perform' },
@@ -375,3 +377,5 @@ export const doApplyPerkAllocation = targetLevels => gameCommand('prestige.apply
 export const doAscendAndApplyAllocation = targetLevels => gameCommand('prestige.ascendAndApply', { targetLevels });
 export const doGetToolMaxSummary = toolType => gameQuery('tool.maxAffordable', { toolType });
 export const doResetPlayer = () => gameCommand('player.reset');
+export const doSetCash = (cash, el) => gameCommand('player.setCash', { cash }, el);
+export const doAddCash = (cash, el) => gameCommand('player.addCash', { cash }, el);

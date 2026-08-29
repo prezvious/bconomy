@@ -13,8 +13,28 @@ const GamblingEngine = require('../engine/gamblingEngine');
 const { getAllItems } = require('../data/itemRegistry');
 const { normalizePlayerState, cleanupOwnedItemFlags, createDefaultState } = require('../state/playerState');
 
+const isDevModeAllowed = () => process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_COMMANDS === 'true';
+
 const COMMAND_TYPES = Object.freeze({
     'player.reset': (state) => ({ replaceState: createDefaultState(), result: { success: true } }),
+    'player.setCash': (state, payload) => {
+        if (!isDevModeAllowed()) {
+            return { ok: false, code: 'DEV_COMMANDS_DISABLED', error: 'Developer cheat commands are disabled in production.' };
+        }
+        const val = payload?.cash !== undefined ? payload.cash : payload?.amount;
+        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(val) || 0)));
+        return { success: true, cash: state.cash };
+    },
+    'player.addCash': (state, payload) => {
+        if (!isDevModeAllowed()) {
+            return { ok: false, code: 'DEV_COMMANDS_DISABLED', error: 'Developer cheat commands are disabled in production.' };
+        }
+        const delta = Math.floor(Number(payload?.cash !== undefined ? payload.cash : payload?.amount) || 0);
+        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, (state.cash || 0) + delta));
+        return { success: true, cash: state.cash };
+    },
+    'dev.setCash': (state, payload) => COMMAND_TYPES['player.setCash'](state, payload),
+    'dev.addCash': (state, payload) => COMMAND_TYPES['player.addCash'](state, payload),
     'inventory.setFlags': (state, payload, now) => InventoryEngine.setFlags(state, payload.itemIds, payload.changes),
     'shop.setWishlist': (state, payload, now) => InventoryEngine.setWishlist(state, payload.itemIds, payload.wished, Number.isSafeInteger(payload.addedAt) ? payload.addedAt : now),
     'action.perform': (state, payload, now) => ActionEngine.performAction(state, payload.actionType, now, Math.random, payload.factionContext),

@@ -1221,7 +1221,8 @@ app.get('/api/config/auth', (req, res) => {
     res.json({
         enabled: isSupabaseConfigured(),
         supabaseUrl: url || null,
-        supabaseAnonKey: anonKey || null
+        supabaseAnonKey: anonKey || null,
+        devMode: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_COMMANDS === 'true'
     });
 });
 

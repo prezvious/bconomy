@@ -4,6 +4,29 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.0.1] — 2026-08-29
+
+### Fixed
+- **Targeted Rank Advancement Indexing**:
+  - Corrected `newRank` return value in `RankPrestigeEngine.targetedRankUp` to return the 1-based rank number (e.g. Rank 81 Legate) instead of the internal 0-based array index.
+- **Targeted Rank Modal Feedback & Accessibility**:
+  - Refined modal messaging when player has reached peak rank (Rank 107 God), has insufficient funds in Next or Max Affordable modes, or has already reached the target tier/rank in Custom mode.
+  - Dynamically updated confirmation button labels to "Insufficient Funds" or "Already Reached" with appropriate disabled states.
+  - Improved keyboard accessibility and dialog focus restoration to return focus to the triggering element (action button or header rank tracker).
+
+### Improvements
+- **Defensive Player State Normalization**:
+  - Added centralized `normalizeStateInvariants` ensuring cash balance is clamped to `[0, Number.MAX_SAFE_INTEGER]`, rankIndex is clamped to valid bounds `[0, 106]`, prestige points and count are non-negative integers, and nested state objects (`perks`, `inventory`, `tools`, `cooldowns`) are initialized with valid structures.
+  - Hardened header stats and deficit tracker against uninitialized rank metadata or legacy save formats.
+
+### Developer Tooling & API
+- **Development Mode Cash Commands**:
+  - Added typed server-authoritative `player.setCash` and `player.addCash` (with `dev.setCash` / `dev.addCash` aliases) commands guarded by server dev mode checks (`NODE_ENV !== 'production'` or `ALLOW_DEV_COMMANDS=true`).
+  - Added `devMode` status flag to `/api/config/auth`.
+  - Updated browser console helpers `window.setCash` and `window.addCash` to route through typed game command gateways when signed in or playing as guest.
+
+---
+
 ## [v4.0.0] — 2026-08-29
 
 ### Added

@@ -17,9 +17,11 @@ export const renderRankPrestige = () => {
     if (!playerState) return;
 
     const rankData = getRankData();
-    const curRankIndex = playerState.rankIndex || 0;
-    const rankInfo = rankData[curRankIndex] || { name: 'Unknown', basePrice: 0 };
     const maxRankIndex = rankData.length > 0 ? rankData.length - 1 : 106;
+    const curRankIndex = Math.min(maxRankIndex, Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
+    const rankInfo = rankData[curRankIndex] || { name: 'Peasant', basePrice: 10000 };
+    const curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+    const curPoints = Math.max(0, Math.floor(Number(playerState.prestigePoints) || 0));
 
     // Overview Elements
     const curRankEl = document.getElementById('rp-current-rank-display');
@@ -32,10 +34,10 @@ export const renderRankPrestige = () => {
     if (progressText) progressText.textContent = `${curRankIndex} / ${maxRankIndex}`;
 
     const tierEl = document.getElementById('rp-tier-display');
-    if (tierEl) tierEl.textContent = `Tier ${playerState.prestigeCount || 0}`;
+    if (tierEl) tierEl.textContent = `Tier ${curTier}`;
 
     const pointsEl = document.getElementById('rp-prestige-points-display');
-    if (pointsEl) pointsEl.textContent = formatDisplayNumber(playerState.prestigePoints || 0);
+    if (pointsEl) pointsEl.textContent = formatDisplayNumber(curPoints);
 
     // Progression Section: Single Rank Promotion
     const nextRankInfo = rankData[curRankIndex + 1];
@@ -81,7 +83,6 @@ export const renderRankPrestige = () => {
     const msgAscend = document.getElementById('rp-ascend-status-msg');
     const ascendCostEl = document.getElementById('rp-ascend-cost');
 
-    const curTier = playerState.prestigeCount || 0;
     const investitureLevel = Math.min(25, (playerState.perks && playerState.perks.investiture) || 0);
     const ascensionCost = curTier === 0 ? 0 : Math.floor(550000000 * (curTier + 2) * (1 - 0.025 * investitureLevel));
 
@@ -90,7 +91,8 @@ export const renderRankPrestige = () => {
     }
 
     const isGod = curRankIndex >= 106;
-    const canAffordAscension = playerState.cash >= ascensionCost;
+    const playerCash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
+    const canAffordAscension = playerCash >= ascensionCost;
 
     if (isGod) {
         if (msgAscend) {
@@ -171,9 +173,11 @@ const renderPerkSimulator = () => {
     if (!root || !state) return;
     const perkData = getPerkData();
     const settings = getStoredSettings().prestigeSimulator;
-    if (!simulatorTargets) simulatorTargets = Object.fromEntries(SIMULATOR_PERKS.map(id => [id, Number(state.perks?.[id]) || 0]));
-    for (const id of SIMULATOR_PERKS) simulatorTargets[id] = Math.max(Number(state.perks?.[id]) || 0, Math.min(perkData[id]?.maxLevel || 0, simulatorTargets[id] || 0));
-    const canAscend = (state.rankIndex || 0) >= 106 && (state.cash || 0) >= (state.prestigeCount === 0 ? 0 : Math.floor(550000000 * ((state.prestigeCount || 0) + 2) * (1 - 0.025 * Math.min(25, state.perks?.investiture || 0))));
+    const stateRankIndex = Math.max(0, Math.floor(Number(state.rankIndex) || 0));
+    const stateCash = Math.max(0, Math.floor(Number(state.cash) || 0));
+    const stateTier = Math.max(0, Math.floor(Number(state.prestigeCount) || 0));
+    const stateInvestiture = Math.min(25, Math.max(0, Math.floor(Number(state.perks?.investiture) || 0)));
+    const canAscend = stateRankIndex >= 106 && stateCash >= (stateTier === 0 ? 0 : Math.floor(550000000 * (stateTier + 2) * (1 - 0.025 * stateInvestiture)));
     root.dataset.canAscend = canAscend ? 'true' : '';
     root.innerHTML = `
         <div class="sim-controls card">
@@ -655,55 +659,95 @@ export const setupTargetedModal = () => {
         if (!playerState) return;
 
         const rankData = getRankData();
+        const curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+        const curRank = Math.min(Math.max(0, rankData.length - 1), Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
         const mode = modeInputs.find(input => input.checked)?.value || 'next';
         const isMax = mode === 'max';
 
         customControls?.classList.toggle('hidden', mode !== 'custom');
 
-        const reqTier = mode === 'custom' ? (parseInt(tierInput.value, 10) || (playerState.prestigeCount || 0)) : (playerState.prestigeCount || 0);
-        const reqRankIndex = mode === 'next' ? Math.min(rankData.length - 1, (playerState.rankIndex || 0) + 1)
-            : mode === 'custom' ? (parseInt(rankSelect.value, 10) || 0) : (playerState.rankIndex || 0);
+        const reqTier = mode === 'custom' ? Math.max(0, parseInt(tierInput.value, 10) || 0) : curTier;
+        const reqRankIndex = mode === 'next' ? Math.min(rankData.length - 1, curRank + 1)
+            : mode === 'custom' ? Math.min(rankData.length - 1, Math.max(0, parseInt(rankSelect.value, 10) || 0)) : curRank;
 
         const requestId = ++previewRequestId;
         if (costBannerEl) costBannerEl.textContent = 'Calculating authoritative cost…';
-        if (btnConfirm) btnConfirm.disabled = true;
+        if (btnConfirm) {
+            btnConfirm.disabled = true;
+            btnConfirm.textContent = 'Calculating…';
+        }
         let calc;
         try {
             calc = await doPreviewRankTarget(reqTier, reqRankIndex, isMax);
         } catch (error) {
-            if (requestId === previewRequestId && costBannerEl) costBannerEl.textContent = error.message || 'Unable to calculate advancement';
+            if (requestId === previewRequestId) {
+                if (costBannerEl) costBannerEl.textContent = error.message || 'Unable to calculate advancement';
+                if (btnConfirm) {
+                    btnConfirm.textContent = 'Advancement Unavailable';
+                    btnConfirm.disabled = true;
+                }
+            }
             return;
         }
         if (requestId !== previewRequestId) return;
         const targetRankObj = rankData[calc.targetRankIndex] || { name: 'Unknown' };
 
+        const isNoAdvancement = calc.totalCost === 0 && calc.targetTier === curTier && calc.targetRankIndex === curRank;
+
         if (promptTextEl) {
-            promptTextEl.textContent = `Would you like to advance to Tier ${calc.targetTier} at Rank ${calc.targetRankIndex + 1} (${targetRankObj.name})?`;
+            if (isNoAdvancement) {
+                if (curRank >= 106) {
+                    promptTextEl.textContent = `You are at peak standing (Rank 107 God) and need more cash to ascend to Tier ${curTier + 1}.`;
+                } else if (mode === 'max') {
+                    promptTextEl.textContent = `You do not have enough cash to advance beyond Tier ${curTier}, Rank ${curRank + 1} (${rankData[curRank]?.name || 'Peasant'}).`;
+                } else if (mode === 'next') {
+                    promptTextEl.textContent = `You do not have enough cash to advance to Rank ${reqRankIndex + 1} (${rankData[reqRankIndex]?.name || 'Next Rank'}).`;
+                } else {
+                    promptTextEl.textContent = `You are already at or above Tier ${reqTier}, Rank ${reqRankIndex + 1} (${rankData[reqRankIndex]?.name || 'Unknown'}).`;
+                }
+            } else {
+                promptTextEl.textContent = `Would you like to advance to Tier ${calc.targetTier} at Rank ${calc.targetRankIndex + 1} (${targetRankObj.name})?`;
+            }
         }
 
         if (costBannerEl) {
-            costBannerEl.textContent = `Total Advancement Cost: ${formatMoney(calc.totalCost)}`;
+            if (isNoAdvancement && !calc.affordable) {
+                costBannerEl.textContent = `Insufficient cash for rank advancement`;
+            } else if (isNoAdvancement) {
+                costBannerEl.textContent = `No rank advancement required`;
+            } else {
+                costBannerEl.textContent = `Total Advancement Cost: ${formatMoney(calc.totalCost)}`;
+            }
         }
 
         if (btnConfirm) {
-            btnConfirm.textContent = `Confirm (${formatMoney(calc.totalCost)})`;
-            btnConfirm.disabled = !calc.affordable || (calc.totalCost === 0 && calc.targetTier === (playerState.prestigeCount || 0) && calc.targetRankIndex === (playerState.rankIndex || 0));
+            if (isNoAdvancement) {
+                btnConfirm.textContent = mode === 'custom' && (reqTier < curTier || (reqTier === curTier && reqRankIndex <= curRank)) ? 'Already Reached' : 'Insufficient Funds';
+                btnConfirm.disabled = true;
+            } else {
+                btnConfirm.textContent = `Confirm (${formatMoney(calc.totalCost)})`;
+                btnConfirm.disabled = !calc.affordable;
+            }
         }
     };
 
-    const openTargetedModal = () => {
-            populateRanks();
-            const playerState = getState();
-            if (playerState) {
-                if (tierInput) tierInput.value = playerState.prestigeCount || 0;
-                if (rankSelect) rankSelect.value = playerState.rankIndex || 0;
-            }
-            void updateModalPreview();
-            openDialog(modal, {
-                initialFocus: 'input[name="targeted-rank-mode"]:checked',
-                closeOnBackdrop: false,
-                returnFocus: btnOpen
-            });
+    let lastTriggerElement = btnOpen;
+    const openTargetedModal = (e) => {
+        lastTriggerElement = e?.currentTarget || btnOpen || document.getElementById('header-rank-tracker');
+        populateRanks();
+        const playerState = getState();
+        if (playerState) {
+            const curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+            const curRank = Math.min(Math.max(0, getRankData().length - 1), Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
+            if (tierInput) tierInput.value = curTier;
+            if (rankSelect) rankSelect.value = curRank;
+        }
+        void updateModalPreview();
+        openDialog(modal, {
+            initialFocus: 'input[name="targeted-rank-mode"]:checked',
+            closeOnBackdrop: false,
+            returnFocus: lastTriggerElement
+        });
     };
     if (btnOpen) btnOpen.addEventListener('click', openTargetedModal);
     document.getElementById('header-rank-tracker')?.addEventListener('click', openTargetedModal);
@@ -721,12 +765,15 @@ export const setupTargetedModal = () => {
 
     if (btnConfirm) {
         btnConfirm.addEventListener('click', async () => {
-            const playerState = getState();
+            const playerState = getState() || {};
+            const rankData = getRankData();
             const mode = modeInputs.find(input => input.checked)?.value || 'next';
             const isMax = mode === 'max';
-            const reqTier = mode === 'custom' ? (parseInt(tierInput.value, 10) || 0) : (playerState.prestigeCount || 0);
-            const reqRankIndex = mode === 'next' ? Math.min(getRankData().length - 1, (playerState.rankIndex || 0) + 1)
-                : mode === 'custom' ? (parseInt(rankSelect.value, 10) || 0) : (playerState.rankIndex || 0);
+            const curTier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+            const curRank = Math.min(Math.max(0, rankData.length - 1), Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
+            const reqTier = mode === 'custom' ? Math.max(0, parseInt(tierInput.value, 10) || 0) : curTier;
+            const reqRankIndex = mode === 'next' ? Math.min(rankData.length - 1, curRank + 1)
+                : mode === 'custom' ? Math.min(rankData.length - 1, Math.max(0, parseInt(rankSelect.value, 10) || 0)) : curRank;
 
             try {
                 btnConfirm.disabled = true;

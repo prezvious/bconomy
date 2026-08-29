@@ -14,30 +14,36 @@ export const renderHeader = () => {
 
     updateAccountHeaderUI();
 
+    const cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(Number(playerState.cash) || 0)));
     const cashEl = document.getElementById('header-cash');
-    if (cashEl) cashEl.textContent = formatMoney(playerState.cash);
+    if (cashEl) cashEl.textContent = formatMoney(cash);
 
     const rankData = getRankData();
-    const rankInfo = rankData[playerState.rankIndex] || { name: 'Unknown' };
+    const curRankIndex = Math.min(Math.max(0, rankData.length > 0 ? rankData.length - 1 : 0), Math.max(0, Math.floor(Number(playerState.rankIndex) || 0)));
+    const rankInfo = rankData[curRankIndex] || { name: 'Peasant' };
     const rankEl = document.getElementById('header-rank');
-    if (rankEl) rankEl.textContent = `Rank ${playerState.rankIndex + 1} - ${rankInfo.name}`;
+    if (rankEl) rankEl.textContent = `Rank ${curRankIndex + 1} - ${rankInfo.name}`;
     const deficitEl = document.getElementById('header-rank-deficit');
-    const nextRank = rankData[playerState.rankIndex + 1];
+    const nextRank = rankData[curRankIndex + 1];
     if (deficitEl) {
-        if (!nextRank) {
+        if (rankData.length === 0) {
+            deficitEl.textContent = 'Checking next rank…';
+            deficitEl.classList.remove('is-ready');
+        } else if (!nextRank) {
             deficitEl.textContent = 'Maximum rank reached';
             deficitEl.classList.add('is-ready');
         } else {
-            const cronyism = Math.min(25, Number(playerState.perks?.cronyism) || 0);
-            const cost = Math.floor(nextRank.basePrice * ((playerState.prestigeCount || 0) + 1) * (1 - (0.025 * cronyism)));
-            const deficit = Math.max(0, cost - (playerState.cash || 0));
+            const cronyism = Math.min(25, Math.max(0, Math.floor(Number(playerState.perks?.cronyism) || 0)));
+            const tier = Math.max(0, Math.floor(Number(playerState.prestigeCount) || 0));
+            const cost = Math.floor(nextRank.basePrice * (tier + 1) * (1 - (0.025 * cronyism)));
+            const deficit = Math.max(0, cost - cash);
             deficitEl.textContent = deficit === 0 ? `Ready · ${formatMoney(cost)}` : `${formatMoney(deficit)} short`;
             deficitEl.classList.toggle('is-ready', deficit === 0);
         }
     }
 
     const prestigeEl = document.getElementById('header-prestige');
-    if (prestigeEl) prestigeEl.textContent = formatDisplayNumber(playerState.prestigePoints);
+    if (prestigeEl) prestigeEl.textContent = formatDisplayNumber(Math.max(0, Math.floor(Number(playerState.prestigePoints) || 0)));
 };
 
 export const renderAll = () => {

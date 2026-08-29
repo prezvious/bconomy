@@ -17,11 +17,25 @@ export const setRevision = revision => {
     const numeric = Number(revision);
     stateRevision = Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0;
 };
-export const setState = (state) => {
-    if (state && typeof state === 'object' && typeof state.cash === 'number' && state.cash > Number.MAX_SAFE_INTEGER) {
-        state.cash = Number.MAX_SAFE_INTEGER;
+export const normalizeStateInvariants = (state) => {
+    if (!state || typeof state !== 'object') return state;
+    if (typeof state.cash === 'number') {
+        state.cash = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(state.cash)));
+    } else {
+        state.cash = 0;
     }
-    playerState = state;
+    state.rankIndex = Math.min(106, Math.max(0, Math.floor(Number(state.rankIndex) || 0)));
+    state.prestigeCount = Math.max(0, Math.floor(Number(state.prestigeCount) || 0));
+    state.prestigePoints = Math.max(0, Math.floor(Number(state.prestigePoints) || 0));
+    if (!state.perks || typeof state.perks !== 'object') state.perks = {};
+    if (!state.inventory || typeof state.inventory !== 'object') state.inventory = {};
+    if (!state.tools || typeof state.tools !== 'object') state.tools = { mine: 1, explore: 1, hunt: 1, fish: 1 };
+    if (!state.cooldowns || typeof state.cooldowns !== 'object') state.cooldowns = { mine: 0, explore: 0, hunt: 0, fish: 0, work: 0 };
+    return state;
+};
+
+export const setState = (state) => {
+    playerState = normalizeStateInvariants(state);
 };
 
 export const getRankData = () => rankData;
@@ -45,11 +59,8 @@ export const loadState = () => {
             }
         }
         if (saved) {
-            playerState = JSON.parse(saved);
+            playerState = normalizeStateInvariants(JSON.parse(saved));
             setRevision(Number(localStorage.getItem(GUEST_REVISION_KEY)) || 0);
-            if (playerState && typeof playerState === 'object' && typeof playerState.cash === 'number' && playerState.cash > Number.MAX_SAFE_INTEGER) {
-                playerState.cash = Number.MAX_SAFE_INTEGER;
-            }
             return playerState;
         }
     } catch (e) {
