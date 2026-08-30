@@ -32,14 +32,14 @@ require.cache[supabasePath].exports = {
     touchPlayerActivity: async () => true,
     lookupProfileByUserId: async () => ({
         status: 'found',
-        profile: { id: userId, account_kind: 'registered', last_active_at: new Date().toISOString(), state_revision: 7, state: {} }
+        profile: { id: userId, account_kind: 'registered', last_active_at: new Date().toISOString(), state_revision: 6, state: { cash: 6 } }
     })
 };
 
 require.cache[factionsPath].exports = {
     ...realFactions,
     cleanupInactiveGuests: async () => ({ status: 'ok', deletedCount: 0 }),
-    migrateLegacyFaction: async () => ({ status: 'duplicate' }),
+    migrateLegacyFaction: async () => ({ status: 'duplicate', playerState: { cash: 7 }, playerRevision: 7 }),
     getFactionSnapshot: async () => ({ status: 'ok', faction: { id: factionId, membershipMode: 'public' } }),
     executeFactionCommand: async input => {
         v1Calls.push(input);
@@ -71,6 +71,15 @@ async function post(version, body) {
     return { status: response.status, headers: response.headers, body: await response.json() };
 }
 
+async function query(version, body) {
+    const headers = { Authorization: 'Bearer faction-v2-token', 'Content-Type': 'application/json' };
+    if (version !== null) headers['X-Bconomy-API-Version'] = version;
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/factions/queries`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+    });
+    return { status: response.status, headers: response.headers, body: await response.json() };
+}
+
 (async () => {
     await new Promise(resolve => server.once('listening', resolve));
     const body = {
@@ -83,6 +92,17 @@ async function post(version, body) {
 
     const missingVersion = await post(null, body);
     assert.equal(missingVersion.status, 426);
+
+    const snapshot = await query('2', { type: 'faction.snapshot', payload: {}, knownRevision: 6 });
+    assert.equal(snapshot.status, 200);
+    assert.equal(snapshot.body.revision, 7);
+    assert.equal(snapshot.body.state.cash, 7, 'query responses use the migration RPC\'s locked authoritative state');
+    assert.equal(snapshot.body.result.faction.membershipMode, 'public');
+
+    const unchangedSnapshot = await query('2', { type: 'faction.snapshot', payload: {}, knownRevision: 7 });
+    assert.equal(unchangedSnapshot.status, 200);
+    assert.equal(unchangedSnapshot.body.revision, 7);
+    assert.equal(unchangedSnapshot.body.state, undefined, 'unchanged queries do not resend the full player save');
 
     const invalidExpected = await post('2', { ...body, expected: { factionId } });
     assert.equal(invalidExpected.status, 400);

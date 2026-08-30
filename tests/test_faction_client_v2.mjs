@@ -29,13 +29,16 @@ let queryRequest;
 let switchIdentityDuringCommand = false;
 let authModule;
 const latestSnapshot = { status: 'ok', faction: { id: '123e4567-e89b-42d3-a456-426614174301', membershipMode: 'public' } };
+const migratedState = { ...profile.state, cash: 20 };
+let queryPlayerState = migratedState;
+let queryPlayerRevision = 5;
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 globalThis.fetch = async (url, options = {}) => {
     if (url === '/api/player/profile') return json(200, profile);
     if (url === '/api/factions/queries') {
         queryRequest = options;
-        return json(200, { result: latestSnapshot });
+        return json(200, { result: latestSnapshot, state: queryPlayerState, revision: queryPlayerRevision });
     }
     if (url === '/api/factions/commands') {
         commandRequest = options;
@@ -64,6 +67,15 @@ state.setRevision(4);
 const query = await api.doFactionState();
 assert.equal(query.faction.membershipMode, 'public');
 assert.equal(queryRequest.headers['X-Bconomy-API-Version'], '2');
+assert.equal(JSON.parse(queryRequest.body).knownRevision, 4);
+assert.equal(state.getRevision(), 5, 'faction initialization advances a migration-changed player revision');
+assert.equal(state.getState().cash, 20, 'revision synchronization applies the matching authoritative player state');
+
+queryPlayerState = { ...profile.state, cash: 1 };
+queryPlayerRevision = 4;
+await api.doFactionState();
+assert.equal(state.getRevision(), 5, 'an older overlapping faction query cannot roll back the player revision');
+assert.equal(state.getState().cash, 20, 'an older overlapping faction query cannot roll back player progress');
 
 let staleEvent;
 window.addEventListener('bconomy-faction-stale', event => { staleEvent = event.detail; });
@@ -79,7 +91,7 @@ const body = JSON.parse(commandRequest.body);
 assert.equal(commandRequest.headers['X-Bconomy-API-Version'], '2');
 assert.deepEqual(body.expected, expected);
 assert.equal(body.expectedFactionRevision, undefined);
-assert.equal(body.expectedRevision, 4);
+assert.equal(body.expectedRevision, 5);
 assert.deepEqual(staleEvent.snapshot, latestSnapshot);
 assert.equal(staleEvent.error.details.precondition, 'membershipMode');
 

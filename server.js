@@ -202,14 +202,19 @@ const resolveFactionActor = async req => {
             expectedRevision: profile.state_revision,
             guestImport: false
         });
-        if (migration.status === 'applied') {
+        if (!['applied', 'duplicate'].includes(migration.status)) {
+            return { error: { code: migration.code || 'MIGRATION_FAILED', message: migration.message || 'Existing faction data could not be migrated safely.' }, status: factionStatusCode(migration) };
+        }
+        const migrationRevision = Number(migration.playerRevision);
+        if (migration.playerState && typeof migration.playerState === 'object'
+            && Number.isSafeInteger(migrationRevision)
+            && migrationRevision >= 0) {
+            profile = { ...profile, state: migration.playerState, state_revision: migrationRevision };
+        } else if (migration.status === 'applied') {
             const migratedLookup = await lookupProfileByUserId(user.id);
             if (migratedLookup.status === 'unavailable') return { error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable.' }, status: 503 };
             if (migratedLookup.status === 'missing') return { error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' }, status: 404 };
             profile = migratedLookup.profile;
-        }
-        if (!['applied', 'duplicate'].includes(migration.status)) {
-            return { error: { code: migration.code || 'MIGRATION_FAILED', message: migration.message || 'Existing faction data could not be migrated safely.' }, status: factionStatusCode(migration) };
         }
     }
     await touchPlayerActivity(user.id);
@@ -476,7 +481,7 @@ app.post('/api/game/commands', async (req, res) => {
 
 app.post('/api/factions/queries', async (req, res) => {
     if (!requireFactionApiVersion(req, res)) return;
-    const { type, payload = {} } = req.body || {};
+    const { type, payload = {}, knownRevision } = req.body || {};
     if (typeof type !== 'string' || !type) {
         return res.status(400).json({ error: { code: 'INVALID_FACTION_QUERY', message: 'Faction query type is required.' } });
     }
@@ -492,7 +497,15 @@ app.post('/api/factions/queries', async (req, res) => {
 
         const status = factionStatusCode(result);
         if (status !== 200) return res.status(status).json({ error: { code: result.code || 'FACTION_QUERY_FAILED', message: result.message || 'Faction data could not be loaded.' } });
-        return res.json({ result });
+        const revision = Math.max(0, Math.floor(Number(actor.profile.state_revision) || 0));
+        const clientRevision = knownRevision;
+        return res.json({
+            result,
+            ...(!Number.isSafeInteger(clientRevision) || clientRevision !== revision
+                ? { state: normalizePlayerState(actor.profile.state || {}) }
+                : {}),
+            revision
+        });
     } catch (error) {
         console.error('Faction query failed:', error);
         return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The faction query could not be completed.' } });

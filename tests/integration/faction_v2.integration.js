@@ -105,7 +105,12 @@ async function cleanup() {
         [JSON.stringify(initialState), leader.id]
     );
 
-    let playerRevision = 0;
+    const initialized = await http('/api/factions/queries', leader.token, { type: 'faction.snapshot', payload: {}, knownRevision: 0 }, '2');
+    assert.equal(initialized.status, 200, JSON.stringify(initialized.body));
+    assert.equal(initialized.body.result.membership, null);
+    assert.equal(initialized.body.state.cash, initialState.cash);
+    let playerRevision = initialized.body.revision;
+    assert(playerRevision > 0, 'registered legacy-migration initialization returns its authoritative player revision');
     const created = await factionCommand(leader.token, {
         expectedRevision: playerRevision,
         type: 'faction.create',

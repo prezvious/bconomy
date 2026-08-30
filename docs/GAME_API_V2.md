@@ -21,6 +21,8 @@ V2 instead asks, “Did the state that justified this exact command change?” T
 
 Authorized boost objects include `configRevision`. Lieutenant and Leader snapshots also include the active access-code row ID as the opaque `accessCode.version`; plaintext remains available only in the original code-generation response.
 
+Faction queries send the client's `knownRevision` and responses include the viewer's authoritative player `revision`. When that revision differs, the response also includes its matching `state`. This synchronizes a browser when first-use legacy migration advances the solo revision without repeatedly transferring an unchanged save. Clients must apply the pair atomically and only when the observed revision is newer, so an older overlapping query cannot roll back progress or associate a new revision with stale state.
+
 ## Commands
 
 `POST /api/factions/commands`

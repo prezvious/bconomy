@@ -228,12 +228,22 @@ export const factionQuery = async (type, payload = {}) => {
             options: {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '2', ...getAuthHeaders() },
-                body: JSON.stringify({ type, payload })
+                body: JSON.stringify({ type, payload, knownRevision: getRevision() })
             }
         };
     });
     requireFactionIdentity(identityId);
     if (!response.ok || data.error) throw apiError(data);
+    const observedRevision = Number(data.revision);
+    if (Number.isSafeInteger(observedRevision)
+        && observedRevision > getRevision()
+        && data.state
+        && typeof data.state === 'object'
+        && !Array.isArray(data.state)) {
+        setState(data.state);
+        setRevision(observedRevision);
+        saveState();
+    }
     return data.result;
 };
 
