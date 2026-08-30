@@ -1,6 +1,6 @@
-# Bconomy v4.0.0 Deployment Guide: Vercel and Supabase
+# Bconomy v4.3.0 Deployment Guide: Vercel and Supabase
 
-This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed solo saves, and server-authoritative multiplayer factions. Apply the database schema before deploying the v4.0.0 application because the release removes client-owned factions.
+This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed solo saves, and server-authoritative multiplayer factions. Apply the canonical database schema before the v4.3.0 application so Faction API v2 and boost configuration revisions exist when the client switches to semantic preconditions.
 
 ## 1. Rotate Previously Exposed Credentials
 
@@ -29,7 +29,22 @@ The script is re-runnable. It creates or updates:
 - Deferred invariants that require at most 20 members and exactly one Leader matching each faction's recorded owner.
 - Row Level Security that permits a player to read only their own profile while keeping all shared faction rows and state writes behind server-authoritative functions.
 
-Run the updated schema before deploying the application. Do not run the v4.0.0 server against a v3 database.
+Run the updated schema before deploying the application. The script is re-runnable and retains the v1 faction RPC during the v4.3.0 compatibility window.
+
+### Dedicated faction test project
+
+Create an exclusive, resettable Supabase project that is never used for production or staging traffic. In the GitHub `supabase-test` environment, configure:
+
+```text
+SUPABASE_TEST_URL=<test project URL>
+SUPABASE_TEST_ANON_KEY=<test anonymous key>
+SUPABASE_TEST_SERVICE_ROLE_KEY=<test service-role key>
+SUPABASE_TEST_DB_URL=<test direct PostgreSQL connection string>
+```
+
+Protected main-branch and manual smoke runs apply the canonical schema twice, create run-tagged Auth identities and faction data, verify semantic concurrency through HTTP, and clean the run in `finally`. A daily workflow removes tagged identities older than 24 hours. The runner refuses remote execution unless the exclusive-project guard is set and refuses a test URL matching the application URL in the same process.
+
+For local integration testing, install Docker and run `npm run test:factions:local`. The checked-in Supabase CLI configuration starts an isolated stack, applies the schema twice, runs the same suite, and stops without retaining database state.
 
 ## 4. Configure Server Environment Variables
 
@@ -96,6 +111,8 @@ After deploying to a staging environment, verify:
 - Registering that guest preserves the same Player ID, solo save, and faction membership.
 - A repeated solo or faction command with the same `commandId` does not apply twice.
 - A stale `expectedRevision` returns a conflict without overwriting newer progress.
+- Runtime boost drain can advance a faction snapshot revision without blocking an unrelated reviewed membership-mode change.
+- Changing the exact membership mode, target rank, boost configuration, or active code version being reviewed returns `FACTION_PRECONDITION_FAILED`, includes a latest snapshot, and requires confirmation again.
 - Two different players can create, discover, request access to, join, and view the same faction.
 - Invite-only, one-time-code-only, and public join-request modes enforce their distinct entry paths.
 - Each new join request offers a newly selected cheerful default message, while allowing edits or regeneration before submission.
@@ -106,7 +123,7 @@ After deploying to a staging environment, verify:
 - A controlled staging guest with more than 365 days of inactivity is deleted and Leader succession follows the documented order.
 - Singular `/api/faction/*`, `/api/auth/lookup-email`, and `/api/auth/sync` return `410 Gone`.
 
-The transport contract is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.md), and the complete player and operator rules are in [docs/FACTIONS.md](docs/FACTIONS.md).
+Solo transport is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.md), faction transport in [docs/GAME_API_V2.md](docs/GAME_API_V2.md), and complete player and operator rules in [docs/FACTIONS.md](docs/FACTIONS.md).
 
 ## 8. Authentication and Save Behavior
 
@@ -114,6 +131,6 @@ The transport contract is documented in [docs/GAME_API_V1.md](docs/GAME_API_V1.m
 - Players can upgrade a guest with a unique username, optional email, and password.
 - Sign-in accepts a username or email plus password; username resolution happens only on the trusted server.
 - Guest and registered browser requests carry the player's access token as a bearer token.
-- Solo commands and multiplayer faction commands are validated server-side, revision checked where cash changes, and protected by idempotency receipts.
+- Solo and multiplayer commands are validated server-side and protected by idempotency receipts. Faction v2 uses command-specific semantic preconditions; cash-changing commands also retain player revision checks.
 - Player-state schema version 2 contains only solo state. Faction membership, treasury, boosts, requests, invitations, codes, ranks, and logs live in shared PostgreSQL tables.
 - Existing registered and guest device saves receive one legacy-faction migration; the local faction field is removed afterward.

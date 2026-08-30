@@ -1,6 +1,6 @@
 # Bconomy Game API v1
 
-Bconomy v4.0.0 uses versioned typed endpoints for solo gameplay and a separate server-authoritative multiplayer faction surface. The transport version remains `1`; the application release and player-state schema versions are independent.
+Bconomy uses Game API v1 for solo gameplay. Faction API v1 remains temporarily available in v4.3.0 only as a compatibility bridge for already-open v4.2.x tabs; new faction clients use [Faction API v2](GAME_API_V2.md). Application release, transport, and player-state schema versions are independent.
 
 ## Identity
 
@@ -74,7 +74,9 @@ Successful commands include `result`, normalized `state`, the resulting `revisio
 
 For a bearer-authenticated `action.perform`, the server reads the player's current faction membership and boost directly from PostgreSQL. It supplies that internal context to `ActionEngine`; a browser-supplied `factionContext` is overwritten. Unauthenticated local requests receive no faction context. Factions therefore affect the matching solo action without making any other game system multiplayer.
 
-## Multiplayer faction transport
+## Deprecated multiplayer faction transport
+
+Faction API v1 is deprecated and scheduled for removal in v4.4.0. Responses include `Deprecation: true` and an HTTP `Warning` header. Game API v1 is unaffected.
 
 Both faction endpoints require `Authorization: Bearer <access token>`, `X-Bconomy-API-Version: 1`, and JSON content. Shared rows are never returned through direct Supabase browser access.
 
@@ -139,7 +141,7 @@ A successful command returns its operation `result`, a new viewer-filtered `snap
 
 Common codes include:
 
-- `INCOMPATIBLE_CLIENT` — API version 1 was omitted.
+- `INCOMPATIBLE_CLIENT` — the required endpoint-specific API version was omitted.
 - `INVALID_AUTH` / `FACTION_IDENTITY_REQUIRED` — the bearer identity is absent or invalid.
 - `GUEST_MIGRATION_REQUIRED` — the new guest has not completed its one-time device import.
 - `GUEST_EXPIRED` — the guest identity exceeded 365 days without activity and was deleted.

@@ -19,14 +19,12 @@ out/
 /js/
 /index.html
 
-# Lock files
-package-lock.json
-
 # Internal design notes & documentation
 *.txt
 game_*.md
 tool_*.md
 game_state_breakdown.md
+!docs/GAME_API_V2.md
 
 # Logs and debug files
 logs/
@@ -62,6 +60,7 @@ Thumbs.db
 coverage/
 .nyc_output/
 *.lcov
+/supabase/.temp/
 
 # Temporary files & caches
 tmp/

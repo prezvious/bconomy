@@ -1,12 +1,15 @@
 {
   "name": "bconomy",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "A persistent text-based economy and incremental game engine built with Node.js, Express, and modern single-page web interfaces.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node tests/run_all_tests.js",
+    "test:factions:local": "node scripts/runFactionIntegration.js --local",
+    "test:factions:remote": "node scripts/runFactionIntegration.js --remote",
+    "test:factions:cleanup": "node scripts/cleanupFactionTestOrphans.js",
     "docs:crafting": "node scripts/generateCraftingDocs.js"
   },
   "dependencies": {
@@ -14,5 +17,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "pg": "^8.23.0",
+    "supabase": "^2.116.0"
   }
 }

@@ -4,6 +4,33 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.3.0] — 2026-08-31
+
+### Fixed
+- **Faction Membership-Mode False Conflicts**:
+  - Fixed changing Invite-only to Public requests being rejected after unrelated continuous-boost processing advanced the faction-wide snapshot revision.
+  - Replaced the browser's cached faction-wide revision token with command-specific reviewed-state expectations.
+  - Kept player-cash revisions, transactional eligibility checks, and 24-hour faction command idempotency intact.
+
+### Changed
+- **Faction API v2**:
+  - Added the transactional `faction_execute_command_v2` path with semantic preconditions for membership context, membership mode, faction details, target member rank, boost configuration, access-code version, and disband review state.
+  - Added stable boost `configRevision` values that change only for officer configuration actions, not runtime treasury drain, processing timestamps, or automatic expiration.
+  - Added opaque active-code versions to snapshots already authorized to view code status.
+  - Moved browser faction queries and commands to API v2. Solo gameplay remains on Game API v1.
+- **Review and Reconfirmation**:
+  - Genuine reviewed-state conflicts now include the latest viewer-filtered snapshot and a reason-specific message.
+  - The browser installs that snapshot but never automatically retries the mutation; the player must review and confirm again.
+  - Cached faction mutation controls remain disabled until the latest refresh resolves, and late account-scoped faction/search responses are ignored.
+
+### Compatibility
+- Faction API v1 and its database RPC remain available for already-open v4.2.x tabs during v4.3.0.
+- V1 responses emit deprecation headers and announce removal in v4.4.0.
+
+### Verification and Operations
+- Added validator, HTTP, cross-layer, and guarded Supabase integration coverage for the reported runtime-drain race, exact-field conflicts, simultaneous confirmations, duplicate replay, target ranks, boost configuration, access-code versions, schema re-runs, and the v1 bridge.
+- Added pull-request/main local Supabase gates, protected remote test-project smoke coverage, run-scoped identity cleanup, a daily orphan cleanup safeguard, and privacy-safe structured faction command outcomes.
+
 ## [v4.2.0] — 2026-08-30
 
 ### Added

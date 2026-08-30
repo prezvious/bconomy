@@ -3,9 +3,67 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.3.0',
+        version: 'v4.3.0',
+        isLatest: true,
+        date: '2026-08-31',
+        title: 'v4.3.0 — Reliable Faction Changes',
+        sections: [
+            {
+                type: 'Faction Reliability',
+                items: [
+                    {
+                        title: 'Relevant-State Conflict Detection',
+                        bullets: [
+                            'Fixed faction membership-mode changes being rejected after unrelated continuous-boost accounting advanced the faction snapshot.',
+                            'Changed faction mutations to verify only the membership, mode, details, member rank, boost configuration, or access-code version relevant to the reviewed action.',
+                            'Kept player-cash revision checks and duplicate-command replay protections intact.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Review & Confirmation Safety',
+                items: [
+                    {
+                        title: 'Fresh State Before Retrying',
+                        bullets: [
+                            'A genuine conflict now loads the latest faction state, explains what changed, and asks the player to review and confirm again.',
+                            'Mutation controls stay disabled while the current faction snapshot is loading, including when cached content is visible.',
+                            'Protected faction, directory, and player-search views from late responses belonging to a previous account session.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Compatibility',
+                items: [
+                    {
+                        title: 'Faction API v2',
+                        bullets: [
+                            'Moved the browser faction surface to semantic Faction API v2 while leaving solo gameplay on Game API v1.',
+                            'Kept deprecated Faction API v1 available through v4.3.0 for already-open older tabs; removal is scheduled for v4.4.0.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Verification & Operations',
+                items: [
+                    {
+                        title: 'Concurrency Regression Coverage',
+                        bullets: [
+                            'Added local and protected Supabase integration gates covering runtime boost drain, concurrent confirmations, semantic conflicts, and idempotent replay.',
+                            'Added run-scoped test identity cleanup, a daily orphan safeguard, structured privacy-safe faction command outcomes, and deployment guidance.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.2.0',
         version: 'v4.2.0',
-        isLatest: true,
         date: '2026-08-30',
         title: 'v4.2.0 — Faction Activity Views & Faster Actions',
         sections: [

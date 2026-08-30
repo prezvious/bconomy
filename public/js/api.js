@@ -17,17 +17,6 @@ import { showToast } from './ui/toast.js';
  * Generic API caller with auto playerState inclusion, state saving, error handling, and trigger element loading state support.
  */
 let _postQueue = Promise.resolve();
-let factionRevision = null;
-
-if (globalThis.window?.addEventListener) {
-    window.addEventListener('bconomy-identity-recovered', () => { factionRevision = null; });
-}
-
-const rememberFactionSnapshot = snapshot => {
-    if (!snapshot || typeof snapshot !== 'object') return;
-    const nextRevision = Number(snapshot.faction?.revision);
-    factionRevision = Number.isSafeInteger(nextRevision) && nextRevision >= 0 ? nextRevision : null;
-};
 
 const COMMAND_ENDPOINTS = Object.freeze({
     '/api/player/set-cash': { type: 'dev.setCash' },
@@ -102,7 +91,16 @@ const apiError = (data, fallback = 'API Error') => {
     const error = new Error(errorMessage(data) || fallback);
     error.code = data?.error?.code || data?.result?.code || 'API_ERROR';
     error.details = data?.error?.details;
+    error.snapshot = data?.snapshot || null;
     return error;
+};
+
+const factionIdentityId = () => String(getAuthProfile()?.id || '');
+const requireFactionIdentity = expectedIdentityId => {
+    if (expectedIdentityId === factionIdentityId()) return;
+    const error = new Error('Your player session changed. Review this faction action again.');
+    error.code = 'FACTION_IDENTITY_CHANGED';
+    throw error;
 };
 
 const requestJsonWithRecovery = async buildRequest => {
@@ -146,7 +144,6 @@ const requestJsonWithRecovery = async buildRequest => {
                 const replacement = await recoverGuestIdentity(getState());
                 setState(replacement.state);
                 setRevision(replacement.state_revision);
-                factionRevision = null;
                 saveState();
                 continue;
             }
@@ -223,45 +220,55 @@ export const gameQuery = async (type, payload = {}) => {
 };
 
 export const factionQuery = async (type, payload = {}) => {
-    const { response, data } = await requestJsonWithRecovery(() => ({
-        url: '/api/factions/queries',
-        options: {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-            body: JSON.stringify({ type, payload })
-        }
-    }));
+    const identityId = factionIdentityId();
+    const { response, data } = await requestJsonWithRecovery(() => {
+        requireFactionIdentity(identityId);
+        return {
+            url: '/api/factions/queries',
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '2', ...getAuthHeaders() },
+                body: JSON.stringify({ type, payload })
+            }
+        };
+    });
+    requireFactionIdentity(identityId);
     if (!response.ok || data.error) throw apiError(data);
-    if (type === 'faction.snapshot') rememberFactionSnapshot(data.result);
     return data.result;
 };
 
-export const factionCommand = async (type, payload = {}, triggerElement = null) => {
+export const factionCommand = async (type, payload = {}, triggerElement = null, expected = { factionId: null }) => {
     if (triggerElement) {
         triggerElement.classList.add('btn-loading');
         triggerElement.disabled = true;
     }
     try {
+        const identityId = factionIdentityId();
         const stableCommandId = commandId();
-        const { response, data } = await requestJsonWithRecovery(() => ({
-            url: '/api/factions/commands',
-            options: {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '1', ...getAuthHeaders() },
-                body: JSON.stringify({
-                    commandId: stableCommandId,
-                    expectedRevision: getRevision(),
-                    expectedFactionRevision: factionRevision,
-                    type,
-                    payload
-                })
-            }
-        }));
+        const { response, data } = await requestJsonWithRecovery(() => {
+            requireFactionIdentity(identityId);
+            return {
+                url: '/api/factions/commands',
+                options: {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Bconomy-API-Version': '2', ...getAuthHeaders() },
+                    body: JSON.stringify({
+                        commandId: stableCommandId,
+                        expectedRevision: getRevision(),
+                        expected,
+                        type,
+                        payload
+                    })
+                }
+            };
+        });
+        requireFactionIdentity(identityId);
         if (response.status === 409 && data.state) applyGameResponse(data);
-        if (data.snapshot) rememberFactionSnapshot(data.snapshot);
         if (!response.ok || data.error) {
             if (response.status === 409 && data.snapshot && globalThis.window?.dispatchEvent && typeof CustomEvent === 'function') {
-                window.dispatchEvent(new CustomEvent('bconomy-faction-stale', { detail: { snapshot: data.snapshot } }));
+                window.dispatchEvent(new CustomEvent('bconomy-faction-stale', {
+                    detail: { snapshot: data.snapshot, error: data.error || null }
+                }));
             }
             throw apiError(data);
         }
@@ -409,26 +416,26 @@ export const doFactionState = () => factionQuery('faction.snapshot');
 export const doFactionDirectory = (search = '', limit = 24, offset = 0) => factionQuery('faction.directory', { search, limit, offset });
 export const doFactionPlayerSearch = (search, limit = 10) => factionQuery('faction.playerSearch', { search, limit });
 export const doFactionJoinMessage = () => factionQuery('faction.joinMessage');
-export const doFactionCreate = (name, description, membershipMode, el) => factionCommand('faction.create', { name, description, membershipMode }, el);
-export const doFactionDeposit = (amount, el) => factionCommand('faction.deposit', { amount }, el);
-export const doFactionActivateBoost = (actionType, level, durationHours, mode, el) => factionCommand('faction.boost.activate', { actionType, level, durationHours, mode }, el);
-export const doFactionStopBoost = (actionType, el) => factionCommand('faction.boost.stop', { actionType }, el);
-export const doFactionCustomize = (name, description, el) => factionCommand('faction.customize', { name, description }, el);
-export const doFactionSetMembershipMode = (membershipMode, el) => factionCommand('faction.membership_mode.set', { membershipMode }, el);
-export const doFactionSendInvitation = (playerId, el) => factionCommand('faction.invitation.send', { playerId }, el);
-export const doFactionRespondInvitation = (invitationId, decision, el) => factionCommand('faction.invitation.respond', { invitationId, decision }, el);
-export const doFactionRevokeInvitation = (invitationId, el) => factionCommand('faction.invitation.revoke', { invitationId }, el);
-export const doFactionSendJoinRequest = (factionNumber, message, el) => factionCommand('faction.request.send', { factionNumber, message }, el);
-export const doFactionReviewJoinRequest = (requestId, decision, el) => factionCommand('faction.request.review', { requestId, decision }, el);
-export const doFactionWithdrawJoinRequest = (requestId, el) => factionCommand('faction.request.withdraw', { requestId }, el);
-export const doFactionGenerateCode = el => factionCommand('faction.code.generate', {}, el);
-export const doFactionRedeemCode = (code, el) => factionCommand('faction.code.redeem', { code }, el);
-export const doFactionSetMemberRank = (playerId, factionRank, el) => factionCommand('faction.member.rank', { playerId, factionRank }, el);
-export const doFactionRemoveMember = (playerId, el) => factionCommand('faction.member.remove', { playerId }, el);
-export const doFactionTransferLeadership = (playerId, el) => factionCommand('faction.leadership.transfer', { playerId }, el);
-export const doFactionLeave = el => factionCommand('faction.leave', {}, el);
-export const doFactionDisband = (confirmationName, el) => factionCommand('faction.disband', { confirmationName }, el);
-export const doFactionReadNotification = (notificationId = 'all', el) => factionCommand('faction.notification.read', { notificationId }, el);
+export const doFactionCreate = (name, description, membershipMode, el, expected) => factionCommand('faction.create', { name, description, membershipMode }, el, expected);
+export const doFactionDeposit = (amount, el, expected) => factionCommand('faction.deposit', { amount }, el, expected);
+export const doFactionActivateBoost = (actionType, level, durationHours, mode, el, expected) => factionCommand('faction.boost.activate', { actionType, level, durationHours, mode }, el, expected);
+export const doFactionStopBoost = (actionType, el, expected) => factionCommand('faction.boost.stop', { actionType }, el, expected);
+export const doFactionCustomize = (name, description, el, expected) => factionCommand('faction.customize', { name, description }, el, expected);
+export const doFactionSetMembershipMode = (membershipMode, el, expected) => factionCommand('faction.membership_mode.set', { membershipMode }, el, expected);
+export const doFactionSendInvitation = (playerId, el, expected) => factionCommand('faction.invitation.send', { playerId }, el, expected);
+export const doFactionRespondInvitation = (invitationId, decision, el, expected) => factionCommand('faction.invitation.respond', { invitationId, decision }, el, expected);
+export const doFactionRevokeInvitation = (invitationId, el, expected) => factionCommand('faction.invitation.revoke', { invitationId }, el, expected);
+export const doFactionSendJoinRequest = (factionNumber, message, el, expected) => factionCommand('faction.request.send', { factionNumber, message }, el, expected);
+export const doFactionReviewJoinRequest = (requestId, decision, el, expected) => factionCommand('faction.request.review', { requestId, decision }, el, expected);
+export const doFactionWithdrawJoinRequest = (requestId, el, expected) => factionCommand('faction.request.withdraw', { requestId }, el, expected);
+export const doFactionGenerateCode = (el, expected) => factionCommand('faction.code.generate', {}, el, expected);
+export const doFactionRedeemCode = (code, el, expected) => factionCommand('faction.code.redeem', { code }, el, expected);
+export const doFactionSetMemberRank = (playerId, factionRank, el, expected) => factionCommand('faction.member.rank', { playerId, factionRank }, el, expected);
+export const doFactionRemoveMember = (playerId, el, expected) => factionCommand('faction.member.remove', { playerId }, el, expected);
+export const doFactionTransferLeadership = (playerId, el, expected) => factionCommand('faction.leadership.transfer', { playerId }, el, expected);
+export const doFactionLeave = (el, expected) => factionCommand('faction.leave', {}, el, expected);
+export const doFactionDisband = (confirmationName, el, expected) => factionCommand('faction.disband', { confirmationName }, el, expected);
+export const doFactionReadNotification = (notificationId = 'all', el, expected) => factionCommand('faction.notification.read', { notificationId }, el, expected);
 
 // QOL domain callers
 export const doSetInventoryFlags = (itemIds, changes, el) => gameCommand('inventory.setFlags', { itemIds, changes }, el);

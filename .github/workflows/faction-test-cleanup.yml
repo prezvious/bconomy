@@ -1,0 +1,32 @@
+name: Faction Test Orphan Cleanup
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: faction-test-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: supabase-test
+    env:
+      BCONOMY_FACTION_TEST_EXCLUSIVE: "true"
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+      SUPABASE_TEST_DB_URL: ${{ secrets.SUPABASE_TEST_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:factions:cleanup

@@ -27,11 +27,13 @@ const {
     searchFactionPlayers,
     getNextJoinMessage,
     executeFactionCommand,
+    executeFactionCommandV2,
     getFactionEffect,
     migrateLegacyFaction,
     cleanupInactiveGuest,
     cleanupInactiveGuests
 } = require('./src/db/factions');
+const { validateFactionExpected } = require('./src/api/factionCommandV2');
 const { executeCommand, executeQuery } = require('./src/api/gameGateway');
 const {
     DEV_COMMAND_TYPES,
@@ -223,6 +225,19 @@ const requireGameApiVersion = (req, res) => {
     return true;
 };
 
+const requireFactionApiVersion = (req, res) => {
+    const version = req.get('x-bconomy-api-version');
+    if (!['1', '2'].includes(version)) {
+        res.status(426).json({ error: { code: 'INCOMPATIBLE_CLIENT', message: 'Reload Bconomy to use the current faction API.' } });
+        return null;
+    }
+    if (version === '1') {
+        res.set('Deprecation', 'true');
+        res.set('Warning', '299 Bconomy "Faction API v1 is deprecated and will be removed in v4.4.0"');
+    }
+    return version;
+};
+
 const resolveGameContext = async req => {
     const token = getBearerToken(req);
     if (token) {
@@ -299,6 +314,17 @@ const logGameRequest = ({ kind, type, commandId, revision, status, startedAt, ti
         status,
         durationMs: Date.now() - startedAt,
         ...timings
+    }));
+};
+
+const logFactionCommand = ({ type, apiVersion, status, precondition = null, startedAt }) => {
+    console.info(JSON.stringify({
+        event: 'faction_command',
+        type,
+        apiVersion,
+        status,
+        precondition,
+        durationMs: Date.now() - startedAt
     }));
 };
 
@@ -449,7 +475,7 @@ app.post('/api/game/commands', async (req, res) => {
 });
 
 app.post('/api/factions/queries', async (req, res) => {
-    if (!requireGameApiVersion(req, res)) return;
+    if (!requireFactionApiVersion(req, res)) return;
     const { type, payload = {} } = req.body || {};
     if (typeof type !== 'string' || !type) {
         return res.status(400).json({ error: { code: 'INVALID_FACTION_QUERY', message: 'Faction query type is required.' } });
@@ -474,36 +500,64 @@ app.post('/api/factions/queries', async (req, res) => {
 });
 
 app.post('/api/factions/commands', async (req, res) => {
-    if (!requireGameApiVersion(req, res)) return;
-    const { commandId, expectedRevision, expectedFactionRevision = null, type, payload = {} } = req.body || {};
-    if (!isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0
-        || (expectedFactionRevision !== null && (!Number.isSafeInteger(expectedFactionRevision) || expectedFactionRevision < 0))
-        || typeof type !== 'string' || !type) {
+    const startedAt = Date.now();
+    const apiVersion = requireFactionApiVersion(req, res);
+    if (!apiVersion) return;
+    const { commandId, expectedRevision, expectedFactionRevision = null, expected, type, payload = {} } = req.body || {};
+    const commonInvalid = !isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0
+        || typeof type !== 'string' || !type;
+    const v1Invalid = apiVersion === '1'
+        && expectedFactionRevision !== null
+        && (!Number.isSafeInteger(expectedFactionRevision) || expectedFactionRevision < 0);
+    if (commonInvalid || v1Invalid) {
+        logFactionCommand({ type, apiVersion, status: 'invalid', startedAt });
         return res.status(400).json({ error: { code: 'INVALID_FACTION_COMMAND', message: 'Command ID, non-negative player revision, and faction command type are required.' } });
+    }
+    const expectedValidation = apiVersion === '2' ? validateFactionExpected(type, expected) : null;
+    if (expectedValidation && !expectedValidation.ok) {
+        logFactionCommand({ type, apiVersion, status: 'invalid_expectation', startedAt });
+        return res.status(400).json({ error: expectedValidation.error });
     }
     try {
         const actor = await resolveFactionActor(req);
-        if (actor.error) return res.status(actor.status).json({ error: actor.error });
-        const outcome = await executeFactionCommand({
+        if (actor.error) {
+            logFactionCommand({ type, apiVersion, status: actor.error.code || 'actor_error', startedAt });
+            return res.status(actor.status).json({ error: actor.error });
+        }
+        const commandInput = {
             userId: actor.user.id,
             commandId,
             expectedPlayerRevision: expectedRevision,
-            expectedFactionRevision,
             type,
             payload
-        });
+        };
+        const outcome = apiVersion === '2'
+            ? await executeFactionCommandV2({ ...commandInput, expected: expectedValidation.value })
+            : await executeFactionCommand({ ...commandInput, expectedFactionRevision });
         const status = factionStatusCode(outcome);
         if (status !== 200) {
-            const latestSnapshot = outcome.code === 'FACTION_CONFLICT'
+            const latestSnapshot = ['FACTION_CONFLICT', 'FACTION_PRECONDITION_FAILED'].includes(outcome.code)
                 ? await getFactionSnapshot(actor.user.id)
                 : undefined;
+            logFactionCommand({
+                type,
+                apiVersion,
+                status: outcome.code || outcome.status || 'rejected',
+                precondition: outcome.details?.precondition || null,
+                startedAt
+            });
             return res.status(status).json({
-                error: { code: outcome.code || 'FACTION_COMMAND_REJECTED', message: outcome.message || 'The faction command was rejected.' },
+                error: {
+                    code: outcome.code || 'FACTION_COMMAND_REJECTED',
+                    message: outcome.message || 'The faction command was rejected.',
+                    details: outcome.details
+                },
                 state: outcome.playerState ? normalizePlayerState(outcome.playerState) : undefined,
                 revision: outcome.playerRevision,
                 snapshot: latestSnapshot?.status === 'ok' ? latestSnapshot : undefined
             });
         }
+        logFactionCommand({ type, apiVersion, status: outcome.status || 'applied', startedAt });
         return res.json({
             result: outcome.result || {},
             snapshot: outcome.snapshot || null,
@@ -513,6 +567,7 @@ app.post('/api/factions/commands', async (req, res) => {
         });
     } catch (error) {
         console.error('Faction command failed:', error);
+        logFactionCommand({ type, apiVersion, status: 'internal_error', startedAt });
         return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The faction command could not be completed.' } });
     }
 });

@@ -43,7 +43,7 @@ for (const table of [
 }
 for (const fn of [
     'faction_get_snapshot', 'faction_list_public', 'faction_next_join_message',
-    'faction_get_effect', 'faction_execute_command', 'faction_search_players',
+    'faction_get_effect', 'faction_execute_command', 'faction_execute_command_v2', 'faction_search_players',
     'faction_migrate_legacy_player', 'faction_cleanup_inactive_guest',
     'faction_cleanup_inactive_guests'
 ]) {
@@ -63,6 +63,12 @@ assert(schema.includes("extensions.digest(plaintext_code, 'sha256')"), 'Faction 
 assert(schema.includes("receipt_result := (command_result - 'code')"), 'Faction command receipts remove generated plaintext codes');
 assert(schema.includes("'codeUnavailable', true"), 'A duplicate code-generation command cannot retrieve plaintext');
 assert(schema.includes("'code', 'FACTION_CONFLICT'"), 'Member commands reject a stale shared-faction revision');
+assert(schema.includes("'code', 'FACTION_PRECONDITION_FAILED'"), 'Faction API v2 rejects changes to command-relevant state');
+assert(schema.includes("'configRevision', boost.config_revision"), 'Boost snapshots expose a stable configuration revision');
+assert(schema.includes("'version', code.id"), 'Authorized code snapshots expose an opaque active-code version');
+assert(schema.includes('config_revision = config_revision + 1'), 'Officer boost changes advance the stable configuration revision');
+const boostProcessor = schema.match(/create or replace function public\.faction_process_boosts[\s\S]*?revoke all on function public\.faction_process_boosts/i)?.[0] || '';
+assert(boostProcessor && !boostProcessor.includes('config_revision'), 'Runtime drain and automatic expiry do not change boost configuration revisions');
 assert((schema.match(/from public\.faction_command_receipts/g) || []).length >= 3, 'Faction commands recheck idempotency after taking the player lock');
 const accessCodeTable = schema.match(/create table if not exists public\.faction_access_codes[\s\S]*?\n\);/i)?.[0] || '';
 assert(accessCodeTable && !/plaintext_code\s+text/i.test(accessCodeTable), 'Plaintext codes are not stored in the access-code table');
@@ -85,8 +91,17 @@ assert(server.includes('touchPlayerActivity'));
 assert(server.includes('Guest device progress can be imported only through the one-time guest migration.'));
 assert(server.includes('factionContext: factionEffect'));
 assert(server.includes('expectedFactionRevision'));
+assert(server.includes('executeFactionCommandV2'));
+assert(server.includes("['1', '2'].includes(version)"));
 assert(api.includes("factionQuery('faction.joinMessage')"));
-assert(api.includes('expectedFactionRevision: factionRevision'));
+assert(api.includes("'X-Bconomy-API-Version': '2'"));
+assert(api.includes('expected,') && !api.includes('expectedFactionRevision: factionRevision'));
+assert(!api.includes('let factionRevision'), 'Browser no longer keeps a module-global faction revision token');
+assert(factionUi.includes('FACTION_PRECONDITION_FAILED'));
+assert(factionUi.includes('review and confirm again'));
+assert(factionUi.includes('Review actions are unavailable until the latest state loads.'));
+assert(factionUi.includes('requireSameViewer(identityId)'));
+assert(factionUi.includes('generatedCodeVersion'), 'Displayed plaintext is tied to the current opaque code version');
 assert(auth.includes('ensureGuestIdentity'));
 assert(auth.includes("fetch('/api/auth/guest'"));
 assert(auth.includes('res.status === 401') && auth.includes('refreshAuthSession()'), 'Guest upgrade refreshes an expired access token before retrying');

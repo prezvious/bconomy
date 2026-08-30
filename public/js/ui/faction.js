@@ -69,6 +69,7 @@ const PERMISSION_ROWS = Object.freeze([
     ['Promote a member to Lieutenant', [false, false, false, false, true]],
     ['Transfer leadership or disband the faction', [false, false, false, false, true]]
 ]);
+const STALE_SAFE_ACTIONS = new Set(['refresh', 'activity-density', 'activity-page', 'directory-search', 'player-search']);
 
 let activeTab = 'overview';
 let unaffiliatedTab = 'discover';
@@ -76,9 +77,9 @@ let snapshot = null;
 let directory = [];
 let loading = false;
 let loadError = '';
-let requestFaction = null;
 let lastGeneratedRequestMessage = '';
 let generatedCode = '';
+let generatedCodeVersion = '';
 let renderGeneration = 0;
 let activityDensity = readFactionActivityDensity();
 let activityHistoryPage = 0;
@@ -133,6 +134,50 @@ export const getTierBadge = level => {
 
 const rankAtLeast = (rank, required) => (RANK_WEIGHT[rank] ?? -1) >= (RANK_WEIGHT[required] ?? 99);
 const viewerPlayerId = () => Number(getAuthProfile()?.player_id || 0);
+const viewerIdentityId = () => String(getAuthProfile()?.id || '');
+const requireSameViewer = identityId => {
+    if (identityId === viewerIdentityId()) return true;
+    showToast('Your player session changed. Review this faction action again.', 'error');
+    return false;
+};
+const reconcileGeneratedCode = nextSnapshot => {
+    const activeVersion = nextSnapshot?.faction?.accessCode?.active
+        ? String(nextSnapshot.faction.accessCode.version || '')
+        : '';
+    if (!activeVersion || activeVersion !== generatedCodeVersion) {
+        generatedCode = '';
+        generatedCodeVersion = '';
+    }
+};
+const expectedFaction = (extra = {}) => ({ factionId: snapshot?.faction?.id || null, ...extra });
+const expectedUnaffiliated = () => ({ factionId: null });
+const expectedBoost = actionType => expectedFaction({
+    boost: {
+        actionType,
+        configRevision: Math.max(0, Math.floor(Number(snapshot?.faction?.boosts?.[actionType]?.configRevision) || 0))
+    }
+});
+
+const reportFactionError = (error, fallback = 'The faction action failed.') => {
+    if (error?.code === 'FACTION_PRECONDITION_FAILED') {
+        const labels = {
+            factionId: 'Your faction membership changed',
+            membershipMode: 'The membership mode changed',
+            details: 'The faction details changed',
+            targetMember: 'That member’s Faction Rank changed',
+            boost: 'That boost configuration changed',
+            accessCodeVersion: 'The active access code changed',
+            disband: 'The faction membership or name changed'
+        };
+        const subject = labels[error.details?.precondition] || 'Relevant faction data changed';
+        const nextStep = error.snapshot
+            ? 'The latest state is loaded; review and confirm again.'
+            : 'Refresh the faction state, then review and confirm again.';
+        showToast(`${subject} while you were reviewing this action. ${nextStep}`, 'error');
+        return;
+    }
+    showToast(error?.message || fallback, 'error');
+};
 const isViewer = member => Number(member?.playerId) === viewerPlayerId();
 const canManageMember = member => {
     const viewerRank = snapshot?.membership?.factionRank;
@@ -437,12 +482,22 @@ const paint = () => {
         attachEvents(panel);
         return;
     }
-    panel.innerHTML = snapshot?.membership && snapshot?.faction ? renderMember() : renderUnaffiliated();
+    const staleNotice = loadError
+        ? `<div class="card faction-empty-copy" role="status"><h3>Showing the last loaded faction state</h3><p>${escapeHtml(loadError)} Review actions are unavailable until the latest state loads.</p><button class="action-btn primary-btn" type="button" data-faction-action="refresh">Try again</button></div>`
+        : '';
+    panel.innerHTML = staleNotice + (snapshot?.membership && snapshot?.faction ? renderMember() : renderUnaffiliated());
     attachEvents(panel);
+    panel.setAttribute('aria-busy', loading ? 'true' : 'false');
+    if (loading || loadError) {
+        panel.querySelectorAll('[data-faction-action]').forEach(control => {
+            if (!STALE_SAFE_ACTIONS.has(control.dataset.factionAction)) control.disabled = true;
+        });
+    }
 };
 
 const refresh = async ({ keepDirectory = true } = {}) => {
     const generation = ++renderGeneration;
+    const identityId = viewerIdentityId();
     loading = true;
     loadError = '';
     paint();
@@ -451,15 +506,15 @@ const refresh = async ({ keepDirectory = true } = {}) => {
             doFactionState(),
             keepDirectory && directory.length ? Promise.resolve({ items: directory }) : doFactionDirectory()
         ]);
-        if (generation !== renderGeneration) return;
+        if (generation !== renderGeneration || identityId !== viewerIdentityId()) return;
         snapshot = nextSnapshot;
-        if (!snapshot?.faction?.accessCode?.active) generatedCode = '';
+        reconcileGeneratedCode(snapshot);
         directory = nextDirectory?.items || [];
     } catch (error) {
-        if (generation !== renderGeneration) return;
+        if (generation !== renderGeneration || identityId !== viewerIdentityId()) return;
         loadError = error.message || 'Faction data could not be loaded.';
     } finally {
-        if (generation === renderGeneration) {
+        if (generation === renderGeneration && identityId === viewerIdentityId()) {
             loading = false;
             paint();
         }
@@ -470,9 +525,13 @@ const applyCommand = async (promise, successMessage) => {
     const response = await promise;
     if (response?.snapshot) {
         snapshot = response.snapshot;
-        if (!snapshot?.faction?.accessCode?.active) generatedCode = '';
+        reconcileGeneratedCode(snapshot);
     }
-    generatedCode = response?.code || response?.plaintextCode || generatedCode;
+    const plaintextCode = response?.code || response?.plaintextCode || '';
+    if (plaintextCode) {
+        generatedCode = plaintextCode;
+        generatedCodeVersion = String(snapshot?.faction?.accessCode?.version || '');
+    }
     showToast(successMessage, 'success');
     addLogEntry(successMessage, 'system');
     renderHeader();
@@ -489,6 +548,7 @@ const openCreateDialog = trigger => {
     const error = document.getElementById('create-faction-name-error');
     const submit = document.getElementById('btn-create-faction-submit');
     if (!dialog) return;
+    const identityId = viewerIdentityId();
     name.value = '';
     description.value = '';
     mode.value = 'invite_only';
@@ -498,6 +558,7 @@ const openCreateDialog = trigger => {
     document.getElementById('btn-close-create-faction').onclick = cancel;
     document.getElementById('btn-create-faction-cancel').onclick = cancel;
     submit.onclick = async event => {
+        if (!requireSameViewer(identityId)) return;
         const factionName = name.value.trim();
         if (!factionName) {
             error.textContent = 'Enter a faction name.';
@@ -507,11 +568,12 @@ const openCreateDialog = trigger => {
         }
         closeDialog(dialog, { reason: 'review', restoreFocus: false });
         if (!await showConfirmation('createFaction', 'Create Faction?', `Create “${factionName}” for ${formatMoney(CREATION_COST)}? You will become its sole Leader and owner.`, { allowIgnore: false, confirmLabel: 'Create faction' })) return;
+        if (!requireSameViewer(identityId)) return;
         try {
-            await applyCommand(doFactionCreate(factionName, description.value.trim(), mode.value, event.currentTarget), `Faction “${factionName}” created.`);
+            await applyCommand(doFactionCreate(factionName, description.value.trim(), mode.value, event.currentTarget, expectedUnaffiliated()), `Faction “${factionName}” created.`);
             activeTab = 'overview';
         } catch (commandError) {
-            showToast(commandError.message || 'Faction creation failed.', 'error');
+            reportFactionError(commandError, 'Faction creation failed.');
         }
     };
     openDialog(dialog, { initialFocus: '#create-faction-name', returnFocus: trigger });
@@ -524,18 +586,21 @@ const openEditDialog = trigger => {
     const description = document.getElementById('faction-desc-input');
     const save = document.getElementById('btn-faction-modal-save');
     if (!faction || !dialog) return;
+    const identityId = viewerIdentityId();
+    const expected = expectedFaction({ name: faction.name, description: faction.description || '' });
     name.value = faction.name;
     description.value = faction.description || '';
     const cancel = () => closeDialog(dialog, { reason: 'cancel' });
     document.getElementById('btn-close-faction-modal').onclick = cancel;
     document.getElementById('btn-faction-modal-cancel').onclick = cancel;
     save.onclick = async event => {
+        if (!requireSameViewer(identityId)) return;
         if (!name.value.trim()) return showToast('Enter a faction name.', 'error');
         try {
-            await applyCommand(doFactionCustomize(name.value.trim(), description.value.trim(), event.currentTarget), 'Faction details updated.');
+            await applyCommand(doFactionCustomize(name.value.trim(), description.value.trim(), event.currentTarget, expected), 'Faction details updated.');
             closeDialog(dialog, { reason: 'saved' });
         } catch (error) {
-            showToast(error.message || 'Faction details could not be updated.', 'error');
+            reportFactionError(error, 'Faction details could not be updated.');
         }
     };
     openDialog(dialog, { initialFocus: '#faction-name-input', returnFocus: trigger });
@@ -549,6 +614,8 @@ const openDisbandDialog = trigger => {
     const error = document.getElementById('disband-faction-error');
     const submit = document.getElementById('btn-disband-faction-submit');
     if (!faction || !dialog || !confirmation || !submit) return;
+    const identityId = viewerIdentityId();
+    const expected = expectedFaction({ name: faction.name, memberCount: Number(faction.memberCount) || 0 });
     name.textContent = faction.name;
     confirmation.value = '';
     error?.classList.add('hidden');
@@ -556,6 +623,7 @@ const openDisbandDialog = trigger => {
     document.getElementById('btn-close-disband-faction').onclick = cancel;
     document.getElementById('btn-disband-faction-cancel').onclick = cancel;
     submit.onclick = async event => {
+        if (!requireSameViewer(identityId)) return;
         if (confirmation.value !== faction.name) {
             error.textContent = 'Enter the faction name exactly as shown.';
             error.classList.remove('hidden');
@@ -563,10 +631,10 @@ const openDisbandDialog = trigger => {
             return;
         }
         try {
-            await applyCommand(doFactionDisband(faction.name, event.currentTarget), `Faction “${faction.name}” was disbanded.`);
+            await applyCommand(doFactionDisband(faction.name, event.currentTarget, expected), `Faction “${faction.name}” was disbanded.`);
             closeDialog(dialog, { reason: 'disbanded' });
         } catch (commandError) {
-            showToast(commandError.message || 'The faction could not be disbanded.', 'error');
+            reportFactionError(commandError, 'The faction could not be disbanded.');
         }
     };
     openDialog(dialog, { initialFocus: '#disband-faction-confirmation', returnFocus: trigger });
@@ -597,21 +665,28 @@ const generateRequestMessage = async ({ confirmEdited = false } = {}) => {
     }
     field.disabled = true;
     if (button) button.disabled = true;
+    const generation = renderGeneration;
+    const identityId = viewerIdentityId();
     try {
         const result = await doFactionJoinMessage();
+        if (generation !== renderGeneration || identityId !== viewerIdentityId() || !field.isConnected) return;
         field.value = result.message || '';
         lastGeneratedRequestMessage = field.value;
         updateRequestCount();
     } catch (error) {
-        showToast(error.message || 'A join-request message could not be generated.', 'error');
+        if (generation === renderGeneration && identityId === viewerIdentityId()) {
+            showToast(error.message || 'A join-request message could not be generated.', 'error');
+        }
     } finally {
-        field.disabled = false;
-        if (button) button.disabled = false;
+        if (generation === renderGeneration && identityId === viewerIdentityId() && field.isConnected) {
+            field.disabled = false;
+            if (button) button.disabled = false;
+        }
     }
 };
 
 const openRequestDialog = async (faction, trigger) => {
-    requestFaction = faction;
+    const identityId = viewerIdentityId();
     const dialog = document.getElementById('faction-join-request-modal');
     const field = document.getElementById('faction-join-request-message');
     const subtitle = document.getElementById('faction-join-request-subtitle');
@@ -626,16 +701,17 @@ const openRequestDialog = async (faction, trigger) => {
     document.getElementById('btn-faction-join-request-cancel').onclick = cancel;
     document.getElementById('btn-faction-join-request-regenerate').onclick = () => generateRequestMessage({ confirmEdited: true });
     document.getElementById('btn-faction-join-request-send').onclick = async event => {
+        if (!requireSameViewer(identityId)) return;
         const message = field.value.trim();
         if (!message) return showToast('Enter a join-request message.', 'error');
         if (Array.from(message).length > 200) return showToast('Join-request messages cannot exceed 200 characters.', 'error');
         try {
-            await applyCommand(doFactionSendJoinRequest(requestFaction.number, message, event.currentTarget), `Join request sent to ${requestFaction.name}.`);
+            await applyCommand(doFactionSendJoinRequest(faction.number, message, event.currentTarget, expectedUnaffiliated()), `Join request sent to ${faction.name}.`);
             closeDialog(dialog, { reason: 'sent' });
             unaffiliatedTab = 'requests';
             paint();
         } catch (error) {
-            showToast(error.message || 'The join request could not be sent.', 'error');
+            reportFactionError(error, 'The join request could not be sent.');
         }
     };
     openDialog(dialog, { initialFocus: '#faction-join-request-message', returnFocus: trigger });
@@ -648,21 +724,28 @@ const searchPlayers = async panel => {
     const results = panel.querySelector('#faction-player-search-results');
     if (!input?.value.trim() || !results) return showToast('Enter a username or player number.', 'error');
     results.innerHTML = '<p>Searching…</p>';
+    const generation = renderGeneration;
+    const identityId = viewerIdentityId();
     try {
         const response = await doFactionPlayerSearch(input.value.trim());
+        if (generation !== renderGeneration || identityId !== viewerIdentityId() || !results.isConnected) return;
         const items = response.items || [];
         results.innerHTML = items.length ? `<div class="faction-list">${items.map(player => `<div class="faction-list-row"><div><strong>${escapeHtml(player.username)}</strong><span>Player #${player.playerId}${player.isGuest ? ' · Guest' : ''}</span></div><button class="action-btn primary-btn" type="button" data-faction-action="invite-player" data-player-id="${player.playerId}" data-name="${escapeHtml(player.username)}" ${player.inFaction ? 'disabled' : ''}>${player.inFaction ? 'Already in a faction' : 'Invite'}</button></div>`).join('')}</div>` : '<p>No eligible players found.</p>';
     } catch (error) {
-        results.innerHTML = `<p class="text-danger">${escapeHtml(error.message || 'Search failed.')}</p>`;
+        if (generation === renderGeneration && identityId === viewerIdentityId() && results.isConnected) {
+            results.innerHTML = `<p class="text-danger">${escapeHtml(error.message || 'Search failed.')}</p>`;
+        }
     }
 };
 
 const confirmAndRun = async ({ key, title, message, label, command, success }) => {
+    const identityId = viewerIdentityId();
     if (!await showConfirmation(key, title, message, { allowIgnore: false, confirmLabel: label })) return;
+    if (!requireSameViewer(identityId)) return;
     try {
         await applyCommand(command(), success);
     } catch (error) {
-        showToast(error.message || 'The faction action failed.', 'error');
+        reportFactionError(error);
     }
 };
 
@@ -691,37 +774,49 @@ const handleAction = async (action, button, panel) => {
     if (action === 'open-create') return openCreateDialog(button);
     if (action === 'open-edit') return openEditDialog(button);
     if (action === 'directory-search') {
+        const generation = renderGeneration;
+        const identityId = viewerIdentityId();
         try {
             const result = await doFactionDirectory(panel.querySelector('#faction-directory-search')?.value || '');
+            if (generation !== renderGeneration || identityId !== viewerIdentityId() || !panel.isConnected) return;
             directory = result.items || [];
             paint();
-        } catch (error) { showToast(error.message || 'Faction search failed.', 'error'); }
+        } catch (error) {
+            if (generation === renderGeneration && identityId === viewerIdentityId()) {
+                showToast(error.message || 'Faction search failed.', 'error');
+            }
+        }
         return;
     }
     if (action === 'open-request') return openRequestDialog({ number: Number(button.dataset.number), name: button.dataset.name }, button);
     if (action === 'respond-invite') {
-        try { await applyCommand(doFactionRespondInvitation(button.dataset.id, button.dataset.decision, button), `Invitation ${button.dataset.decision === 'accept' ? 'accepted' : 'declined'}.`); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionRespondInvitation(button.dataset.id, button.dataset.decision, button, expected), `Invitation ${button.dataset.decision === 'accept' ? 'accepted' : 'declined'}.`); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'withdraw-request') {
-        try { await applyCommand(doFactionWithdrawJoinRequest(button.dataset.id, button), 'Join request withdrawn.'); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionWithdrawJoinRequest(button.dataset.id, button, expected), 'Join request withdrawn.'); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'redeem-code') {
         const code = panel.querySelector('#faction-code-input')?.value.trim();
         if (!code) return showToast('Enter a faction code.', 'error');
-        try { await applyCommand(doFactionRedeemCode(code, button), 'Faction code redeemed. Welcome to the faction!'); activeTab = 'overview'; paint(); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionRedeemCode(code, button, expected), 'Faction code redeemed. Welcome to the faction!'); activeTab = 'overview'; paint(); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'read-all' || action === 'read-notification') {
-        try { await applyCommand(doFactionReadNotification(action === 'read-all' ? 'all' : button.dataset.id, button), 'Faction notifications updated.'); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionReadNotification(action === 'read-all' ? 'all' : button.dataset.id, button, expected), 'Faction notifications updated.'); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'deposit') {
         const input = panel.querySelector('#faction-deposit-input');
         const amount = parseAmount(input?.value, getState()?.cash || 0);
         if (!amount) return showToast('Enter a valid deposit amount.', 'error');
-        return confirmAndRun({ key: 'factionDeposit', title: 'Deposit Faction Points?', message: `${formatMoney(amount)} will become ${formatDisplayNumber(amount)} shared FP. This deposit cannot be withdrawn or reversed.`, label: 'Deposit', command: () => doFactionDeposit(amount, button), success: `${formatMoney(amount)} deposited into the shared faction treasury.` });
+        const expected = expectedFaction();
+        return confirmAndRun({ key: 'factionDeposit', title: 'Deposit Faction Points?', message: `${formatMoney(amount)} will become ${formatDisplayNumber(amount)} shared FP. This deposit cannot be withdrawn or reversed.`, label: 'Deposit', command: () => doFactionDeposit(amount, button, expected), success: `${formatMoney(amount)} deposited into the shared faction treasury.` });
     }
     if (action === 'draft-level') {
         boostDrafts[button.dataset.actionType].level = Number(button.value);
@@ -730,50 +825,75 @@ const handleAction = async (action, button, panel) => {
     if (action === 'activate-boost') {
         const type = button.dataset.actionType;
         const current = snapshot.faction.boosts?.[type];
+        const expected = expectedBoost(type);
         const draft = boostDrafts[type];
         const mode = current?.level > 0 ? current.mode : panel.querySelector(`[data-boost-mode="${type}"]`)?.value || draft.mode;
         const hours = Number(panel.querySelector(`[data-boost-hours="${type}"]`)?.value || draft.hours);
         if (mode === 'duration' && (!Number.isFinite(hours) || hours < 0.1)) return showToast('Enter at least 0.1 hours.', 'error');
-        try { await applyCommand(doFactionActivateBoost(type, draft.level, hours, mode, button), `${type[0].toUpperCase() + type.slice(1)} faction boost updated.`); } catch (error) { showToast(error.message, 'error'); }
+        try { await applyCommand(doFactionActivateBoost(type, draft.level, hours, mode, button, expected), `${type[0].toUpperCase() + type.slice(1)} faction boost updated.`); } catch (error) { reportFactionError(error); }
         return;
     }
-    if (action === 'stop-boost') return confirmAndRun({ key: 'stopFactionBoost', title: 'Stop Faction Boost?', message: 'The boost will stop immediately. Spent Faction Points are not refunded.', label: 'Stop boost', command: () => doFactionStopBoost(button.dataset.actionType, button), success: 'Faction boost stopped.' });
+    if (action === 'stop-boost') {
+        const actionType = button.dataset.actionType;
+        const expected = expectedBoost(actionType);
+        return confirmAndRun({ key: 'stopFactionBoost', title: 'Stop Faction Boost?', message: 'The boost will stop immediately. Spent Faction Points are not refunded.', label: 'Stop boost', command: () => doFactionStopBoost(actionType, button, expected), success: 'Faction boost stopped.' });
+    }
     if (action === 'save-rank') {
         const playerId = Number(button.dataset.playerId);
         const rank = panel.querySelector(`.faction-rank-select[data-player-id="${playerId}"]`)?.value;
         const member = snapshot.faction.members.find(item => Number(item.playerId) === playerId);
         if (!member || !rank) return showToast('That faction member is no longer available.', 'error');
         if (rank === member.factionRank) return showToast(`${member.username} is already a ${RANK_LABEL[rank]}.`, 'info');
+        const expected = expectedFaction({ targetMember: { playerId, factionRank: member.factionRank } });
         return confirmAndRun({
             key: 'changeFactionRank',
             title: 'Change Faction Rank?',
             message: `${member.username} will change from ${RANK_LABEL[member.factionRank]} to ${RANK_LABEL[rank]}. Their fixed permissions will change immediately.`,
             label: rankAtLeast(rank, member.factionRank) ? 'Promote member' : 'Demote member',
-            command: () => doFactionSetMemberRank(playerId, rank, button),
+            command: () => doFactionSetMemberRank(playerId, rank, button, expected),
             success: `${member.username}'s Faction Rank changed to ${RANK_LABEL[rank]}.`
         });
     }
-    if (action === 'remove-member') return confirmAndRun({ key: 'removeFactionMember', title: 'Remove Faction Member?', message: `Remove ${button.dataset.name} from this faction? There is no membership cooldown.`, label: 'Remove member', command: () => doFactionRemoveMember(Number(button.dataset.playerId), button), success: `${button.dataset.name} was removed from the faction.` });
-    if (action === 'transfer') return confirmAndRun({ key: 'transferFaction', title: 'Transfer Faction Ownership?', message: `${button.dataset.name} will become the sole Leader and owner. ${snapshot.faction.leaderUsername} will become a Lieutenant. This authority change is immediate and cannot be undone automatically.`, label: 'Transfer ownership', command: () => doFactionTransferLeadership(Number(button.dataset.playerId), button), success: `Faction ownership transferred to ${button.dataset.name}.` });
+    if (action === 'remove-member') {
+        const playerId = Number(button.dataset.playerId);
+        const member = snapshot.faction.members.find(item => Number(item.playerId) === playerId);
+        if (!member) return showToast('That faction member is no longer available.', 'error');
+        const expected = expectedFaction({ targetMember: { playerId, factionRank: member.factionRank } });
+        return confirmAndRun({ key: 'removeFactionMember', title: 'Remove Faction Member?', message: `Remove ${button.dataset.name} from this faction? There is no membership cooldown.`, label: 'Remove member', command: () => doFactionRemoveMember(playerId, button, expected), success: `${button.dataset.name} was removed from the faction.` });
+    }
+    if (action === 'transfer') {
+        const expected = expectedFaction();
+        return confirmAndRun({ key: 'transferFaction', title: 'Transfer Faction Ownership?', message: `${button.dataset.name} will become the sole Leader and owner. ${snapshot.faction.leaderUsername} will become a Lieutenant. This authority change is immediate and cannot be undone automatically.`, label: 'Transfer ownership', command: () => doFactionTransferLeadership(Number(button.dataset.playerId), button, expected), success: `Faction ownership transferred to ${button.dataset.name}.` });
+    }
     if (action === 'save-mode') {
         const mode = panel.querySelector('#faction-mode-select')?.value;
         if (mode === snapshot.faction.membershipMode) return showToast('Choose a different membership mode.', 'info');
-        return confirmAndRun({ key: 'changeFactionMode', title: 'Change Membership Mode?', message: `Change from ${MODE_LABEL[snapshot.faction.membershipMode]} to ${MODE_LABEL[mode]}? ${modeChangeWarning(snapshot.faction.membershipMode, mode)}`, label: 'Change mode', command: () => doFactionSetMembershipMode(mode, button), success: `Membership mode changed to ${MODE_LABEL[mode]}.` });
+        const previousMode = snapshot.faction.membershipMode;
+        const expected = expectedFaction({ membershipMode: previousMode });
+        return confirmAndRun({ key: 'changeFactionMode', title: 'Change Membership Mode?', message: `Change from ${MODE_LABEL[previousMode]} to ${MODE_LABEL[mode]}? ${modeChangeWarning(previousMode, mode)}`, label: 'Change mode', command: () => doFactionSetMembershipMode(mode, button, expected), success: `Membership mode changed to ${MODE_LABEL[mode]}.` });
     }
     if (action === 'player-search') return searchPlayers(panel);
     if (action === 'invite-player') {
-        try { await applyCommand(doFactionSendInvitation(Number(button.dataset.playerId), button), `Invitation sent to ${button.dataset.name}.`); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction({ membershipMode: snapshot.faction.membershipMode });
+        try { await applyCommand(doFactionSendInvitation(Number(button.dataset.playerId), button, expected), `Invitation sent to ${button.dataset.name}.`); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'revoke-invite') {
-        try { await applyCommand(doFactionRevokeInvitation(button.dataset.id, button), 'Invitation revoked.'); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionRevokeInvitation(button.dataset.id, button, expected), 'Invitation revoked.'); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'review-request') {
-        try { await applyCommand(doFactionReviewJoinRequest(button.dataset.id, button.dataset.decision, button), `Join request ${button.dataset.decision === 'accept' ? 'accepted' : 'declined'}.`); } catch (error) { showToast(error.message, 'error'); }
+        const expected = expectedFaction();
+        try { await applyCommand(doFactionReviewJoinRequest(button.dataset.id, button.dataset.decision, button, expected), `Join request ${button.dataset.decision === 'accept' ? 'accepted' : 'declined'}.`); } catch (error) { reportFactionError(error); }
         return;
     }
     if (action === 'generate-code') {
+        const identityId = viewerIdentityId();
+        const expected = expectedFaction({
+            membershipMode: snapshot.faction.membershipMode,
+            accessCodeVersion: snapshot.faction.accessCode?.version || null
+        });
         if (snapshot.faction.accessCode?.active) {
             const reset = await showConfirmation(
                 'resetFactionAccessCode',
@@ -782,19 +902,24 @@ const handleAction = async (action, button, panel) => {
                 { allowIgnore: false, confirmLabel: 'Reset and generate', cancelLabel: 'Keep current code' }
             );
             if (!reset) return;
+            if (!requireSameViewer(identityId)) return;
         }
         generatedCode = '';
         try {
-            const result = await applyCommand(doFactionGenerateCode(button), snapshot.faction.accessCode?.active ? 'The prior code was reset and a new one was generated.' : 'One-time faction code generated.');
+            const result = await applyCommand(doFactionGenerateCode(button, expected), snapshot.faction.accessCode?.active ? 'The prior code was reset and a new one was generated.' : 'One-time faction code generated.');
             generatedCode = result.code || result.plaintextCode || '';
+            generatedCodeVersion = generatedCode ? String(snapshot?.faction?.accessCode?.version || '') : '';
             if (!generatedCode && result.codeUnavailable) {
                 showToast('The code was generated but its original response could not be replayed. Generate another code to reset it and display the replacement.', 'info');
             }
             paint();
-        } catch (error) { showToast(error.message, 'error'); }
+        } catch (error) { reportFactionError(error); }
         return;
     }
-    if (action === 'leave') return confirmAndRun({ key: 'leaveFaction', title: 'Leave Faction?', message: 'You will lose faction access immediately. There is no cooldown for joining another faction.', label: 'Leave faction', command: () => doFactionLeave(button), success: 'You left the faction.' });
+    if (action === 'leave') {
+        const expected = expectedFaction();
+        return confirmAndRun({ key: 'leaveFaction', title: 'Leave Faction?', message: 'You will lose faction access immediately. There is no cooldown for joining another faction.', label: 'Leave faction', command: () => doFactionLeave(button, expected), success: 'You left the faction.' });
+    }
     if (action === 'disband') return openDisbandDialog(button);
 };
 
@@ -831,16 +956,25 @@ if (globalThis.window?.addEventListener) {
     window.addEventListener('bconomy-faction-stale', event => {
         if (!event.detail?.snapshot) return;
         snapshot = event.detail.snapshot;
-        if (!snapshot.faction?.accessCode?.active) generatedCode = '';
+        reconcileGeneratedCode(snapshot);
         paint();
+    });
+    window.addEventListener('bconomy-auth-change', () => {
+        resetFactionViewCache();
+        paint();
+        const panel = document.getElementById('panel-faction');
+        if (panel?.classList.contains('active')) refresh({ keepDirectory: false });
     });
 }
 
 export const resetFactionViewCache = () => {
     snapshot = null;
     directory = [];
+    lastGeneratedRequestMessage = '';
     loadError = '';
+    loading = false;
     generatedCode = '';
+    generatedCodeVersion = '';
     activityHistoryPage = 0;
     treasuryHistoryPage = 0;
     renderGeneration += 1;

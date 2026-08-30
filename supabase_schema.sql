@@ -366,10 +366,32 @@ create table if not exists public.faction_boosts (
   level integer not null default 0 constraint faction_boosts_level_valid check (level between 0 and 36),
   mode text not null default 'duration' constraint faction_boosts_mode_valid check (mode in ('duration', 'continuous')),
   cost_per_hour numeric(30, 0) not null default 0 constraint faction_boosts_cost_nonnegative check (cost_per_hour >= 0),
+  config_revision bigint not null default 0 constraint faction_boosts_config_revision_nonnegative check (config_revision >= 0),
   active_until timestamp with time zone,
   last_processed_at timestamp with time zone not null default timezone('utc'::text, now()),
   primary key (faction_id, action_type)
 );
+
+alter table public.faction_boosts
+  add column if not exists config_revision bigint not null default 0;
+
+update public.faction_boosts set config_revision = 0 where config_revision is null;
+alter table public.faction_boosts
+  alter column config_revision set default 0,
+  alter column config_revision set not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'faction_boosts_config_revision_nonnegative'
+      and conrelid = 'public.faction_boosts'::regclass
+  ) then
+    alter table public.faction_boosts
+      add constraint faction_boosts_config_revision_nonnegative check (config_revision >= 0);
+  end if;
+end
+$$;
 
 create table if not exists public.faction_join_requests (
   id uuid primary key default gen_random_uuid(),
@@ -762,6 +784,7 @@ begin
           'multiplier', public.faction_multiplier(boost.level),
           'mode', boost.mode,
           'costPerHour', boost.cost_per_hour,
+          'configRevision', boost.config_revision,
           'activeUntil', boost.active_until,
           'remainingSeconds', case
             when boost.level = 0 then 0
@@ -774,7 +797,7 @@ begin
         where boost.faction_id = f.id
       ), '{}'::jsonb),
       'accessCode', case when public.faction_rank_weight(membership_row.faction_rank) >= 3 then (
-        select jsonb_build_object('active', true, 'createdAt', code.created_at, 'createdByPlayerId', creator.player_id)
+        select jsonb_build_object('active', true, 'version', code.id, 'createdAt', code.created_at, 'createdByPlayerId', creator.player_id)
         from public.faction_access_codes code
         left join public.player_state creator on creator.id = code.created_by
         where code.faction_id = f.id and code.status = 'active'
@@ -1695,7 +1718,8 @@ begin
         return jsonb_build_object('status', 'error', 'code', 'INSUFFICIENT_FACTION_POINTS', 'message', 'The treasury must cover at least one hour at the selected level.');
       end if;
       update public.faction_boosts
-      set level = level_value, mode = 'continuous', cost_per_hour = cost_value, active_until = null, last_processed_at = p_now
+      set level = level_value, mode = 'continuous', cost_per_hour = cost_value, config_revision = config_revision + 1,
+          active_until = null, last_processed_at = p_now
       where faction_id = faction_row.id and action_type = action_value;
       activity_type := case when boost_row.level > 0 then 'boost_changed' else 'boost_activated' end;
       command_result := jsonb_build_object('actionType', action_value, 'level', level_value, 'mode', 'continuous', 'costPerHour', cost_value);
@@ -1714,6 +1738,7 @@ begin
       set level = level_value,
           mode = 'duration',
           cost_per_hour = public.faction_cost_per_hour(level_value),
+          config_revision = config_revision + 1,
           active_until = case
             when boost_row.level = level_value and boost_row.mode = 'duration' and boost_row.active_until > p_now
               then boost_row.active_until + make_interval(secs => (hours_value * 3600)::double precision)
@@ -1744,7 +1769,8 @@ begin
     if boost_row.level = 0 then
       return jsonb_build_object('status', 'error', 'code', 'BOOST_NOT_ACTIVE', 'message', 'That faction boost is not active.');
     end if;
-    update public.faction_boosts set level = 0, cost_per_hour = 0, active_until = null, last_processed_at = p_now
+    update public.faction_boosts
+    set level = 0, cost_per_hour = 0, config_revision = config_revision + 1, active_until = null, last_processed_at = p_now
     where faction_id = faction_row.id and action_type = action_value;
     update public.factions set revision = revision + 1, updated_at = p_now where id = faction_row.id;
     insert into public.faction_activity(faction_id, actor_id, event_type, metadata, created_at)
@@ -1818,6 +1844,215 @@ $$;
 
 revoke all on function public.faction_execute_command(uuid, uuid, bigint, text, jsonb, bigint, timestamp with time zone) from public, anon, authenticated;
 grant execute on function public.faction_execute_command(uuid, uuid, bigint, text, jsonb, bigint, timestamp with time zone) to service_role;
+
+create or replace function public.faction_precondition_failure(p_precondition text)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'status', 'conflict',
+    'code', 'FACTION_PRECONDITION_FAILED',
+    'message', 'Faction data relevant to this action changed while you were reviewing it.',
+    'details', jsonb_build_object('precondition', p_precondition)
+  );
+$$;
+
+revoke all on function public.faction_precondition_failure(text) from public, anon, authenticated;
+
+create or replace function public.faction_execute_command_v2(
+  p_user_id uuid,
+  p_command_id uuid,
+  p_expected_player_revision bigint,
+  p_command_type text,
+  p_payload jsonb default '{}'::jsonb,
+  p_expected jsonb default '{}'::jsonb,
+  p_now timestamp with time zone default timezone('utc'::text, now())
+)
+returns jsonb
+language plpgsql
+security definer set search_path = public, extensions
+as $$
+declare
+  actor_member public.faction_members%rowtype;
+  target_member public.faction_members%rowtype;
+  faction_row public.factions%rowtype;
+  boost_row public.faction_boosts%rowtype;
+  current_faction_revision bigint := null;
+  target_player_number bigint;
+  target_faction_number bigint;
+  target_faction_id uuid;
+  member_count_value integer;
+  active_code_version text;
+  expected_faction_id text;
+  expected_code_version text;
+  action_value text;
+  clean_code text;
+begin
+  if p_expected is null or jsonb_typeof(p_expected) <> 'object' or not (p_expected ? 'factionId') then
+    return jsonb_build_object(
+      'status', 'error',
+      'code', 'INVALID_FACTION_EXPECTATION',
+      'message', 'Faction API v2 commands require an expected faction context.'
+    );
+  end if;
+
+  -- A replay must return its original result even when the reviewed state has
+  -- changed since the first successful execution.
+  if exists (
+    select 1 from public.faction_command_receipts
+    where user_id = p_user_id and command_id = p_command_id
+  ) then
+    return public.faction_execute_command(
+      p_user_id, p_command_id, p_expected_player_revision, p_command_type,
+      p_payload, null, p_now
+    );
+  end if;
+
+  perform 1 from public.player_state where id = p_user_id for update;
+  if not found then
+    return jsonb_build_object('status', 'error', 'code', 'PLAYER_NOT_FOUND', 'message', 'Player profile not found.');
+  end if;
+
+  if exists (
+    select 1 from public.faction_command_receipts
+    where user_id = p_user_id and command_id = p_command_id
+  ) then
+    return public.faction_execute_command(
+      p_user_id, p_command_id, p_expected_player_revision, p_command_type,
+      p_payload, null, p_now
+    );
+  end if;
+
+  select * into actor_member from public.faction_members where player_id = p_user_id;
+  expected_faction_id := p_expected->>'factionId';
+
+  if actor_member.player_id is null then
+    if expected_faction_id is not null then
+      return public.faction_precondition_failure('factionId');
+    end if;
+
+    -- Resolve and lock the target faction before the legacy executor locks an
+    -- invitation, request, or code row. Member-side commands use faction-first
+    -- ordering too, preventing accept/revoke, review/withdraw, and
+    -- generate/redeem deadlocks while v1 and v2 coexist.
+    if p_command_type = 'faction.invitation.respond' then
+      begin
+        select invitation.faction_id into target_faction_id
+        from public.faction_invitations invitation
+        where invitation.id = (p_payload->>'invitationId')::uuid;
+      exception when others then target_faction_id := null; end;
+    elsif p_command_type = 'faction.request.send' then
+      begin target_faction_number := (p_payload->>'factionNumber')::bigint;
+      exception when others then target_faction_number := null; end;
+      select faction.id into target_faction_id
+      from public.factions faction where faction.faction_number = target_faction_number;
+    elsif p_command_type = 'faction.request.withdraw' then
+      begin
+        select request.faction_id into target_faction_id
+        from public.faction_join_requests request
+        where request.id = (p_payload->>'requestId')::uuid;
+      exception when others then target_faction_id := null; end;
+    elsif p_command_type = 'faction.code.redeem' then
+      clean_code := upper(trim(coalesce(p_payload->>'code', '')));
+      if clean_code ~ '^BCF-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$' then
+        select code.faction_id into target_faction_id
+        from public.faction_access_codes code
+        where code.code_hash = encode(extensions.digest(clean_code, 'sha256'), 'hex')
+          and code.status = 'active';
+      end if;
+    end if;
+
+    if target_faction_id is not null then
+      perform 1 from public.factions where id = target_faction_id for update;
+    end if;
+  else
+    select * into faction_row from public.factions where id = actor_member.faction_id for update;
+    -- Membership administrators take the faction lock before changing another
+    -- member. Re-read after that lock so a removal that won the race cannot
+    -- leave this wrapper validating a stale actor membership row.
+    select * into actor_member from public.faction_members where player_id = p_user_id;
+    if faction_row.id is null or actor_member.player_id is null
+      or actor_member.faction_id <> faction_row.id
+      or expected_faction_id is null or faction_row.id::text <> expected_faction_id then
+      return public.faction_precondition_failure('factionId');
+    end if;
+    current_faction_revision := faction_row.revision;
+  end if;
+
+  if p_command_type in ('faction.membership_mode.set', 'faction.invitation.send', 'faction.code.generate')
+    and (p_expected->>'membershipMode') is distinct from faction_row.membership_mode then
+    return public.faction_precondition_failure('membershipMode');
+  end if;
+
+  if p_command_type = 'faction.customize'
+    and ((p_expected->>'name') is distinct from faction_row.name
+      or (p_expected->>'description') is distinct from faction_row.description) then
+    return public.faction_precondition_failure('details');
+  end if;
+
+  if p_command_type in ('faction.member.rank', 'faction.member.remove') then
+    begin
+      target_player_number := (p_payload->>'playerId')::bigint;
+    exception when others then
+      target_player_number := null;
+    end;
+    select member.* into target_member
+    from public.faction_members member
+    join public.player_state profile on profile.id = member.player_id
+    where member.faction_id = actor_member.faction_id and profile.player_id = target_player_number
+    for update of member;
+    if target_member.player_id is null
+      or (p_expected->'targetMember'->>'playerId') is distinct from target_player_number::text
+      or (p_expected->'targetMember'->>'factionRank') is distinct from target_member.faction_rank then
+      return public.faction_precondition_failure('targetMember');
+    end if;
+  end if;
+
+  if p_command_type in ('faction.boost.activate', 'faction.boost.stop') then
+    action_value := lower(coalesce(p_payload->>'actionType', ''));
+    select * into boost_row from public.faction_boosts
+    where faction_id = actor_member.faction_id and action_type = action_value
+    for update;
+    if boost_row.faction_id is null
+      or (p_expected->'boost'->>'actionType') is distinct from action_value
+      or (p_expected->'boost'->>'configRevision') is distinct from boost_row.config_revision::text then
+      return public.faction_precondition_failure('boost');
+    end if;
+  end if;
+
+  if p_command_type = 'faction.code.generate' then
+    select code.id::text into active_code_version
+    from public.faction_access_codes code
+    where code.faction_id = actor_member.faction_id and code.status = 'active'
+    limit 1
+    for update;
+    expected_code_version := p_expected->>'accessCodeVersion';
+    if expected_code_version is distinct from active_code_version then
+      return public.faction_precondition_failure('accessCodeVersion');
+    end if;
+  end if;
+
+  if p_command_type = 'faction.disband' then
+    select count(*)::integer into member_count_value
+    from public.faction_members where faction_id = actor_member.faction_id;
+    if (p_expected->>'name') is distinct from faction_row.name
+      or (p_expected->>'memberCount') is distinct from member_count_value::text then
+      return public.faction_precondition_failure('disband');
+    end if;
+  end if;
+
+  -- The faction row remains locked until the legacy executor returns, so its
+  -- internal revision gate cannot race after semantic validation.
+  return public.faction_execute_command(
+    p_user_id, p_command_id, p_expected_player_revision, p_command_type,
+    p_payload, current_faction_revision, p_now
+  );
+end;
+$$;
+
+revoke all on function public.faction_execute_command_v2(uuid, uuid, bigint, text, jsonb, jsonb, timestamp with time zone) from public, anon, authenticated;
+grant execute on function public.faction_execute_command_v2(uuid, uuid, bigint, text, jsonb, jsonb, timestamp with time zone) to service_role;
 
 create or replace function public.faction_search_players(
   p_user_id uuid,

@@ -1,6 +1,6 @@
 # Bconomy Multiplayer Factions
 
-Bconomy v4.0.0 makes Faction the game's player-to-player system. Every other gameplay system remains solo. Factions do not add achievements, lotteries, quests, chat, direct messages, or automated gameplay.
+Bconomy v4.3.0 makes Faction the game's player-to-player system. Every other gameplay system remains solo. Factions do not add achievements, lotteries, quests, chat, direct messages, or automated gameplay.
 
 ## Membership
 
@@ -78,9 +78,10 @@ A guest identity is deleted after 365 days without activity. Cleanup also remove
 
 - Shared faction tables use Row Level Security and are not directly accessible from browser clients.
 - Reads and writes pass through service-only database functions.
-- Mutations use expected player and faction revisions plus unique command IDs for conflict detection and idempotency.
+- Mutations use expected player revisions, command-specific reviewed-state preconditions, and unique command IDs for conflict detection and idempotency. Runtime boost accounting does not invalidate an unrelated reviewed command.
+- A genuine reviewed-state conflict refreshes the faction snapshot and requires review and confirmation again; the browser never retries the mutation automatically.
 - Capacity and eligibility are rechecked inside the transaction that joins a player.
 - Deferred database triggers reject any committed faction with more than 20 members or without exactly one Leader who matches the owner record.
 - Legacy local factions are imported once, then removed from player-state schema version 2.
 
-The canonical product specification is [2026-08-28-multiplayer-factions-design.md](superpowers/specs/2026-08-28-multiplayer-factions-design.md). The HTTP contract is documented in [GAME_API_V1.md](GAME_API_V1.md).
+The canonical product specification is [2026-08-28-multiplayer-factions-design.md](superpowers/specs/2026-08-28-multiplayer-factions-design.md). The current faction HTTP contract is documented in [GAME_API_V2.md](GAME_API_V2.md); solo gameplay remains in [GAME_API_V1.md](GAME_API_V1.md).

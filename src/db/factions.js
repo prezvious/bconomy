@@ -59,6 +59,16 @@ const executeFactionCommand = ({ userId, commandId, expectedPlayerRevision, expe
     p_now: now.toISOString()
 });
 
+const executeFactionCommandV2 = ({ userId, commandId, expectedPlayerRevision, expected = {}, type, payload = {}, now = new Date() }) => callFactionRpc('faction_execute_command_v2', {
+    p_user_id: userId,
+    p_command_id: commandId,
+    p_expected_player_revision: Math.max(0, Math.floor(Number(expectedPlayerRevision) || 0)),
+    p_command_type: type,
+    p_payload: payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {},
+    p_expected: expected && typeof expected === 'object' && !Array.isArray(expected) ? expected : {},
+    p_now: now.toISOString()
+});
+
 const getFactionEffect = (userId, actionType, now = new Date()) => callFactionRpc('faction_get_effect', {
     p_user_id: userId,
     p_action_type: actionType,
@@ -88,6 +98,7 @@ module.exports = {
     searchFactionPlayers,
     getNextJoinMessage,
     executeFactionCommand,
+    executeFactionCommandV2,
     getFactionEffect,
     migrateLegacyFaction,
     cleanupInactiveGuest,
