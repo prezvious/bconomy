@@ -1,6 +1,6 @@
 {
   "name": "bconomy",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "A persistent text-based economy and incremental game engine built with Node.js, Express, and modern single-page web interfaces.",
   "main": "server.js",
   "scripts": {

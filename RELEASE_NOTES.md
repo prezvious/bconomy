@@ -4,6 +4,23 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.1.1] — 2026-08-30
+
+### Performance
+- **Faster Authoritative Action Commands**:
+  - Removed the separate command-receipt lookup from the normal in-revision signed-in path. Stale requests use a read-only receipt check to distinguish duplicate retries from conflicts without risking a state mutation.
+  - Folded `last_active_at` into the same transaction that saves player state, advances the revision, and records the command receipt. This eliminates a separate database update from every successful signed command.
+  - Removed inactive-guest cleanup from the core game-command context. Cleanup remains on profile and faction maintenance paths instead of delaying the first action handled by a new serverless instance.
+- **Action Phase Timing**:
+  - Added `Server-Timing` response metrics and structured log durations for command context loading, replay checks, faction-effect lookup, engine execution, persistence, and total request time.
+  - Timing telemetry records durations only; it does not log player state, access tokens, or credentials.
+
+### Integrity
+- Rewards, cooldowns, shared faction effects, server-authoritative state, revision checks, and duplicate-command results are unchanged by this performance work.
+
+### Developer Documentation
+- Added the approved and implemented action-latency optimization design, including invariants, verification, and rollout guidance.
+
 ## [v4.1.0] — 2026-08-29
 
 ### Added

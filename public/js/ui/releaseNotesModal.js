@@ -3,9 +3,42 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.1.1',
+        version: 'v4.1.1',
+        isLatest: true,
+        date: '2026-08-30',
+        title: 'v4.1.1 — Faster Authoritative Actions & Phase Timing',
+        sections: [
+            {
+                type: 'Action Performance & Integrity',
+                items: [
+                    {
+                        title: 'Faster Authoritative Commands',
+                        bullets: [
+                            'Removed the receipt lookup and standalone activity update from the normal signed-in command path while preserving read-only duplicate replay checks and revision conflicts.',
+                            'Moved inactive-guest cleanup off the core action path so serverless maintenance work does not delay a player action.',
+                            'Added Server-Timing metrics and structured phase durations for context loading, replay checks, faction lookup, engine execution, persistence, and total command time.',
+                            'Kept rewards, cooldowns, faction effects, authoritative state, revision checks, and duplicate-command results unchanged.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Developer Documentation',
+                items: [
+                    {
+                        title: 'Approved Interface & Performance Designs',
+                        bullets: [
+                            'Documented the implemented action-latency optimization design, invariants, verification, and rollout guidance.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.1.0',
         version: 'v4.1.0',
-        isLatest: true,
         date: '2026-08-29',
         title: 'v4.1.0 — Hardened Developer Controls, Identity Recovery & Progression Contracts',
         sections: [

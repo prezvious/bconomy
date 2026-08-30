@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-30
 
-**Status:** Approved direction; implementation pending
+**Status:** Implemented in v4.1.1
 
 **Scope:** Reduce the time between clicking a core action button and receiving its authoritative result without weakening persistence, revision checks, idempotency, or faction correctness.
 
@@ -64,7 +64,7 @@ This improves perceived latency but duplicates random action execution, complica
 
 `commit_player_command` remains the only successful signed-command state mutation. Its update of `player_state` will also set `last_active_at` to the database clock. State, revision, activity time, and command receipt therefore advance in the same transaction.
 
-The server will no longer query `player_command_receipts` before executing a command. The commit function already checks the receipt before locking and updating player state. On a duplicate, it returns the stored result and resulting revision. The existing duplicate branch will load the latest state and return the stored result; duplicate retries remain correct even though the in-process engine may have performed discarded work before the commit detects the duplicate.
+The server will no longer query `player_command_receipts` before every signed command. When the submitted revision matches the current state, execution proceeds directly to the atomic commit, which checks the receipt before locking and updating player state. A stale submitted revision uses a read-only receipt lookup to distinguish a legitimate retry from a conflict without risking a state mutation. On a duplicate, the server returns the stored result with the latest authoritative state.
 
 ### Guest cleanup
 
@@ -105,7 +105,7 @@ The transmutation implementation currently performs one random-number draw per c
 
 1. Run the existing engine, API, identity recovery, faction, and UI contract suites.
 2. Add a schema contract assertion that `commit_player_command` updates `last_active_at` in the same player-state update.
-3. Add a server contract assertion that the signed command path no longer pre-reads command receipts or calls `touchPlayerActivity` through `resolveGameContext`.
+3. Add a server contract assertion that the normal in-revision signed command path no longer pre-reads command receipts and that `resolveGameContext` no longer calls `touchPlayerActivity`.
 4. Verify duplicate command IDs return the stored result without incrementing the revision twice.
 5. Verify successful commands increment the revision and activity timestamp together.
 6. Verify conflict and rejected commands do not update state.

@@ -217,7 +217,8 @@ begin
 
   update public.player_state
   set state = p_state,
-      state_revision = current_revision + 1
+      state_revision = current_revision + 1,
+      last_active_at = timezone('utc'::text, now())
   where id = p_user_id;
 
   insert into public.player_command_receipts(user_id, command_id, resulting_revision, result)

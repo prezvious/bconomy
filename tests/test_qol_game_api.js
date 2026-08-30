@@ -5,9 +5,15 @@ process.env.BCONOMY_DEV_COMMANDS = 'true';
 const app = require('../server');
 
 const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-const supabaseSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'supabase.js'), 'utf8');
-assert.ok(serverSource.indexOf('getPlayerCommandReceipt({ userId: context.user.id, commandId })') < serverSource.indexOf('if (expectedRevision !== context.revision)'), 'signed retries must check idempotency receipts before rejecting stale revisions');
-assert.ok(supabaseSource.includes(".from('player_command_receipts')"));
+const schemaSource = fs.readFileSync(path.join(__dirname, '..', 'supabase_schema.sql'), 'utf8');
+const gameContextSource = serverSource.slice(serverSource.indexOf('const resolveGameContext'), serverSource.indexOf('const phaseDurationMs'));
+const commandRouteSource = serverSource.slice(serverSource.indexOf("app.post('/api/game/commands'"), serverSource.indexOf("app.post('/api/factions/queries'"));
+const commitFunctionSource = schemaSource.slice(schemaSource.indexOf('create or replace function public.commit_player_command'), schemaSource.indexOf('revoke all on function public.commit_player_command'));
+assert.ok(commandRouteSource.indexOf("expectedRevision !== context.revision") < commandRouteSource.indexOf('getPlayerCommandReceipt'), 'only stale signed commands issue the read-only receipt lookup');
+assert.ok(commandRouteSource.includes("measureAsyncPhase(timings, 'replayMs'"), 'stale replay checks expose their own timing phase');
+assert.ok(commitFunctionSource.indexOf('existing_receipt') < commitFunctionSource.indexOf('current_revision <> p_expected_revision'), 'atomic commits must recognize duplicate retries before revision conflicts');
+assert.ok(commitFunctionSource.includes("last_active_at = timezone('utc'::text, now())"), 'successful commits must update player activity atomically');
+assert.ok(!gameContextSource.includes('touchPlayerActivity') && !gameContextSource.includes('maybeCleanupInactiveGuests'), 'game context loading must not issue activity or maintenance writes');
 
 console.log('--- Running Versioned Game API Tests ---');
 
@@ -22,13 +28,13 @@ const server = app.listen(0, '127.0.0.1');
             headers: { 'Content-Type': 'application/json', ...headers },
             body: JSON.stringify(body)
         });
-        return { status: response.status, data: await response.json() };
+        return { status: response.status, data: await response.json(), headers: response.headers };
     };
 
     const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
     const health = await healthResponse.json();
     assert.strictEqual(health.status, 'ok');
-    assert.strictEqual(health.version, '4.1.0');
+    assert.strictEqual(health.version, '4.1.1');
 
     const progressionRules = await (await fetch(`http://127.0.0.1:${port}/api/data/progression-rules`)).json();
     assert.deepStrictEqual(progressionRules, { maxTargetedTierAdvance: 3000 });
@@ -58,6 +64,7 @@ const server = app.listen(0, '127.0.0.1');
     assert.strictEqual(wished.data.revision, 1);
     assert(wished.data.state.shopWishlist.Diamond);
     assert.strictEqual(wished.data.state_revision, undefined);
+    assert.match(wished.headers.get('server-timing') || '', /context;dur=\d+(?:\.\d+)?, engine;dur=\d+(?:\.\d+)?, total;dur=\d+(?:\.\d+)?/, 'commands expose context, engine, and total timing phases');
 
     const retry = await request('/api/game/commands', {
         commandId,

@@ -223,12 +223,11 @@ const requireGameApiVersion = (req, res) => {
     return true;
 };
 
-const resolveGameContext = async (req, { query = false } = {}) => {
+const resolveGameContext = async req => {
     const token = getBearerToken(req);
     if (token) {
         const user = await verifyAccessToken(token);
         if (!user) return { errorStatus: 401, error: { code: 'INVALID_AUTH', message: 'Your session expired. Sign in again.' } };
-        await maybeCleanupInactiveGuests();
         const lookup = await lookupProfileByUserId(user.id);
         if (lookup.status === 'unavailable') return { errorStatus: 503, error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Player persistence is temporarily unavailable. Try again.' } };
         if (lookup.status === 'missing') return { errorStatus: 404, error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } };
@@ -237,7 +236,6 @@ const resolveGameContext = async (req, { query = false } = {}) => {
             await cleanupInactiveGuest(user.id);
             return { errorStatus: 401, error: { code: 'GUEST_EXPIRED', message: 'This guest identity was deleted after 365 days without activity.' } };
         }
-        await touchPlayerActivity(user.id);
         return {
             mode: 'signed',
             user,
@@ -257,14 +255,50 @@ const resolveGameContext = async (req, { query = false } = {}) => {
     };
 };
 
-const logGameRequest = ({ kind, type, commandId, revision, status, startedAt }) => {
+const phaseDurationMs = startedAt => Number((Number(process.hrtime.bigint() - startedAt) / 1e6).toFixed(2));
+
+const measureAsyncPhase = async (timings, phase, operation) => {
+    const startedAt = process.hrtime.bigint();
+    try {
+        return await operation();
+    } finally {
+        timings[phase] = phaseDurationMs(startedAt);
+    }
+};
+
+const measureSyncPhase = (timings, phase, operation) => {
+    const startedAt = process.hrtime.bigint();
+    try {
+        return operation();
+    } finally {
+        timings[phase] = phaseDurationMs(startedAt);
+    }
+};
+
+const attachServerTiming = (res, timings, startedAt) => {
+    const sendJson = res.json.bind(res);
+    res.json = body => {
+        if (!res.headersSent) {
+            const metrics = { ...timings, totalMs: Date.now() - startedAt };
+            const header = Object.entries(metrics)
+                .filter(([name, duration]) => name.endsWith('Ms') && Number.isFinite(duration) && duration >= 0)
+                .map(([name, duration]) => `${name.slice(0, -2)};dur=${Number(duration).toFixed(2)}`)
+                .join(', ');
+            if (header) res.set('Server-Timing', header);
+        }
+        return sendJson(body);
+    };
+};
+
+const logGameRequest = ({ kind, type, commandId, revision, status, startedAt, timings = {} }) => {
     console.info(JSON.stringify({
         event: `game_${kind}`,
         type,
         commandId: commandId || null,
         revision,
         status,
-        durationMs: Date.now() - startedAt
+        durationMs: Date.now() - startedAt,
+        ...timings
     }));
 };
 
@@ -280,7 +314,7 @@ app.post('/api/game/queries', async (req, res) => {
         return res.status(400).json({ error: { code: 'INVALID_QUERY', message: 'Query type is required.' } });
     }
     try {
-        const context = await resolveGameContext(req, { query: true });
+        const context = await resolveGameContext(req);
         if (context.error) return res.status(context.errorStatus).json({ error: context.error });
         const outcome = executeQuery(context.state, type, payload, Date.now());
         if (!outcome.ok) {
@@ -298,6 +332,8 @@ app.post('/api/game/queries', async (req, res) => {
 
 app.post('/api/game/commands', async (req, res) => {
     const startedAt = Date.now();
+    const timings = {};
+    attachServerTiming(res, timings, startedAt);
     if (!requireGameApiVersion(req, res)) return;
     const { commandId, expectedRevision, type, payload = {} } = req.body || {};
     if (!isUuid(commandId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || typeof type !== 'string' || !type) {
@@ -308,7 +344,7 @@ app.post('/api/game/commands', async (req, res) => {
         return res.status(403).json({ error: { code: 'DEV_COMMANDS_DISABLED', message: 'Developer commands are disabled.' } });
     }
     try {
-        const context = await resolveGameContext(req);
+        const context = await measureAsyncPhase(timings, 'contextMs', () => resolveGameContext(req));
         if (context.error) return res.status(context.errorStatus).json({ error: context.error });
         if (context.mode === 'signed' && req.body.guestState !== undefined) {
             return res.status(400).json({ error: { code: 'SIGNED_STATE_FORBIDDEN', message: 'Signed commands cannot supply client-owned state.' } });
@@ -317,7 +353,7 @@ app.post('/api/game/commands', async (req, res) => {
         if (isDevCommand) {
             const access = authorizeDevCommand({ req, userId: context.user?.id });
             if (!access.allowed) {
-                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: access.code, startedAt });
+                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: access.code, startedAt, timings });
                 return res.status(403).json({ error: { code: access.code, message: access.message } });
             }
             executionContext = {
@@ -326,16 +362,16 @@ app.post('/api/game/commands', async (req, res) => {
                 devCommandActorId: context.user?.id || null
             };
         }
-        if (context.mode === 'signed') {
-            const receipt = await getPlayerCommandReceipt({ userId: context.user.id, commandId });
+        if (context.mode === 'signed' && expectedRevision !== context.revision) {
+            const receipt = await measureAsyncPhase(timings, 'replayMs', () => getPlayerCommandReceipt({
+                userId: context.user.id,
+                commandId
+            }));
             if (receipt) {
-                const revision = context.revision;
-                logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt });
-                return res.json({ state: context.state, revision, result: receipt.result || {}, duplicate: true });
+                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: 'duplicate', startedAt, timings });
+                return res.json({ state: context.state, revision: context.revision, result: receipt.result || {}, duplicate: true });
             }
-        }
-        if (expectedRevision !== context.revision) {
-            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: 'conflict', startedAt });
+            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: 'conflict', startedAt, timings });
             return res.status(409).json({
                 error: { code: 'STATE_CONFLICT', message: 'Progress changed in another session. Review the latest state and try again.' },
                 state: context.state,
@@ -344,7 +380,7 @@ app.post('/api/game/commands', async (req, res) => {
         }
         let authoritativePayload = payload;
         if (type === 'action.perform' && context.mode === 'signed') {
-            const factionEffect = await getFactionEffect(context.user.id, payload.actionType, new Date());
+            const factionEffect = await measureAsyncPhase(timings, 'factionMs', () => getFactionEffect(context.user.id, payload.actionType, new Date()));
             if (factionEffect.status !== 'ok') {
                 return res.status(factionStatusCode(factionEffect)).json({
                     error: {
@@ -359,20 +395,20 @@ app.post('/api/game/commands', async (req, res) => {
         } else if (type === 'action.perform') {
             authoritativePayload = { ...payload, factionContext: null };
         }
-        const outcome = executeCommand(context.state, type, authoritativePayload, Date.now(), executionContext);
+        const outcome = measureSyncPhase(timings, 'engineMs', () => executeCommand(context.state, type, authoritativePayload, Date.now(), executionContext));
         if (!outcome.ok) {
-            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: outcome.code, startedAt });
+            logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: outcome.code, startedAt, timings });
             return res.status(422).json({ error: { code: outcome.code, message: outcome.error, details: outcome.details }, state: context.state, revision: context.revision });
         }
 
         if (context.mode === 'signed') {
-            const commit = await commitPlayerCommand({
+            const commit = await measureAsyncPhase(timings, 'commitMs', () => commitPlayerCommand({
                 userId: context.user.id,
                 expectedRevision,
                 commandId,
                 state: outcome.state,
                 result: outcome.result
-            });
+            }));
             if (commit.status === 'conflict') {
                 const latestLookup = await lookupProfileByUserId(context.user.id);
                 if (latestLookup.status === 'unavailable') return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Latest progress could not be loaded safely. Try again.' } });
@@ -390,24 +426,24 @@ app.post('/api/game/commands', async (req, res) => {
                 if (latestLookup.status === 'missing') return res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'Player profile not found.' } });
                 const latest = latestLookup.profile;
                 const revision = Math.max(0, Math.floor(Number(latest?.state_revision ?? commit.revision) || 0));
-                logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt });
+                logGameRequest({ kind: 'command', type, commandId, revision, status: 'duplicate', startedAt, timings });
                 return res.json({ state: normalizePlayerState(latest?.state || outcome.state), revision, result: commit.result || outcome.result, duplicate: true });
             }
             if (commit.status !== 'applied') {
-                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: commit.status, startedAt });
+                logGameRequest({ kind: 'command', type, commandId, revision: context.revision, status: commit.status, startedAt, timings });
                 return res.status(503).json({ error: { code: 'PERSISTENCE_UNAVAILABLE', message: 'Progress could not be safely saved. Try again.' } });
             }
             const revision = Math.max(0, Math.floor(Number(commit.revision) || expectedRevision + 1));
-            logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied', startedAt });
+            logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied', startedAt, timings });
             return res.json({ state: outcome.state, revision, result: outcome.result, duplicate: false });
         }
 
         const revision = expectedRevision + 1;
-        logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied_guest', startedAt });
+        logGameRequest({ kind: 'command', type, commandId, revision, status: 'applied_guest', startedAt, timings });
         res.json({ state: outcome.state, revision, result: outcome.result, duplicate: false });
     } catch (error) {
         console.error('Game command failed:', error);
-        logGameRequest({ kind: 'command', type, commandId, revision: null, status: 'internal_error', startedAt });
+        logGameRequest({ kind: 'command', type, commandId, revision: null, status: 'internal_error', startedAt, timings });
         res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The game command could not be completed.' } });
     }
 });
