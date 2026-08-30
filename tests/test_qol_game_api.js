@@ -34,7 +34,7 @@ const server = app.listen(0, '127.0.0.1');
     const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
     const health = await healthResponse.json();
     assert.strictEqual(health.status, 'ok');
-    assert.strictEqual(health.version, '4.1.1');
+    assert.strictEqual(health.version, '4.2.0');
 
     const progressionRules = await (await fetch(`http://127.0.0.1:${port}/api/data/progression-rules`)).json();
     assert.deepStrictEqual(progressionRules, { maxTargetedTierAdvance: 3000 });

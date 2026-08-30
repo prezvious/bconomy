@@ -3,9 +3,74 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.2.0',
+        version: 'v4.2.0',
+        isLatest: true,
+        date: '2026-08-30',
+        title: 'v4.2.0 — Faction Activity Views & Faster Actions',
+        sections: [
+            {
+                type: 'Faction Activity',
+                items: [
+                    {
+                        title: 'Local Activity View Density',
+                        bullets: [
+                            'Added Comfortable, Compact, and Super Compact views that affect only the Faction Activity tab.',
+                            'Comfortable shows 10 entries per section; Compact and Super Compact show 5 entries with progressively tighter row layouts.',
+                            'Remembered the selected Activity view without changing the player’s global Interface Density preference.'
+                        ]
+                    },
+                    {
+                        title: 'Independent History Pagination',
+                        bullets: [
+                            'Paginated Faction Activity and Treasury Ledger separately so each history can move through its own recent entries.',
+                            'Added visible ranges, page counts, disabled boundaries, and safe page clamping after refreshes or density changes.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Responsive & Accessible Interface',
+                items: [
+                    {
+                        title: 'Compact History Presentation',
+                        bullets: [
+                            'Kept side-by-side histories on wide screens and stacked them without horizontal overflow at tablet and phone widths.',
+                            'Added keyboard-operable controls, visible focus states, live page status, long-text wrapping, and aligned tabular treasury values.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Action Performance & Integrity',
+                items: [
+                    {
+                        title: 'Faster Authoritative Commands',
+                        bullets: [
+                            'Removed the receipt lookup and standalone activity update from the normal signed-in command path while preserving read-only duplicate replay checks and revision conflicts.',
+                            'Moved inactive-guest cleanup off the core action path so serverless maintenance work does not delay a player action.',
+                            'Added Server-Timing metrics and structured phase durations for context loading, replay checks, faction lookup, engine execution, persistence, and total command time.',
+                            'Kept rewards, cooldowns, faction effects, authoritative state, revision checks, and duplicate-command results unchanged.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Developer Documentation',
+                items: [
+                    {
+                        title: 'Approved Interface & Performance Designs',
+                        bullets: [
+                            'Documented the delivered Faction Activity pagination and action-latency optimization designs.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.1.1',
         version: 'v4.1.1',
-        isLatest: true,
         date: '2026-08-30',
         title: 'v4.1.1 — Faster Authoritative Actions & Phase Timing',
         sections: [
@@ -27,7 +92,7 @@ export const RELEASES = [
                 type: 'Developer Documentation',
                 items: [
                     {
-                        title: 'Approved Interface & Performance Designs',
+                        title: 'Approved Performance Design',
                         bullets: [
                             'Documented the implemented action-latency optimization design, invariants, verification, and rollout guidance.'
                         ]

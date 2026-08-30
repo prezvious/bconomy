@@ -32,6 +32,12 @@ import { renderHeader } from './header.js';
 import { showToast } from './toast.js';
 import { addLogEntry } from './log.js';
 import { openDialog, closeDialog, showConfirmation } from './modal.js';
+import {
+    FACTION_ACTIVITY_DENSITIES,
+    paginateFactionHistory,
+    readFactionActivityDensity,
+    writeFactionActivityDensity
+} from './factionActivityPaging.js';
 
 const CREATION_COST = 1000000;
 const MEMBER_LIMIT = 20;
@@ -74,6 +80,9 @@ let requestFaction = null;
 let lastGeneratedRequestMessage = '';
 let generatedCode = '';
 let renderGeneration = 0;
+let activityDensity = readFactionActivityDensity();
+let activityHistoryPage = 0;
+let treasuryHistoryPage = 0;
 const boostDrafts = Object.fromEntries(ACTIONS.map(action => [action.id, { level: 4, mode: 'duration', hours: 1 }]));
 
 const escapeHtml = value => String(value ?? '')
@@ -349,11 +358,44 @@ const renderRecruitment = faction => {
         ${faction.membershipMode === 'public' ? `<section class="card faction-table-card"><h3>Pending join requests</h3>${requests.length ? `<div class="faction-list">${requests.map(request => `<div class="faction-list-row"><div><strong>${escapeHtml(request.applicantUsername)}</strong><span>“${escapeHtml(request.message)}”</span><small>${escapeHtml(displayDate(request.createdAt))}</small></div>${canReview ? `<div class="faction-row-actions"><button class="action-btn primary-btn" type="button" data-faction-action="review-request" data-id="${request.id}" data-decision="accept">Accept</button><button class="action-btn secondary-btn" type="button" data-faction-action="review-request" data-id="${request.id}" data-decision="decline">Decline</button></div>` : ''}</div>`).join('')}</div>` : '<p>No pending join requests.</p>'}</section>` : ''}`;
 };
 
-const renderActivity = faction => `
-    <div class="faction-dashboard-grid">
-        <section class="card faction-table-card"><span class="eyebrow">Latest events</span><h3>Faction activity</h3><div class="faction-list compact-list">${(faction.activity || []).length ? faction.activity.map(item => `<div class="faction-list-row"><div><strong>${escapeHtml(activityText(item))}</strong><span>${escapeHtml(displayDate(item.createdAt))}</span></div></div>`).join('') : '<p>No faction activity yet.</p>'}</div></section>
-        <section class="card faction-table-card"><span class="eyebrow">Shared funds</span><h3>Treasury ledger</h3><div class="faction-list compact-list">${(faction.ledger || []).length ? faction.ledger.map(item => `<div class="faction-list-row"><div><strong>${escapeHtml(String(item.entryType || '').replaceAll('_', ' '))}</strong><span>${escapeHtml(item.actorUsername || 'System')} · ${escapeHtml(displayDate(item.createdAt))}</span></div><strong class="${Number(item.amountDelta) >= 0 ? 'text-success' : 'text-danger'}">${Number(item.amountDelta) >= 0 ? '+' : ''}${formatDisplayNumber(item.amountDelta)} FP</strong></div>`).join('') : '<p>No treasury entries yet.</p>'}</div></section>
-    </div>`;
+const renderHistoryPagination = (history, label, pagination) => {
+    if (!pagination.total) return '';
+    return `
+        <nav class="faction-history-pagination" aria-label="${label} pagination">
+            <button class="faction-history-page-btn" type="button" data-faction-action="activity-page" data-history="${history}" data-page="${pagination.page - 1}" data-page-direction="previous" ${pagination.page === 0 ? 'disabled' : ''}>Previous</button>
+            <span class="faction-history-page-status" aria-live="polite">${pagination.start}–${pagination.end} of ${pagination.total} · Page ${pagination.page + 1} of ${pagination.pageCount}</span>
+            <button class="faction-history-page-btn" type="button" data-faction-action="activity-page" data-history="${history}" data-page="${pagination.page + 1}" data-page-direction="next" ${pagination.page >= pagination.pageCount - 1 ? 'disabled' : ''}>Next</button>
+        </nav>`;
+};
+
+const renderActivity = faction => {
+    const activity = paginateFactionHistory(faction.activity, activityHistoryPage, activityDensity);
+    const ledger = paginateFactionHistory(faction.ledger, treasuryHistoryPage, activityDensity);
+    activityHistoryPage = activity.page;
+    treasuryHistoryPage = ledger.page;
+
+    return `
+        <div class="faction-activity-controls">
+            <span id="faction-activity-density-label" class="faction-activity-control-label">Activity View</span>
+            <div class="view-toggle faction-activity-density-toggle" role="group" aria-labelledby="faction-activity-density-label">
+                ${Object.entries(FACTION_ACTIVITY_DENSITIES).map(([value, config]) => `<button class="view-toggle-btn" type="button" data-faction-action="activity-density" data-density="${value}" aria-pressed="${activityDensity === value}" title="Show ${config.pageSize} entries per section in ${config.label.toLowerCase()} rows">${config.label}</button>`).join('')}
+            </div>
+        </div>
+        <div class="faction-dashboard-grid faction-activity-grid is-${activityDensity}">
+            <section class="card faction-table-card faction-history-card" aria-labelledby="faction-activity-history-title">
+                <span class="eyebrow">Latest events</span>
+                <h3 id="faction-activity-history-title">Faction Activity</h3>
+                <div class="faction-list faction-history-list">${activity.total ? activity.items.map(item => `<div class="faction-list-row faction-history-row"><div><strong class="faction-history-title">${escapeHtml(activityText(item))}</strong><span class="faction-history-meta">${escapeHtml(displayDate(item.createdAt))}</span></div></div>`).join('') : '<p>No faction activity yet.</p>'}</div>
+                ${renderHistoryPagination('activity', 'Faction Activity', activity)}
+            </section>
+            <section class="card faction-table-card faction-history-card" aria-labelledby="faction-treasury-history-title">
+                <span class="eyebrow">Shared funds</span>
+                <h3 id="faction-treasury-history-title">Treasury Ledger</h3>
+                <div class="faction-list faction-history-list">${ledger.total ? ledger.items.map(item => `<div class="faction-list-row faction-history-row"><div><strong class="faction-history-title">${escapeHtml(String(item.entryType || '').replaceAll('_', ' '))}</strong><span class="faction-history-meta">${escapeHtml(item.actorUsername || 'System')} · ${escapeHtml(displayDate(item.createdAt))}</span></div><strong class="faction-history-amount ${Number(item.amountDelta) >= 0 ? 'text-success' : 'text-danger'}">${Number(item.amountDelta) >= 0 ? '+' : ''}${formatDisplayNumber(item.amountDelta)} FP</strong></div>`).join('') : '<p>No treasury entries yet.</p>'}</div>
+                ${renderHistoryPagination('ledger', 'Treasury Ledger', ledger)}
+            </section>
+        </div>`;
+};
 
 const renderPermissions = faction => `
     <section class="card faction-table-card"><span class="eyebrow">Fixed delegation</span><h3>Faction Rank permissions</h3><p>Faction Ranks are separate from Bconomy's solo progression ranks. Higher ranks inherit every applicable permission below them.</p><div class="faction-permission-table" role="table"><div class="faction-permission-row faction-permission-head" role="row"><span>Permission</span>${RANKS.map(rank => `<strong>${RANK_LABEL[rank]}</strong>`).join('')}</div>${PERMISSION_ROWS.map(([label, values]) => `<div class="faction-permission-row" role="row"><span>${escapeHtml(label)}</span>${values.map(permissionCell).join('')}</div>`).join('')}</div></section>
@@ -626,6 +668,26 @@ const confirmAndRun = async ({ key, title, message, label, command, success }) =
 
 const handleAction = async (action, button, panel) => {
     if (action === 'refresh') return refresh({ keepDirectory: false });
+    if (action === 'activity-density') {
+        activityDensity = writeFactionActivityDensity(button.dataset.density);
+        activityHistoryPage = 0;
+        treasuryHistoryPage = 0;
+        paint();
+        panel.querySelector(`[data-faction-action="activity-density"][data-density="${activityDensity}"]`)?.focus();
+        return;
+    }
+    if (action === 'activity-page') {
+        const history = button.dataset.history;
+        const requestedPage = Math.max(0, Math.floor(Number(button.dataset.page) || 0));
+        if (history === 'activity') activityHistoryPage = requestedPage;
+        if (history === 'ledger') treasuryHistoryPage = requestedPage;
+        paint();
+        const direction = button.dataset.pageDirection;
+        const sameDirection = panel.querySelector(`[data-faction-action="activity-page"][data-history="${history}"][data-page-direction="${direction}"]:not(:disabled)`);
+        const fallbackDirection = direction === 'next' ? 'previous' : 'next';
+        (sameDirection || panel.querySelector(`[data-faction-action="activity-page"][data-history="${history}"][data-page-direction="${fallbackDirection}"]:not(:disabled)`))?.focus();
+        return;
+    }
     if (action === 'open-create') return openCreateDialog(button);
     if (action === 'open-edit') return openEditDialog(button);
     if (action === 'directory-search') {
@@ -779,6 +841,8 @@ export const resetFactionViewCache = () => {
     directory = [];
     loadError = '';
     generatedCode = '';
+    activityHistoryPage = 0;
+    treasuryHistoryPage = 0;
     renderGeneration += 1;
 };
 

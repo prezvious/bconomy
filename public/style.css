@@ -11035,6 +11035,145 @@ details[open] .details-arrow {
     gap: 9px;
 }
 
+.faction-activity-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.faction-activity-control-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.faction-activity-density-toggle {
+    min-height: var(--control-height-compact);
+}
+
+.faction-activity-density-toggle .view-toggle-btn {
+    min-height: calc(var(--control-height-compact) - 8px);
+}
+
+.faction-history-card {
+    min-width: 0;
+}
+
+.faction-history-list {
+    align-content: start;
+}
+
+.faction-history-row {
+    min-height: 0;
+}
+
+.faction-history-title,
+.faction-history-meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.faction-history-amount {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.faction-activity-grid.is-compact .faction-history-list {
+    gap: 6px;
+}
+
+.faction-activity-grid.is-compact .faction-history-row {
+    padding: 8px 10px;
+}
+
+.faction-activity-grid.is-super-compact .faction-history-list {
+    gap: 4px;
+}
+
+.faction-activity-grid.is-super-compact .faction-history-row {
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.faction-activity-grid.is-super-compact .faction-history-row > div:first-child {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.faction-activity-grid.is-super-compact .faction-history-title {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.faction-activity-grid.is-super-compact .faction-history-meta {
+    flex: 0 1 auto;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.faction-activity-grid.is-super-compact .faction-history-amount {
+    font-size: 12px;
+}
+
+.faction-history-pagination {
+    display: grid;
+    grid-template-columns: minmax(78px, 1fr) auto minmax(78px, 1fr);
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.faction-history-page-btn {
+    min-height: var(--control-height-compact);
+    padding: 0 10px;
+    color: var(--text-primary);
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font: 650 12px var(--font-sans);
+    cursor: pointer;
+}
+
+.faction-history-page-btn:last-child {
+    justify-self: end;
+}
+
+.faction-history-page-btn:hover:not(:disabled) {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.faction-history-page-btn:focus-visible {
+    outline: 2px solid var(--accent-brass);
+    outline-offset: 2px;
+}
+
+.faction-history-page-btn:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+}
+
+.faction-history-page-status {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+}
+
 .faction-list-row {
     min-width: 0;
     padding: 11px 12px;
@@ -11192,6 +11331,54 @@ details[open] .details-arrow {
 
     .faction-row-actions {
         justify-content: stretch;
+        width: 100%;
+    }
+
+    .faction-activity-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .faction-activity-density-toggle {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .faction-activity-density-toggle .view-toggle-btn {
+        min-width: 0;
+        padding-inline: 7px;
+    }
+
+    .faction-activity-grid.is-super-compact .faction-history-row {
+        align-items: flex-start;
+        flex-direction: row;
+    }
+
+    .faction-activity-grid.is-super-compact .faction-history-row > div:first-child {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .faction-activity-grid.is-super-compact .faction-history-title,
+    .faction-activity-grid.is-super-compact .faction-history-meta {
+        max-width: 100%;
+        white-space: normal;
+    }
+
+    .faction-history-pagination {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .faction-history-page-status {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        white-space: normal;
+    }
+
+    .faction-history-page-btn {
+        min-height: 40px;
         width: 100%;
     }
 }

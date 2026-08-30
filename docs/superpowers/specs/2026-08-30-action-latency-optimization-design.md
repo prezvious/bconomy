@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-30
 
-**Status:** Implemented in v4.1.1
+**Status:** Implemented in v4.2.0
 
 **Scope:** Reduce the time between clicking a core action button and receiving its authoritative result without weakening persistence, revision checks, idempotency, or faction correctness.
 
