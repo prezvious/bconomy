@@ -12,6 +12,7 @@ const cleanup = read('scripts/cleanupFactionTestOrphans.js');
 const localWorkflow = read('.github/workflows/test.yml');
 const remoteWorkflow = read('.github/workflows/faction-remote-smoke.yml');
 const cleanupWorkflow = read('.github/workflows/faction-test-cleanup.yml');
+const deployWorkflow = read('.github/workflows/deploy.yml');
 const config = read('supabase/config.toml');
 
 assert.equal((runner.match(/await client\.query\(schema\)/g) || []).length, 2, 'local and remote gates apply the canonical schema twice');
@@ -28,6 +29,7 @@ assert(cleanup.includes('bconomy_test_run') && cleanup.includes('24 * 60 * 60 * 
 assert(localWorkflow.includes('npm run test:factions:local'));
 assert(remoteWorkflow.includes('environment: supabase-test') && remoteWorkflow.includes('npm run test:factions:remote'));
 assert(cleanupWorkflow.includes('schedule:') && cleanupWorkflow.includes('npm run test:factions:cleanup'));
+assert(deployWorkflow.includes('enablement: true'), 'Pages deployment can enable the repository site on first release');
 for (const secret of ['SUPABASE_TEST_URL', 'SUPABASE_TEST_ANON_KEY', 'SUPABASE_TEST_SERVICE_ROLE_KEY', 'SUPABASE_TEST_DB_URL']) {
     assert(remoteWorkflow.includes(`secrets.${secret}`), `remote workflow consumes protected ${secret}`);
 }
