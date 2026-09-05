@@ -66,8 +66,10 @@ export const renderShop = async ({ resetControls = false } = {}) => {
     // Fetch latest state from server (triggers time-gated restock if deadline passed)
     let state = getState();
     let sellRolls = {};
+    let refreshOnExpire = false;
     try {
         const res = await doGetShopState();
+        refreshOnExpire = true;
         if (res && res.state) {
             state = res.state;
             sellRolls = res.sellRolls || {};
@@ -181,8 +183,8 @@ export const renderShop = async ({ resetControls = false } = {}) => {
 
     // Attach Event Listeners
     setupShopEventListeners();
-    startRestockCountdownTimer(nextRestockAt);
-    startBoosterCountdownTimers();
+    startRestockCountdownTimer(nextRestockAt, refreshOnExpire);
+    startBoosterCountdownTimers(refreshOnExpire);
 
     // Restore scroll position after transaction-driven re-render.
     if (ledgerMain) ledgerMain.scrollTop = mainScrollTop;
@@ -195,7 +197,9 @@ const formatCountdown = (ms) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const startRestockCountdownTimer = (nextRestockAt) => {
+const isShopActive = () => document.getElementById('panel-shop')?.classList.contains('active');
+
+const startRestockCountdownTimer = (nextRestockAt, refreshOnExpire) => {
     if (restockTimerInterval) clearInterval(restockTimerInterval);
 
     restockTimerInterval = setInterval(() => {
@@ -206,12 +210,13 @@ const startRestockCountdownTimer = (nextRestockAt) => {
         }
         if (remaining <= 0) {
             clearInterval(restockTimerInterval);
-            renderShop();
+            restockTimerInterval = null;
+            if (refreshOnExpire && isShopActive()) void renderShop();
         }
     }, 1000);
 };
 
-const startBoosterCountdownTimers = () => {
+const startBoosterCountdownTimers = (refreshOnExpire) => {
     if (boosterTimerInterval) clearInterval(boosterTimerInterval);
 
     boosterTimerInterval = setInterval(() => {
@@ -240,10 +245,13 @@ const startBoosterCountdownTimers = () => {
         });
 
         if (anyExpired) {
-            setTimeout(() => {
-                clearInterval(boosterTimerInterval);
-                renderShop();
-            }, 2000);
+            clearInterval(boosterTimerInterval);
+            boosterTimerInterval = null;
+            if (refreshOnExpire) {
+                setTimeout(() => {
+                    if (isShopActive()) void renderShop();
+                }, 2000);
+            }
         }
     }, 1000);
 };

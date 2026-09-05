@@ -4,6 +4,28 @@ Personal game updates, changelogs, and version history.
 
 ---
 
+## [v4.3.1] — 2026-09-05
+
+### Fixed
+- **Anonymous and Account Recovery**:
+  - Prevented an unauthenticated Faction request from being mistaken for an expired player identity and blocking subsequent solo gameplay.
+  - Automatically repairs the orphaned sign-in recovery marker created by affected older browser sessions without changing valid registered-account recovery.
+  - Displays structured authentication error messages instead of `[object Object]` when account creation or sign-in fails.
+- **Shop and Farm Synchronization**:
+  - Stopped expired Shop and booster timers from repeatedly refreshing after synchronization failed or after the player left the Shop.
+  - Added bounded retry backoff to automatic Farm synchronization so temporary service failures do not create rapid request and notification loops.
+- **Responsive Layout and API Accuracy**:
+  - Removed horizontal Shop overflow on 320-pixel screens by allowing grids and cards to shrink within the viewport.
+  - Normalized invalid or negative gambling-limit level parameters to Level 0 instead of returning an inaccurate `null` level.
+
+### Accessibility
+- Added accessible names to Release Notes and Faction search, code, deposit, membership, recruitment, and boost controls.
+- Changed routine toast announcements from assertive to polite so repeated game feedback does not interrupt higher-priority assistive-technology output.
+
+### Verification
+- Added regression coverage for anonymous identity recovery, synchronization retry loops, narrow Shop layouts, structured authentication errors, API normalization, and accessible control names.
+- Verified every primary game section and core interaction at desktop and mobile widths; all 69 automated test suites pass.
+
 ## [v4.3.0] — 2026-08-31
 
 ### Fixed

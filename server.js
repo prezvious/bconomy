@@ -1355,7 +1355,8 @@ app.post('/api/gambling/coinflip', (req, res) => {
 });
 
 app.get('/api/gambling/limits/:numismatistLevel?', (req, res) => {
-    const level = parseInt(req.params.numismatistLevel || 0, 10);
+    const parsedLevel = Number.parseInt(req.params.numismatistLevel || 0, 10);
+    const level = Number.isFinite(parsedLevel) ? Math.max(0, parsedLevel) : 0;
     const maxBetLimit = GamblingEngine.getMaxBetLimit(level);
     res.json({ numismatistLevel: level, maxBetLimit });
 });

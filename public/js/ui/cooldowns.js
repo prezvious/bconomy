@@ -8,6 +8,9 @@ import { renderActiveBoosts } from './actions.js';
 
 let isSyncingFarm = false;
 let lastFarmSyncTime = 0;
+let nextFarmSyncAttemptAt = 0;
+let farmSyncRetryDelayMs = 5000;
+const FARM_SYNC_RETRY_MAX_MS = 60000;
 let hoverListenersAttached = false;
 
 export const initTimerHoverListeners = () => {
@@ -234,16 +237,23 @@ export const cooldownLoop = () => {
         }
 
         // 3. Trigger server harvest processing & UI re-render when crops finish growing
-        if (needsSync && !isSyncingFarm && (now - lastFarmSyncTime > 1500)) {
+        if (needsSync && !isSyncingFarm && now >= nextFarmSyncAttemptAt && (now - lastFarmSyncTime > 1500)) {
             isSyncingFarm = true;
             lastFarmSyncTime = now;
             doFarmState().then(() => {
+                nextFarmSyncAttemptAt = 0;
+                farmSyncRetryDelayMs = 5000;
                 renderFarm();
             }).catch(err => {
+                nextFarmSyncAttemptAt = Date.now() + farmSyncRetryDelayMs;
+                farmSyncRetryDelayMs = Math.min(FARM_SYNC_RETRY_MAX_MS, farmSyncRetryDelayMs * 2);
                 console.error("Auto farm sync error:", err);
             }).finally(() => {
                 isSyncingFarm = false;
             });
+        } else if (!needsSync) {
+            nextFarmSyncAttemptAt = 0;
+            farmSyncRetryDelayMs = 5000;
         }
     }
 

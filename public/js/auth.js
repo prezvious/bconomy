@@ -50,11 +50,16 @@ const normalizeRecoverySnapshot = state => {
     return snapshot;
 };
 
+const responseErrorMessage = (data, fallback) => {
+    const candidate = data?.error;
+    return typeof candidate === 'string' ? candidate : candidate?.message || fallback;
+};
+
 const responseError = async response => {
     let data = {};
     try { data = await response.json(); } catch { /* The status still identifies the failure. */ }
     const candidate = data?.error;
-    const error = new Error(typeof candidate === 'string' ? candidate : candidate?.message || `Request failed (${response.status}).`);
+    const error = new Error(responseErrorMessage(data, `Request failed (${response.status}).`));
     error.code = candidate?.code || (response.status === 401 ? 'INVALID_AUTH' : `HTTP_${response.status}`);
     error.status = response.status;
     return error;
@@ -135,6 +140,15 @@ export async function initAuth(deviceState = null) {
         let signInRequestedDuringInit = false;
         const storedSession = localStorage.getItem(AUTH_SESSION_KEY);
         const storedProfile = localStorage.getItem(AUTH_PROFILE_KEY);
+
+        // Repair the invalid state produced by older clients when an anonymous
+        // request to an account-only endpoint was mistaken for an expired login.
+        if (authRecoveryState === 'requires-sign-in'
+            && !storedSession
+            && !storedProfile
+            && !localStorage.getItem(AUTH_RECOVERY_ACCOUNT_KEY)) {
+            setRecoveryState('ready');
+        }
 
         if (storedSession && storedProfile) {
             currentSession = JSON.parse(storedSession);
@@ -394,7 +408,7 @@ export async function signUpUser({ username, email, password }) {
 
     const data = await res.json();
     if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to create account.');
+        throw new Error(responseErrorMessage(data, 'Failed to create account.'));
     }
 
     currentSession = data.session;
@@ -429,7 +443,7 @@ export async function signInUser({ usernameOrEmail, password }) {
 
     const data = await res.json();
     if (!res.ok || data.error) {
-        throw new Error(data.error || 'Invalid username or password.');
+        throw new Error(responseErrorMessage(data, 'Invalid username or password.'));
     }
 
     currentSession = data.session;

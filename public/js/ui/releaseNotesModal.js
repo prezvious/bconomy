@@ -3,9 +3,68 @@ import { openDialog } from './modal.js';
 
 export const RELEASES = [
     {
+        id: 'v4.3.1',
+        version: 'v4.3.1',
+        isLatest: true,
+        date: '2026-09-05',
+        title: 'v4.3.1 — Stability & Recovery Fixes',
+        sections: [
+            {
+                type: 'Fixed',
+                items: [
+                    {
+                        title: 'Anonymous & Account Recovery',
+                        bullets: [
+                            'Prevented an account-only Faction response from locking anonymous solo gameplay or repeatedly opening the sign-in prompt.',
+                            'Affected older anonymous sessions now repair their orphaned recovery marker automatically while registered-account recovery remains protected.',
+                            'Structured authentication failures now display their actual message instead of [object Object].'
+                        ]
+                    },
+                    {
+                        title: 'Shop & Farm Synchronization',
+                        bullets: [
+                            'Stopped expired Shop and booster timers from repeatedly refreshing after a failed sync or after leaving the Shop.',
+                            'Added bounded retry backoff to automatic Farm synchronization during temporary service failures.'
+                        ]
+                    },
+                    {
+                        title: 'Responsive Layout & API Accuracy',
+                        bullets: [
+                            'Kept Shop grids and cards inside the viewport on 320-pixel screens.',
+                            'Normalized invalid or negative gambling-limit levels to Level 0 instead of returning an inaccurate null level.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Accessibility',
+                items: [
+                    {
+                        title: 'Named Controls & Polite Updates',
+                        bullets: [
+                            'Added accessible names to Release Notes and Faction search, code, deposit, membership, recruitment, and boost controls.',
+                            'Changed routine toast announcements from assertive to polite so game feedback does not interrupt higher-priority output.'
+                        ]
+                    }
+                ]
+            },
+            {
+                type: 'Verification',
+                items: [
+                    {
+                        title: 'Regression Coverage',
+                        bullets: [
+                            'Added coverage for identity recovery, synchronization retry loops, narrow Shop layouts, authentication errors, API normalization, and accessible control names.',
+                            'Verified all primary game sections and core interactions at desktop and mobile widths; all 69 automated test suites pass.'
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: 'v4.3.0',
         version: 'v4.3.0',
-        isLatest: true,
         date: '2026-08-31',
         title: 'v4.3.0 — Reliable Faction Changes',
         sections: [

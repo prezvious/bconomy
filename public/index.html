@@ -17,7 +17,7 @@
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <div class="app-container">
         <!-- Sidebar Navigation -->
@@ -79,7 +79,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v4.3.0" title="Click to view release notes">Bconomy v4.3.0</button>
+                <button type="button" class="guild-seal-tag version-btn" id="btn-release-notes" aria-label="View Release Notes for Bconomy v4.3.1" title="Click to view release notes">Bconomy v4.3.1</button>
             </div>
         </nav>
 
@@ -1461,7 +1461,7 @@
                     <div>
                         <div class="release-header-top">
                             <h3 id="release-notes-modal-title" class="auth-title">Release Notes & Updates</h3>
-                            <span class="badge release-latest-tag">v4.3.0 Latest</span>
+                            <span class="badge release-latest-tag">v4.3.1 Latest</span>
                         </div>
                         <p class="modal-header-subtitle">Game changelogs, updates, and version release notes</p>
                     </div>
@@ -1474,7 +1474,7 @@
             <div class="release-notes-toolbar">
                 <div class="release-search-wrapper">
                     <iconify-icon icon="lucide:search" class="release-search-icon" aria-hidden="true"></iconify-icon>
-                    <input type="text" id="release-notes-search" class="form-input release-search-input" placeholder="Search updates, features, bugfixes..." autocomplete="off">
+                    <input type="text" id="release-notes-search" class="form-input release-search-input" aria-label="Search release notes" placeholder="Search updates, features, bug fixes…" autocomplete="off">
                 </div>
                 <div class="release-toolbar-actions">
                     <div class="release-category-filters" id="release-category-filters" role="group" aria-label="Filter by change type">

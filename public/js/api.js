@@ -136,7 +136,12 @@ const requestJsonWithRecovery = async buildRequest => {
             if (await refreshAuthSession()) continue;
         }
 
-        const identityFailure = response.status === 401 || isIdentityErrorCode(responseCode);
+        // Anonymous game commands are valid and some account-only surfaces (such as
+        // factions) deliberately return 401. Only begin identity recovery when
+        // there is an identity that can actually be recovered.
+        const hasRecoverableIdentity = Boolean(getAuthProfile()?.id);
+        const identityFailure = hasRecoverableIdentity
+            && (response.status === 401 || isIdentityErrorCode(responseCode));
         if (identityFailure && identityRecoveryAttempts < 1) {
             identityRecoveryAttempts += 1;
             const profile = getAuthProfile();

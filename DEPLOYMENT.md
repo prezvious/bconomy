@@ -1,4 +1,4 @@
-# Bconomy v4.3.0 Deployment Guide: Vercel and Supabase
+# Bconomy v4.3.1 Deployment Guide: Vercel and Supabase
 
 This guide deploys Bconomy with Supabase Auth, PostgreSQL-backed solo saves, and server-authoritative multiplayer factions. Apply the canonical database schema before the v4.3.0 application so Faction API v2 and boost configuration revisions exist when the client switches to semantic preconditions.
 
